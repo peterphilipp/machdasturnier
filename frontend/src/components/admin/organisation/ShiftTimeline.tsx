@@ -134,14 +134,17 @@ export default function ShiftTimeline({
       />
 
       {/* Legende */}
-      <div style={{ display: 'flex', gap: 20, marginTop: 12, flexWrap: 'wrap', fontSize: 12, color: '#6c757d' }}>
-        <span>🟦 = Standard-Zeiten (aus Vorlage)</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed rgba(255,255,255,0.9)', borderRadius: 3, background: '#3b98f8' }} />
+      <div style={{ display: 'flex', gap: 20, marginTop: 12, flexWrap: 'wrap', fontSize: 12, color: '#64748b', alignItems: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '1px solid #cbd5e1', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#ebf5ff' }} />
+          = Standard-Zeiten
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #0d6efd', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#ebf5ff' }} />
           = Angepasste Zeiten
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ display: 'inline-block', width: 20, height: 12, border: '3px dashed #fd7e14', borderRadius: 3, background: '#3b98f8' }} />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #fd7e14', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#fff3cd' }} />
           = Nicht gespeicherte Änderung
         </span>
       </div>
