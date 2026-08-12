@@ -21,7 +21,7 @@ export const getVolunteerShifts = async (req: Request, res: Response) => {
     orderBy: { date: 'asc' },
     include: {
       user: {
-        include: { tournamentMemberships: true }
+        include: { children: true, trainedYearGroups: true }
       }
     },
   });

@@ -511,12 +511,26 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               const assignedShiftsForDay = volunteerShifts.filter(vs => slots.some((s: any) => vs.shiftId === s.id));
               const ygCounts = new Map<number, number>();
               assignedShiftsForDay.forEach(vs => {
-                const membership = vs.user?.tournamentMemberships?.find(m => m.tournamentId === currentTournament?.id);
-                if (membership && membership.yearGroupIds) {
-                  membership.yearGroupIds.forEach(ygId => {
-                    ygCounts.set(ygId, (ygCounts.get(ygId) || 0) + 1);
+                const uniqueYearGroupIds = new Set<number>();
+                
+                // Match children with year groups
+                if (vs.user?.children && currentTournament?.yearGroups) {
+                  vs.user.children.forEach(child => {
+                    const matchedYg = currentTournament.yearGroups?.find(yg => child.childYear >= yg.birthYearStart && child.childYear <= yg.birthYearEnd);
+                    if (matchedYg) uniqueYearGroupIds.add(matchedYg.id);
                   });
                 }
+                
+                // Add trained year groups
+                if (vs.user?.trainedYearGroups) {
+                  vs.user.trainedYearGroups.forEach(tyg => {
+                    uniqueYearGroupIds.add(tyg.id);
+                  });
+                }
+                
+                uniqueYearGroupIds.forEach(ygId => {
+                  ygCounts.set(ygId, (ygCounts.get(ygId) || 0) + 1);
+                });
               });
               const yearGroupStats = Array.from(ygCounts.entries())
                 .map(([ygId, count]) => {
