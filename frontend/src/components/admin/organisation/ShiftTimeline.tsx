@@ -85,10 +85,6 @@ export default function ShiftTimeline({
         : null;
       const max = s.maxVolunteers ?? 1;
       const isFull = assigned != null && assigned >= max;
-      const staffingBorder = assigned == null
-        ? undefined
-        : isFull ? '#16a34a' : assigned > 0 ? '#d97706' : '#dc2626';
-
       const showTime = (en - st) > 20;
       const timeStr = `${minToTime(st)}–${minToTime(en)}`;
       const occStr = assigned != null ? `${assigned}/${max}` : `${s.minVolunteers ?? 1}-${max}`;
@@ -108,8 +104,7 @@ export default function ShiftTimeline({
         isPending,
         assignedCount: assigned,
         maxVolunteers: max,
-        border: hasCustomTime ? '2px dashed #0d6efd' : undefined,
-        boxShadow: staffingBorder ? `0 0 0 2px ${staffingBorder}` : undefined
+        border: hasCustomTime ? '2px dashed #0d6efd' : undefined
       };
     })
   }));
