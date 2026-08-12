@@ -62,7 +62,8 @@ export default function StationPrintModal({
     window.print();
   };
 
-  const tournamentLogo = tournament?.logo || tournament?.club?.logo;
+  const clubLogo = tournament?.club?.logo;
+  const sponsorLogo = tournament?.logo;
   const sponsorName = tournament?.sponsorName || (tournament?.hasSponsor ? 'Sponsor' : null);
 
   return (
@@ -214,8 +215,8 @@ export default function StationPrintModal({
                     {/* Header */}
                     <div className="station-print-header">
                       <div className="station-print-header-left">
-                        {tournamentLogo ? (
-                          <img src={tournamentLogo} alt="Turnier Logo" className="station-print-logo" />
+                        {clubLogo ? (
+                          <img src={clubLogo} alt="Vereins Logo" className="station-print-logo" />
                         ) : (
                           <div style={{ fontSize: 32 }}>🏆</div>
                         )}
@@ -229,12 +230,18 @@ export default function StationPrintModal({
                       </div>
 
                       <div className="station-print-header-right">
-                        {sponsorName && (
+                        {sponsorLogo ? (
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
+                            <img src={sponsorLogo} alt={sponsorName || 'Sponsor Logo'} className="station-print-logo" />
+                            {sponsorName && <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{sponsorName}</div>}
+                          </div>
+                        ) : sponsorName ? (
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
                             <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{sponsorName}</div>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
 

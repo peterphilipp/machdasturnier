@@ -559,16 +559,33 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                           const endMin = s.endMin ?? s.daySlot?.endMin ?? 0;
                           const areaName = (s.workArea?.name || s.arbeitsbereich?.name || 'Schicht');
                           const areaIcon = (s.workArea?.icon || s.arbeitsbereich?.icon || '📌');
-                          const isFull = assigned.length >= s.maxVolunteers;
+                          const count = assigned.length;
+                          const max = s.maxVolunteers || 1;
+                          const isFull = count >= max;
+                          const isPartial = count > 0 && count < max;
+
                           return (
-                            <div key={s.id} className="admin-core-style-200">
+                            <div key={s.id} className="admin-core-style-200" style={{ borderLeft: `4px solid ${s.workArea?.color || s.arbeitsbereich?.color || '#3b98f8'}` }}>
                               <div className="admin-core-style-201">
                                 <div>
-                                  <div className="admin-core-style-202">{areaIcon} {areaName}</div>
-                                  <div className="admin-core-style-203">⏰ {minToTime(startMin)} – {minToTime(endMin)}</div>
-                                  <div style={{ fontSize: 12, color: isFull ? '#155724' : '#856404', marginTop: 2 }}>
-                                    {isFull ? '✅' : '⚠️'} {assigned.length}/{s.maxVolunteers} besetzt
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                                    <span className="admin-core-style-202">{areaIcon} {areaName}</span>
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                      padding: '2px 8px',
+                                      borderRadius: 6,
+                                      fontSize: 12,
+                                      fontWeight: 800,
+                                      background: isFull ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
+                                      color: isFull ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
+                                      border: `1px solid ${isFull ? '#86efac' : isPartial ? '#fde68a' : '#fca5a5'}`
+                                    }}>
+                                      {isFull ? '✅' : isPartial ? '🟡' : '⚠️'} {count}/{max} {isFull ? 'voll' : 'besetzt'}
+                                    </span>
                                   </div>
+                                  <div className="admin-core-style-203" style={{ color: '#64748b', fontSize: 12 }}>⏰ {minToTime(startMin)} – {minToTime(endMin)}</div>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
                                   <button

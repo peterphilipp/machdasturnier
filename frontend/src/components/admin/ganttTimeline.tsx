@@ -14,6 +14,8 @@ export interface GanttItem {
   border?: string;
   boxShadow?: string;
   isPending?: boolean;
+  assignedCount?: number | null;
+  maxVolunteers?: number;
 }
 
 export interface GanttRow {
@@ -287,12 +289,16 @@ export function GanttTimeline({
                       onClick={!canDrag && onItemClick ? () => onItemClick(item.id) : undefined}
                       style={{
                         position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2,
-                        background: row.color, borderRadius: 6,
-                        boxShadow: isDragging(item.id) ? '0 4px 12px rgba(0,0,0,0.4)' : item.boxShadow || '0 1px 3px rgba(0,0,0,0.2)',
-                        border: item.isPending ? '3px dashed #fd7e14' : item.border || 'none',
-                        color: '#fff', fontSize: 11,
+                        background: '#ffffff',
+                        borderLeft: `4px solid ${row.color}`,
+                        borderTop: item.isPending ? '2px dashed #fd7e14' : item.border || '1px solid #cbd5e1',
+                        borderRight: item.isPending ? '2px dashed #fd7e14' : item.border || '1px solid #cbd5e1',
+                        borderBottom: item.isPending ? '2px dashed #fd7e14' : item.border || '1px solid #cbd5e1',
+                        borderRadius: 6,
+                        boxShadow: isDragging(item.id) ? '0 8px 16px rgba(0,0,0,0.2)' : item.boxShadow || '0 2px 4px rgba(0,0,0,0.06)',
+                        color: '#0f172a', fontSize: 11,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        whiteSpace: 'nowrap', padding: '0 8px', boxSizing: 'border-box',
+                        whiteSpace: 'nowrap', padding: '0 6px', boxSizing: 'border-box',
                         cursor: isDragging(item.id) ? 'grabbing' : canDrag ? 'grab' : (onItemClick ? 'pointer' : 'default'),
                         opacity: isDragging(item.id) ? 0.9 : 1,
                         zIndex: isDragging(item.id) ? 50 : 1,
@@ -306,15 +312,40 @@ export function GanttTimeline({
                       </div>
 
                       {canDrag && (
-                        <div onPointerDown={(e) => handlePointerDown(e, item, 'start')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 16, cursor: 'ew-resize', background: 'rgba(0,0,0,0.15)', touchAction: 'none' }} title="Startzeit verschieben" />
+                        <div onPointerDown={(e) => handlePointerDown(e, item, 'start')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 14, cursor: 'ew-resize', background: 'rgba(0,0,0,0.06)', borderRadius: '4px 0 0 4px', touchAction: 'none' }} title="Startzeit verschieben" />
                       )}
 
-                      <span style={{ fontWeight: 600, opacity: 0.92, pointerEvents: 'none', fontSize: 11 }}>
-                        {item.label || `${minToTime(st)}–${minToTime(en)}`}
-                      </span>
+                      {/* Prominenter Auslastungs-Badge & dezentere Uhrzeit */}
+                      {item.assignedCount != null && item.maxVolunteers != null ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', pointerEvents: 'none' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 2,
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontWeight: 800,
+                            background: item.assignedCount >= item.maxVolunteers ? '#dcfce7' : item.assignedCount > 0 ? '#fef3c7' : '#fee2e2',
+                            color: item.assignedCount >= item.maxVolunteers ? '#15803d' : item.assignedCount > 0 ? '#b45309' : '#b91c1c',
+                            border: `1px solid ${item.assignedCount >= item.maxVolunteers ? '#86efac' : item.assignedCount > 0 ? '#fde68a' : '#fca5a5'}`
+                          }}>
+                            {item.assignedCount >= item.maxVolunteers ? '✅' : item.assignedCount > 0 ? '🟡' : '⚠️'} {item.assignedCount}/{item.maxVolunteers}
+                          </span>
+                          {width > 12 && (
+                            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
+                              {minToTime(st)}–{minToTime(en)}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 11, pointerEvents: 'none' }}>
+                          {item.label || `${minToTime(st)}–${minToTime(en)}`}
+                        </span>
+                      )}
 
                       {canDrag && (
-                        <div onPointerDown={(e) => handlePointerDown(e, item, 'end')} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 16, cursor: 'ew-resize', background: 'rgba(0,0,0,0.15)', touchAction: 'none' }} title="Endzeit verschieben" />
+                        <div onPointerDown={(e) => handlePointerDown(e, item, 'end')} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 14, cursor: 'ew-resize', background: 'rgba(0,0,0,0.06)', borderRadius: '0 4px 4px 0', touchAction: 'none' }} title="Endzeit verschieben" />
                       )}
 
                       {/* Delete button – inside the bar */}

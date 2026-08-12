@@ -87,15 +87,15 @@ export default function ShiftTimeline({
       const isFull = assigned != null && assigned >= max;
       const staffingBorder = assigned == null
         ? undefined
-        : isFull ? '#198754' : assigned > 0 ? '#ffc107' : undefined;
+        : isFull ? '#16a34a' : assigned > 0 ? '#d97706' : '#dc2626';
 
-      const showTime = (en - st) > 15;
-      const label = (isPending ? '✎ ' : '') + (assigned != null
-        ? (showTime ? `${minToTime(st)}–${minToTime(en)} (${assigned}/${max}${isFull ? ' ✓' : ''})` : `${assigned}/${max}${isFull ? ' ✓' : ''}`)
-        : (showTime ? `${minToTime(st)}–${minToTime(en)} (${s.minVolunteers}-${max})` : `${s.minVolunteers}-${max}`));
+      const showTime = (en - st) > 20;
+      const timeStr = `${minToTime(st)}–${minToTime(en)}`;
+      const occStr = assigned != null ? `${assigned}/${max}` : `${s.minVolunteers ?? 1}-${max}`;
+      const label = (isPending ? '✎ ' : '') + (showTime ? `${occStr} (${timeStr})` : occStr);
 
       const tooltip = (assigned != null
-        ? `${minToTime(st)}–${minToTime(en)} · ${assigned}/${max} Helfer${editable && timeEditMode ? ' · klicken für Details, Ränder ziehen für Zeiten' : ''}`
+        ? `${minToTime(st)}–${minToTime(en)} · Belegung: ${assigned}/${max} Helfer${editable && timeEditMode ? ' · klicken für Details, Ränder ziehen für Zeiten' : ''}`
         : `${minToTime(st)}–${minToTime(en)} · ${s.minVolunteers}–${max} Helfer${hasCustomTime ? ' (angepasste Zeit)' : ''}`)
         + (isPending ? ' · Änderung noch nicht gespeichert' : '');
 
@@ -106,7 +106,9 @@ export default function ShiftTimeline({
         label,
         tooltip,
         isPending,
-        border: hasCustomTime ? '2px dashed rgba(255,255,255,0.9)' : undefined,
+        assignedCount: assigned,
+        maxVolunteers: max,
+        border: hasCustomTime ? '2px dashed #0d6efd' : undefined,
         boxShadow: staffingBorder ? `0 0 0 2px ${staffingBorder}` : undefined
       };
     })
