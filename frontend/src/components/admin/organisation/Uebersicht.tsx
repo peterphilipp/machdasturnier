@@ -507,6 +507,24 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                 const count = volunteerShifts.filter(vs => vs.shiftId === s.id).length;
                 return sum + Math.max(0, (s.maxVolunteers || 1) - count);
               }, 0);
+              
+              const assignedShiftsForDay = volunteerShifts.filter(vs => slots.some((s: any) => vs.shiftId === s.id));
+              const ygCounts = new Map<number, number>();
+              assignedShiftsForDay.forEach(vs => {
+                const membership = vs.user?.tournamentMemberships?.find(m => m.tournamentId === currentTournament?.id);
+                if (membership && membership.yearGroupIds) {
+                  membership.yearGroupIds.forEach(ygId => {
+                    ygCounts.set(ygId, (ygCounts.get(ygId) || 0) + 1);
+                  });
+                }
+              });
+              const yearGroupStats = Array.from(ygCounts.entries())
+                .map(([ygId, count]) => {
+                  const yg = currentTournament?.yearGroups?.find(y => y.id === ygId);
+                  return { name: yg?.name || `JG ${ygId}`, count };
+                })
+                .sort((a, b) => b.count - a.count);
+
               const isExpanded = expandedDays.has(dateStr);
 
               if (isMobile) {
@@ -524,7 +542,7 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                       }}
                       style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: isExpanded ? '#eff6ff' : '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', gap: 8, borderLeft: isExpanded ? '4px solid #3b82f6' : '4px solid transparent', transition: 'all 0.2s' }}
                     >
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 15, color: isExpanded ? '#1e40af' : '#0f172a' }}>📅 {dateStr} – {dayName}</div>
                         <div style={{ fontSize: 12, color: isExpanded ? '#3b82f6' : '#64748b', marginTop: 4 }}>
                           {slots.length} Schichten · {totalHelfer} Helfer zugewiesen
@@ -534,6 +552,15 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                             </span>
                           )}
                         </div>
+                        {yearGroupStats.length > 0 && (
+                          <div style={{ marginTop: 6, fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                            {yearGroupStats.map(yg => (
+                              <span key={yg.name} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                👶 {yg.name}: {yg.count}x
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <span style={{ fontSize: 20, color: isExpanded ? '#3b82f6' : '#94a3b8', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
                     </button>
@@ -609,15 +636,26 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                   key={dateStr}
                   title={`📅 ${dateStr} (${dayName})`}
                   subtitle={
-                    <span className="admin-core-style-205">
-                      {slots.length} Schichten · {totalHelfer} Helfer zugewiesen
-                      {fehlendeHelfer > 0 && (
-                        <span style={{ color: '#b91c1c', fontWeight: 600, marginLeft: 4, marginRight: 4 }}>
-                          · ⚠️ {fehlendeHelfer} fehlen
-                        </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span className="admin-core-style-205">
+                        {slots.length} Schichten · {totalHelfer} Helfer zugewiesen
+                        {fehlendeHelfer > 0 && (
+                          <span style={{ color: '#b91c1c', fontWeight: 600, marginLeft: 4, marginRight: 4 }}>
+                            · ⚠️ {fehlendeHelfer} fehlen
+                          </span>
+                        )}
+                        {' · '}💡 {timeEditMode ? 'Ränder ziehen = Zeiten anpassen, dann oben übernehmen' : 'Balken antippen = Helfer'}
+                      </span>
+                      {yearGroupStats.length > 0 && (
+                        <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                          {yearGroupStats.map(yg => (
+                            <span key={yg.name} style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 4, border: '1px solid #cbd5e1', fontWeight: 600 }}>
+                              👶 {yg.name}: {yg.count}x
+                            </span>
+                          ))}
+                        </div>
                       )}
-                      {' · '}💡 {timeEditMode ? 'Ränder ziehen = Zeiten anpassen, dann oben übernehmen' : 'Balken antippen = Helfer'}
-                    </span>
+                    </div>
                   }
                   headerRight={
                     tournamentDay && (
