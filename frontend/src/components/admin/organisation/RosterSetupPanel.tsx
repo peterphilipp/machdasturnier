@@ -262,15 +262,31 @@ export default function RosterSetupPanel({
   });
 
   return (
-    <div className="admin-core-style-111">
+    <div className="admin-core-style-111" style={{ marginBottom: 16 }}>
       <button
         onClick={() => setSetupExpandedOverride(!setupExpanded)}
-        className="admin-core-style-112"
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '12px 16px',
+          background: setupExpanded ? '#f8f9fa' : 'transparent',
+          border: setupExpanded ? '1px solid #e9ecef' : '1px dashed #ced4da',
+          borderRadius: 8,
+          cursor: 'pointer',
+          color: '#495057',
+          fontWeight: 600,
+          fontSize: 14,
+          transition: 'all 0.2s',
+          justifyContent: 'space-between'
+        }}
       >
-        <span className="admin-core-style-113">⚙️ Dienstplan-Generierung</span>
-        <span className="admin-core-style-114">Arbeitsbereiche, Turnier-Tage, Schichten generieren</span>
-        <span className="admin-core-style-115" />
-        <span style={{ fontSize: 18, color: '#6c757d', transition: 'transform 0.2s', display: 'inline-block', transform: setupExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>⚙️</span>
+          <span>Dienstplan-Generierung {setupExpanded ? 'ausblenden' : 'anzeigen'}</span>
+        </div>
+        <span style={{ fontSize: 18, color: '#adb5bd', transition: 'transform 0.2s', transform: setupExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
       </button>
 
       {setupExpanded && (

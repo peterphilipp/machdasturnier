@@ -421,54 +421,30 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
 
       {jobSlots.length > 0 && (
         <>
-          {/* Offene Punkte Widget */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24 }}>
-            {unbesetzteSlots.length > 0 ? (
-              <div className="admin-core-style-184">
-                <div className="admin-core-style-185">⚠️ <strong className="admin-core-style-186">{unbesetzteSlots.length} unbesetzte Job-Slots</strong></div>
-                <p className="admin-core-style-187">Es fehlen noch Helfer in verschiedenen Schichten.</p>
-              </div>
-            ) : (
-              <div className="admin-core-style-188">
-                <div className="admin-core-style-189">✅ <strong className="admin-core-style-190">Alle Job-Slots besetzt!</strong></div>
-                <p className="admin-core-style-191">Gute Arbeit!</p>
-              </div>
-            )}
-          </div>
-
-          {/* Editiermodus-Toolbar: Zeiten sind standardmäßig gesperrt (nur Helfer
-              ein-/ausplanen ist ohne Umschalten möglich). Erst hier freigeschaltet
-              lassen sich Balken ziehen; verlassen geht nur über Commit oder Verwerfen. */}
+          {/* Editiermodus-Toolbar */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap: 12, flexWrap: 'wrap',
-            marginBottom: 32, padding: isMobile ? '16px' : '12px 16px', borderRadius: 12,
-            background: timeEditMode ? '#fff3cd' : '#fff',
-            boxShadow: timeEditMode ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
-            border: `1px solid ${timeEditMode ? '#ffe69c' : '#e2e8f0'}`
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap',
+            marginBottom: 24, padding: timeEditMode ? '12px 16px' : '0', borderRadius: timeEditMode ? 12 : 0,
+            background: timeEditMode ? '#fff3cd' : 'transparent',
+            border: timeEditMode ? '1px solid #ffe69c' : 'none'
           }}>
             {!timeEditMode ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: isMobile ? '1 1 100%' : 'none', marginBottom: isMobile ? 8 : 0 }}>
-                  <span style={{ fontSize: 18 }}>🔒</span>
-                  <span style={{ fontWeight: 600, color: '#475569', fontSize: 14 }}>Schicht-Zeiten sind gesperrt</span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => setTimeEditMode(true)}
-                    style={{ flex: isMobile ? '1 1 100%' : 'none', padding: '10px 14px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                  >
-                    ✏️ Zeiten bearbeiten
-                  </button>
-                  <button
-                    onClick={() => setShowPrintModal(true)}
-                    style={{
-                      flex: isMobile ? '1 1 100%' : 'none', padding: '10px 14px', borderRadius: 8, border: '1px solid #0d6efd', background: '#0d6efd', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6
-                    }}
-                  >
-                    🖨️ Stationszettel (PDF)
-                  </button>
-                </div>
-              </>
+              <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+                <button
+                  onClick={() => setShowPrintModal(true)}
+                  style={{
+                    flex: isMobile ? 1 : 'none', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  🖨️ PDF
+                </button>
+                <button
+                  onClick={() => setTimeEditMode(true)}
+                  style={{ flex: isMobile ? 1 : 'none', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}
+                >
+                  🔒 Zeiten bearbeiten
+                </button>
+              </div>
             ) : (
               <>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: isMobile ? '1 1 100%' : 'none', marginBottom: isMobile ? 8 : 0 }}>
