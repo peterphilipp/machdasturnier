@@ -527,6 +527,10 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                 return nameA.localeCompare(nameB);
               });
               const totalHelfer = slots.reduce((sum: number, s: Record<string, any>) => sum + volunteerShifts.filter(vs => vs.shiftId === s.id).length, 0);
+              const fehlendeHelfer = slots.reduce((sum: number, s: Record<string, any>) => {
+                const count = volunteerShifts.filter(vs => vs.shiftId === s.id).length;
+                return sum + Math.max(0, (s.maxVolunteers || 1) - count);
+              }, 0);
               const isExpanded = expandedDays.has(dateStr);
 
               if (isMobile) {
@@ -546,7 +550,14 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                     >
                       <div>
                         <div style={{ fontWeight: 700, fontSize: 15, color: isExpanded ? '#1e40af' : '#0f172a' }}>📅 {dateStr} – {dayName}</div>
-                        <div style={{ fontSize: 12, color: isExpanded ? '#3b82f6' : '#64748b', marginTop: 4 }}>{slots.length} Schichten · {totalHelfer} Helfer zugewiesen</div>
+                        <div style={{ fontSize: 12, color: isExpanded ? '#3b82f6' : '#64748b', marginTop: 4 }}>
+                          {slots.length} Schichten · {totalHelfer} Helfer zugewiesen
+                          {fehlendeHelfer > 0 && (
+                            <span style={{ color: '#b91c1c', fontWeight: 600, marginLeft: 6 }}>
+                              · ⚠️ {fehlendeHelfer} fehlen
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span style={{ fontSize: 20, color: isExpanded ? '#3b82f6' : '#94a3b8', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
                     </button>
@@ -623,7 +634,12 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                   title={`📅 ${dateStr} (${dayName})`}
                   subtitle={
                     <span className="admin-core-style-205">
-                      {slots.length} Schichten · {totalHelfer} Helfer
+                      {slots.length} Schichten · {totalHelfer} Helfer zugewiesen
+                      {fehlendeHelfer > 0 && (
+                        <span style={{ color: '#b91c1c', fontWeight: 600, marginLeft: 4, marginRight: 4 }}>
+                          · ⚠️ {fehlendeHelfer} fehlen
+                        </span>
+                      )}
                       {' · '}💡 {timeEditMode ? 'Ränder ziehen = Zeiten anpassen, dann oben übernehmen' : 'Balken antippen = Helfer'}
                     </span>
                   }
