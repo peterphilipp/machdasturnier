@@ -147,9 +147,10 @@
 }
 
 .station-print-logo {
-  max-height: 54px;
+  height: 54px;
   max-width: 120px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 
 .station-print-title-box {

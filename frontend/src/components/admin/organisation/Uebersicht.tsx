@@ -405,7 +405,13 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
   });
 
   return (
-    <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e9ecef' }}>
+    <div style={{
+      background: isMobile ? 'transparent' : '#fff',
+      padding: isMobile ? '12px 0' : 24,
+      borderRadius: isMobile ? 0 : 16,
+      boxShadow: isMobile ? 'none' : '0 2px 12px rgba(0,0,0,0.08)',
+      border: isMobile ? 'none' : '1px solid #e9ecef'
+    }}>
       {tid && (
         <RosterSetupPanel
           selectedTournamentId={tid}
@@ -434,60 +440,59 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               ein-/ausplanen ist ohne Umschalten möglich). Erst hier freigeschaltet
               lassen sich Balken ziehen; verlassen geht nur über Commit oder Verwerfen. */}
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
-            marginBottom: 32, padding: '10px 16px', borderRadius: 10,
-            background: timeEditMode ? '#fff3cd' : '#f8f9fa',
-            border: `1px solid ${timeEditMode ? '#ffe69c' : '#dee2e6'}`
+            display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'space-between' : 'flex-start', gap: 12, flexWrap: 'wrap',
+            marginBottom: 32, padding: isMobile ? '16px' : '12px 16px', borderRadius: 12,
+            background: timeEditMode ? '#fff3cd' : '#fff',
+            boxShadow: timeEditMode ? 'none' : '0 1px 3px rgba(0,0,0,0.05)',
+            border: `1px solid ${timeEditMode ? '#ffe69c' : '#e2e8f0'}`
           }}>
             {!timeEditMode ? (
               <>
-                <span className="admin-core-style-192">🔒 Schicht-Zeiten sind gesperrt</span>
-                <button
-                  onClick={() => setTimeEditMode(true)}
-                  className="admin-core-style-193"
-                >
-                  ✏️ Zeiten bearbeiten
-                </button>
-                <button
-                  onClick={() => setShowPrintModal(true)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 8,
-                    border: '1px solid #0d6efd',
-                    background: '#0d6efd',
-                    color: '#fff',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                >
-                  🖨️ Stationszettel (PDF)
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: isMobile ? '1 1 100%' : 'none', marginBottom: isMobile ? 8 : 0 }}>
+                  <span style={{ fontSize: 18 }}>🔒</span>
+                  <span style={{ fontWeight: 600, color: '#475569', fontSize: 14 }}>Schicht-Zeiten sind gesperrt</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setTimeEditMode(true)}
+                    style={{ flex: isMobile ? '1 1 100%' : 'none', padding: '10px 14px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  >
+                    ✏️ Zeiten bearbeiten
+                  </button>
+                  <button
+                    onClick={() => setShowPrintModal(true)}
+                    style={{
+                      flex: isMobile ? '1 1 100%' : 'none', padding: '10px 14px', borderRadius: 8, border: '1px solid #0d6efd', background: '#0d6efd', color: '#fff', fontWeight: 600, cursor: 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6
+                    }}
+                  >
+                    🖨️ Stationszettel (PDF)
+                  </button>
+                </div>
               </>
             ) : (
               <>
-                <span className="admin-core-style-194">✏️ Bearbeitungsmodus aktiv – Ränder ziehen zum Anpassen</span>
-                <span className="admin-core-style-195">
-                  {pendingCount === 0 ? 'Noch keine Änderungen' : `${pendingCount} Änderung${pendingCount === 1 ? '' : 'en'} ausstehend`}
-                </span>
-                <span className="admin-core-style-196" />
-                <button
-                  onClick={handleDiscardTimeChanges}
-                  disabled={committing}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #ced4da', background: '#fff', color: '#495057', fontWeight: 600, cursor: committing ? 'not-allowed' : 'pointer', fontSize: 13, opacity: committing ? 0.6 : 1 }}
-                >
-                  ✖️ Verwerfen
-                </button>
-                <button
-                  onClick={handleCommitTimeChanges}
-                  disabled={committing}
-                  style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: '#198754', color: '#fff', fontWeight: 600, cursor: committing ? 'not-allowed' : 'pointer', fontSize: 13, opacity: committing ? 0.6 : 1 }}
-                >
-                  {committing ? '...' : `✅ Übernehmen${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: isMobile ? '1 1 100%' : 'none', marginBottom: isMobile ? 8 : 0 }}>
+                  <span style={{ fontWeight: 600, color: '#856404', fontSize: 14 }}>✏️ Bearbeitungsmodus aktiv – Ränder ziehen</span>
+                  <span style={{ fontSize: 12, color: '#856404', opacity: 0.8 }}>
+                    {pendingCount === 0 ? 'Noch keine Änderungen' : `${pendingCount} Änderung${pendingCount === 1 ? '' : 'en'} ausstehend`}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleDiscardTimeChanges}
+                    disabled={committing}
+                    style={{ flex: isMobile ? 1 : 'none', padding: '10px 14px', borderRadius: 8, border: '1px solid #ced4da', background: '#fff', color: '#495057', fontWeight: 600, cursor: committing ? 'not-allowed' : 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: committing ? 0.6 : 1 }}
+                  >
+                    ✖️ Verwerfen
+                  </button>
+                  <button
+                    onClick={handleCommitTimeChanges}
+                    disabled={committing}
+                    style={{ flex: isMobile ? 1 : 'none', padding: '10px 14px', borderRadius: 8, border: 'none', background: '#198754', color: '#fff', fontWeight: 600, cursor: committing ? 'not-allowed' : 'pointer', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: committing ? 0.6 : 1 }}
+                  >
+                    {committing ? '...' : `✅ Speichern${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+                  </button>
+                </div>
               </>
             )}
           </div>
@@ -527,7 +532,7 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               if (isMobile) {
                 // Mobile: aufklappbares Accordion pro Tag
                 return (
-                  <div key={dateStr} className="admin-core-style-197">
+                  <div key={dateStr} style={{ marginBottom: 12, borderRadius: 12, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0', background: '#fff' }}>
                     <button
                       onClick={() => {
                         setExpandedDays(prev => {
@@ -537,13 +542,13 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                           return next;
                         });
                       }}
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: isExpanded ? '#0d6efd' : '#f8f9fa', border: 'none', cursor: 'pointer', textAlign: 'left', gap: 8 }}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px', background: isExpanded ? '#eff6ff' : '#fff', border: 'none', cursor: 'pointer', textAlign: 'left', gap: 8, borderLeft: isExpanded ? '4px solid #3b82f6' : '4px solid transparent', transition: 'all 0.2s' }}
                     >
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 15, color: isExpanded ? '#fff' : '#212529' }}>📅 {dateStr} – {dayName}</div>
-                        <div style={{ fontSize: 12, color: isExpanded ? 'rgba(255,255,255,0.8)' : '#6c757d', marginTop: 2 }}>{slots.length} Schichten · {totalHelfer} Helfer zugewiesen</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: isExpanded ? '#1e40af' : '#0f172a' }}>📅 {dateStr} – {dayName}</div>
+                        <div style={{ fontSize: 12, color: isExpanded ? '#3b82f6' : '#64748b', marginTop: 4 }}>{slots.length} Schichten · {totalHelfer} Helfer zugewiesen</div>
                       </div>
-                      <span style={{ fontSize: 20, color: isExpanded ? '#fff' : '#6c757d', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+                      <span style={{ fontSize: 20, color: isExpanded ? '#3b82f6' : '#94a3b8', transition: 'transform 0.2s', display: 'inline-block', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
                     </button>
                     {isExpanded && (
                       <div className="admin-core-style-198">
