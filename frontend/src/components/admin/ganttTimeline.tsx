@@ -40,6 +40,24 @@ interface DragState {
   containerWidth: number;
 }
 
+function getSoftTint(color: string, opacityPercent = 16): string {
+  if (!color) return '#f1f5f9';
+  if (color.startsWith('#') && color.length === 7) {
+    const alphaHex = Math.round((opacityPercent / 100) * 255).toString(16).padStart(2, '0');
+    return `${color}${alphaHex}`;
+  }
+  return color;
+}
+
+function getSoftBorder(color: string, opacityPercent = 45): string {
+  if (!color) return '#cbd5e1';
+  if (color.startsWith('#') && color.length === 7) {
+    const alphaHex = Math.round((opacityPercent / 100) * 255).toString(16).padStart(2, '0');
+    return `${color}${alphaHex}`;
+  }
+  return color;
+}
+
 export function GanttTimeline({
   globalStartMin,
   globalEndMin,
@@ -246,64 +264,68 @@ export function GanttTimeline({
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-          {rows.map(row => (
-            <div key={row.id} style={{ display: 'flex', alignItems: 'center', height: 32, position: 'relative' }}>
-              {/* Label links */}
-              <div style={{ position: 'absolute', left: -140, width: 130, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {row.icon} {row.label}
-              </div>
+          {rows.map(row => {
+            const rowTintBg = getSoftTint(row.color, 16);
+            const rowBorderTint = getSoftBorder(row.color, 45);
 
-              {/* Add slot button */}
-              {editable && timeEditMode && onAddSlot && (
-                <div
-                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', zIndex: 100 }}
-                  onPointerDown={e => e.stopPropagation()}
-                >
-                  <button
-                    onClick={(e) => {
-                      console.log('AddSlot clicked for row:', row.id);
-                      onAddSlot(row.id);
-                    }}
-                    style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid #badbcc', background: '#d1e7dd', color: '#0f5132', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    title="Neue Schicht hinzufügen"
-                  >
-                    +
-                  </button>
+            return (
+              <div key={row.id} style={{ display: 'flex', alignItems: 'center', height: 32, position: 'relative' }}>
+                {/* Label links */}
+                <div style={{ position: 'absolute', left: -140, width: 130, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {row.icon} {row.label}
                 </div>
-              )}
 
-              {/* Balken-Hintergrund */}
-              <div style={{ position: 'relative', width: '100%', height: '100%', background: 'rgba(241, 243, 245, 0.4)', borderRadius: 6 }}>
-                {row.items.map(item => {
-                  const st = isDragging(item.id) ? drag!.curStart : item.startMin;
-                  const en = isDragging(item.id) ? drag!.curEnd : item.endMin;
-                  const left = ((st - dStart) / (dEnd - dStart)) * 100;
-                  const width = ((en - st) / (dEnd - dStart)) * 100;
-                  const canDrag = editable && timeEditMode;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="gantt-item-wrapper"
-                      onPointerDown={(e) => handlePointerDown(e, item, 'move')}
-                      onClick={!canDrag && onItemClick ? () => onItemClick(item.id) : undefined}
-                      style={{
-                        position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2,
-                        background: '#ffffff',
-                        border: item.isPending ? '2px dashed #fd7e14' : item.border || '1px solid #e2e8f0',
-                        borderLeft: `4px solid ${row.color}`,
-                        borderRadius: 6,
-                        boxShadow: isDragging(item.id) ? '0 8px 16px rgba(0,0,0,0.15)' : '0 1px 3px rgba(0,0,0,0.05)',
-                        color: '#0f172a', fontSize: 11,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        whiteSpace: 'nowrap', padding: '0 6px', boxSizing: 'border-box',
-                        cursor: isDragging(item.id) ? 'grabbing' : canDrag ? 'grab' : (onItemClick ? 'pointer' : 'default'),
-                        opacity: isDragging(item.id) ? 0.9 : 1,
-                        zIndex: isDragging(item.id) ? 50 : 1,
-                        transition: isDragging(item.id) ? 'none' : 'left 0.15s, width 0.15s',
-                        touchAction: canDrag ? 'none' : undefined
+                {/* Add slot button */}
+                {editable && timeEditMode && onAddSlot && (
+                  <div
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', zIndex: 100 }}
+                    onPointerDown={e => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={(e) => {
+                        console.log('AddSlot clicked for row:', row.id);
+                        onAddSlot(row.id);
                       }}
+                      style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid #badbcc', background: '#d1e7dd', color: '#0f5132', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      title="Neue Schicht hinzufügen"
                     >
+                      +
+                    </button>
+                  </div>
+                )}
+
+                {/* Balken-Hintergrund (Spur) */}
+                <div style={{ position: 'relative', width: '100%', height: '100%', background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 6 }}>
+                  {row.items.map(item => {
+                    const st = isDragging(item.id) ? drag!.curStart : item.startMin;
+                    const en = isDragging(item.id) ? drag!.curEnd : item.endMin;
+                    const left = ((st - dStart) / (dEnd - dStart)) * 100;
+                    const width = ((en - st) / (dEnd - dStart)) * 100;
+                    const canDrag = editable && timeEditMode;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="gantt-item-wrapper"
+                        onPointerDown={(e) => handlePointerDown(e, item, 'move')}
+                        onClick={!canDrag && onItemClick ? () => onItemClick(item.id) : undefined}
+                        style={{
+                          position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2,
+                          background: rowTintBg,
+                          border: item.isPending ? '2px dashed #fd7e14' : item.border || `1px solid ${rowBorderTint}`,
+                          borderLeft: `4px solid ${row.color}`,
+                          borderRadius: 6,
+                          boxShadow: isDragging(item.id) ? '0 8px 16px rgba(0,0,0,0.18)' : '0 2px 4px rgba(0,0,0,0.06)',
+                          color: '#0f172a', fontSize: 11,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          whiteSpace: 'nowrap', padding: '0 6px', boxSizing: 'border-box',
+                          cursor: isDragging(item.id) ? 'grabbing' : canDrag ? 'grab' : (onItemClick ? 'pointer' : 'default'),
+                          opacity: isDragging(item.id) ? 0.9 : 1,
+                          zIndex: isDragging(item.id) ? 50 : 1,
+                          transition: isDragging(item.id) ? 'none' : 'left 0.15s, width 0.15s',
+                          touchAction: canDrag ? 'none' : undefined
+                        }}
+                      >
                       {/* Custom Tooltip */}
                       <div className="gantt-item-tooltip">
                         {item.tooltip || `${minToTime(st)}–${minToTime(en)}`}
@@ -368,7 +390,8 @@ export function GanttTimeline({
                 })}
               </div>
             </div>
-          ))}
+          );
+        })}
         </div>
       </div>
     </div>
