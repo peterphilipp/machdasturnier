@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from './shared';
 
 // ============================================================
 // GanttTimeline – Gemeinsame Zeitleiste für ziehbare Balken
@@ -56,6 +57,27 @@ function getSoftBorder(color: string, opacityPercent = 45): string {
     return `${color}${alphaHex}`;
   }
   return color;
+}
+
+/**
+ * Gefuellte und leere Punkte fuer "3 von 5 besetzt". Der Unterschied liegt in
+ * der Form, nicht im Farbton - damit bleibt er auch bei Rot-Gruen-Schwaeche
+ * lesbar, wo die Ampelfarbe allein nichts aussagt. Ab zu vielen Plaetzen
+ * werden die Punkte zu klein zum Zaehlen; dann traegt die Zahl daneben allein.
+ */
+function BesetzungsPunkte({ belegt, max, farbe }: { belegt: number; max: number; farbe: string }) {
+  if (max > MAX_BESETZUNGS_PUNKTE) return null;
+  return (
+    <span style={{ display: 'inline-flex', gap: 2, flexShrink: 0 }} aria-hidden="true">
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: i < belegt ? farbe : 'transparent',
+          boxShadow: `inset 0 0 0 1px ${farbe}`
+        }} />
+      ))}
+    </span>
+  );
 }
 
 export function GanttTimeline({
@@ -303,6 +325,17 @@ export function GanttTimeline({
                     const width = ((en - st) / (dEnd - dStart)) * 100;
                     const canDrag = editable && timeEditMode;
 
+                    // Die Flaeche traegt die Besetzung, nicht den Arbeitsbereich:
+                    // welcher Bereich gemeint ist, steht links als Name und Symbol,
+                    // die offene Frage beim Blick auf den Tag ist "wo fehlen Leute".
+                    // Die Bereichsfarbe bleibt als Kante links, um eine Zeile quer
+                    // durch das Diagramm verfolgen zu koennen.
+                    const zeigtBesetzung = item.assignedCount != null && item.maxVolunteers != null;
+                    const stufe = zeigtBesetzung
+                      ? besetzungsStufe(item.assignedCount as number, item.maxVolunteers as number)
+                      : null;
+                    const farben = stufe ? BESETZUNG_FARBEN[stufe] : null;
+
                     return (
                       <div
                         key={item.id}
@@ -311,8 +344,8 @@ export function GanttTimeline({
                         onClick={!canDrag && onItemClick ? () => onItemClick(item.id) : undefined}
                         style={{
                           position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2,
-                          background: rowTintBg,
-                          border: item.isPending ? '2px dashed #fd7e14' : item.border || `1px solid ${rowBorderTint}`,
+                          background: farben ? farben.flaeche : rowTintBg,
+                          border: item.isPending ? '2px dashed #fd7e14' : item.border || `1px solid ${farben ? farben.rand : rowBorderTint}`,
                           borderLeft: `4px solid ${row.color}`,
                           borderRadius: 6,
                           boxShadow: isDragging(item.id) ? '0 8px 16px rgba(0,0,0,0.18)' : '0 2px 4px rgba(0,0,0,0.06)',
@@ -335,24 +368,18 @@ export function GanttTimeline({
                         <div onPointerDown={(e) => handlePointerDown(e, item, 'start')} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 14, cursor: 'ew-resize', background: 'rgba(0,0,0,0.06)', borderRadius: '4px 0 0 4px', touchAction: 'none' }} title="Startzeit verschieben" />
                       )}
 
-                      {/* Prominenter Auslastungs-Badge & dezentere Uhrzeit */}
-                      {item.assignedCount != null && item.maxVolunteers != null ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', pointerEvents: 'none' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 2,
-                            padding: '1px 5px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            background: item.assignedCount >= item.maxVolunteers ? '#dcfce7' : item.assignedCount > 0 ? '#fef3c7' : '#fee2e2',
-                            color: item.assignedCount >= item.maxVolunteers ? '#15803d' : item.assignedCount > 0 ? '#b45309' : '#b91c1c',
-                            border: `1px solid ${item.assignedCount >= item.maxVolunteers ? '#86efac' : item.assignedCount > 0 ? '#fde68a' : '#fca5a5'}`
-                          }}>
-                            {item.assignedCount >= item.maxVolunteers ? '✅' : item.assignedCount > 0 ? '🟡' : '⚠️'} {item.assignedCount}/{item.maxVolunteers}
+                      {/* Besetzung zuerst, Uhrzeit nur wenn der Balken breit genug ist */}
+                      {zeigtBesetzung && farben ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', pointerEvents: 'none' }}>
+                          <BesetzungsPunkte
+                            belegt={item.assignedCount as number}
+                            max={item.maxVolunteers as number}
+                            farbe={farben.punkt}
+                          />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: farben.text, flexShrink: 0 }}>
+                            {item.assignedCount}/{item.maxVolunteers}
                           </span>
-                          {width > 12 && (
+                          {width > 18 && (
                             <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
                               {minToTime(st)}–{minToTime(en)}
                             </span>

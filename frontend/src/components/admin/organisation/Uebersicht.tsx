@@ -7,7 +7,7 @@ import {
   exportDayToTemplate, createShift, apiDelete, apiPost, getTournaments
 } from '../../../api';
 import { modal } from '../Modal';
-import { btnStyle, inputStyle, tdStyle, thStyle } from '../shared';
+import { btnStyle, inputStyle, tdStyle, thStyle, BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from '../shared';
 import ShiftFeedbackModal from './ShiftFeedbackModal';
 import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
@@ -594,11 +594,15 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                           const areaIcon = (s.workArea?.icon || s.arbeitsbereich?.icon || '📌');
                           const count = assigned.length;
                           const max = s.maxVolunteers || 1;
-                          const isFull = count >= max;
-                          const isPartial = count > 0 && count < max;
+                          const stufe = besetzungsStufe(count, max);
+                          const farben = BESETZUNG_FARBEN[stufe];
 
                           return (
-                            <div key={s.id} className="admin-core-style-200" style={{ borderLeft: `4px solid ${s.workArea?.color || s.arbeitsbereich?.color || '#3b98f8'}` }}>
+                            // Wie im Diagramm traegt die Besetzung die Farbe: die linke
+                            // Kante der Karte, damit eine luckenhafte Liste schon beim
+                            // Ueberfliegen auffaellt. Der Arbeitsbereich steht daneben
+                            // im Klartext und braucht die Farbe nicht.
+                            <div key={s.id} className="admin-core-style-200" style={{ borderLeft: `4px solid ${farben.punkt}` }}>
                               <div className="admin-core-style-201">
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
@@ -606,16 +610,27 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                                     <span style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
-                                      gap: 3,
+                                      gap: 5,
                                       padding: '2px 8px',
                                       borderRadius: 6,
                                       fontSize: 12,
-                                      fontWeight: 800,
-                                      background: isFull ? '#dcfce7' : isPartial ? '#fef3c7' : '#fee2e2',
-                                      color: isFull ? '#15803d' : isPartial ? '#b45309' : '#b91c1c',
-                                      border: `1px solid ${isFull ? '#86efac' : isPartial ? '#fde68a' : '#fca5a5'}`
+                                      fontWeight: 700,
+                                      background: farben.flaeche,
+                                      color: farben.text,
+                                      border: `1px solid ${farben.rand}`
                                     }}>
-                                      {isFull ? '✅' : isPartial ? '🟡' : '⚠️'} {count}/{max} {isFull ? 'voll' : 'besetzt'}
+                                      {max <= MAX_BESETZUNGS_PUNKTE && (
+                                        <span style={{ display: 'inline-flex', gap: 2 }} aria-hidden="true">
+                                          {Array.from({ length: max }, (_, i) => (
+                                            <span key={i} style={{
+                                              width: 6, height: 6, borderRadius: '50%',
+                                              background: i < count ? farben.punkt : 'transparent',
+                                              boxShadow: `inset 0 0 0 1px ${farben.punkt}`
+                                            }} />
+                                          ))}
+                                        </span>
+                                      )}
+                                      {count}/{max} {stufe === 'voll' ? 'voll' : 'besetzt'}
                                     </span>
                                   </div>
                                   <div className="admin-core-style-203" style={{ color: '#64748b', fontSize: 12 }}>⏰ {minToTime(startMin)} – {minToTime(endMin)}</div>

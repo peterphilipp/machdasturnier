@@ -195,3 +195,39 @@ export interface Match { id: number; tournamentId: number; yearGroupId: number |
 export interface Group { id: number; name: string; tournamentId: number; teams?: Team[]; }
 export interface Team { id: number; name: string; groupId: number | null; tournamentId: number | null; yearGroupId: number | null; clubId: number | null; club?: Club | null; yearGroup?: { id: number; name: string }; goalsFor: number; goalsAgainst: number; group?: Group | null; }
 export interface KnockoutBracket { id: number; tournamentId: number; name: string; runde: string; order: number; matches: Match[]; }
+
+// ===================== Besetzung einer Schicht =====================
+/**
+ * Beim Blick auf einen Turniertag stellt der Organisator eine einzige Frage:
+ * wo fehlen mir Leute. Deshalb traegt die Besetzung die Flaeche eines Balkens
+ * bzw. die Kante einer Karte - nicht die Bereichsfarbe, die links ohnehin als
+ * Name und Symbol dasteht und dort eindeutig ist.
+ *
+ * Neben der Zahl stehen gefuellte und leere Punkte. Das ist ein Unterschied in
+ * der Form, kein Farbton-Unterschied, und bleibt damit auch bei Rot-Gruen-
+ * Schwaeche und auf einem grauen Ausdruck lesbar.
+ */
+export type Besetzung = 'leer' | 'teilweise' | 'voll';
+
+export interface BesetzungsFarben {
+  /** Fuellung der Flaeche */
+  flaeche: string;
+  rand: string;
+  /** Textfarbe auf der Fuellung */
+  text: string;
+  punkt: string;
+}
+
+export const BESETZUNG_FARBEN: Record<Besetzung, BesetzungsFarben> = {
+  voll:      { flaeche: '#dcfce7', rand: '#86efac', text: '#15803d', punkt: '#16a34a' },
+  teilweise: { flaeche: '#fef3c7', rand: '#fde68a', text: '#b45309', punkt: '#d97706' },
+  leer:      { flaeche: '#fee2e2', rand: '#fca5a5', text: '#b91c1c', punkt: '#dc2626' }
+};
+
+export function besetzungsStufe(belegt: number, max: number): Besetzung {
+  if (max > 0 && belegt >= max) return 'voll';
+  return belegt > 0 ? 'teilweise' : 'leer';
+}
+
+/** Ab dieser Platzzahl werden Punkte unlesbar - dann traegt nur noch die Zahl. */
+export const MAX_BESETZUNGS_PUNKTE = 6;

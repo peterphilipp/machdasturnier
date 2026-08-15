@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { minToTime } from '../shared';
+import { minToTime, BESETZUNG_FARBEN } from '../shared';
 import type { VolunteerShift } from '../shared';
 import { GanttTimeline, GanttRow } from '../ganttTimeline';
 
@@ -133,19 +133,31 @@ export default function ShiftTimeline({
         onItemClick={handleItemClick}
       />
 
-      {/* Legende */}
+      {/* Legende: erst die Besetzung (das ist die Farbe der Flaeche), dann die Zeit-Zustaende (das ist der Rahmen) */}
       <div style={{ display: 'flex', gap: 20, marginTop: 12, flexWrap: 'wrap', fontSize: 12, color: '#64748b', alignItems: 'center' }}>
+        {([['voll', 'voll besetzt'], ['teilweise', 'teilweise besetzt'], ['leer', 'niemand eingeplant']] as const).map(([stufe, text]) => (
+          <span key={stufe} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              display: 'inline-block', width: 20, height: 12, borderRadius: 3,
+              background: BESETZUNG_FARBEN[stufe].flaeche,
+              border: `1px solid ${BESETZUNG_FARBEN[stufe].rand}`,
+              borderLeft: '4px solid #94a3b8'
+            }} />
+            = {text}
+          </span>
+        ))}
+        <span style={{ width: 1, height: 14, background: '#e2e8f0' }} />
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 20, height: 12, border: '1px solid #cbd5e1', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#ebf5ff' }} />
-          = Standard-Zeiten
-        </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #0d6efd', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#ebf5ff' }} />
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #0d6efd', borderRadius: 3, background: '#f8fafc' }} />
           = Angepasste Zeiten
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #fd7e14', borderLeft: '4px solid #3b98f8', borderRadius: 3, background: '#fff3cd' }} />
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #fd7e14', borderRadius: 3, background: '#f8fafc' }} />
           = Nicht gespeicherte Änderung
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 4, height: 12, borderRadius: 2, background: '#94a3b8' }} />
+          = Farbe des Arbeitsbereichs
         </span>
       </div>
     </div>
