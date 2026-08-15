@@ -8,6 +8,16 @@
     <meta name="theme-color" content="#198754" />
     <meta name="apple-mobile-web-app-title" content="Mach das Turnier!" />
     <title>Mach das Turnier!</title>
+    <!--
+      Beschreibung und der Ladehinweis unten im <body> sind bewusst
+      deutschsprachiger Fliesstext: Ohne sie liefert die Seite beim Laden gar
+      keinen Text aus (leeres <div id="root">), Chrome kann die Sprache nicht
+      bestimmen ("Automatisch erkennen") und bietet deutschen Nutzern eine
+      Uebersetzung an. Ein versehentliches Tippen darauf merkt sich der Browser
+      dauerhaft - und uebersetzt dann Fachbegriffe falsch, "Aufbau" und
+      "Schicht" etwa beide zu "layer".
+    -->
+    <meta name="description" content="Mach das Turnier! - Helferplanung, Spielplan und Verpflegung für das Vereinsturnier. Schichten übernehmen, Spenden zusagen und den Turniertag gemeinsam organisieren." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,10 +33,46 @@
         display: none;
         -webkit-appearance: none;
       }
+      #ladehinweis {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        text-align: center;
+      }
+      #ladehinweis h1 { margin: 0; font-size: 20px; font-weight: 700; }
+      #ladehinweis p { margin: 0; max-width: 30em; font-size: 14px; line-height: 1.6; color: #6c757d; }
+      #ladehinweis .kreisel {
+        width: 28px; height: 28px; margin-bottom: 4px;
+        border: 3px solid #dee2e6; border-top-color: #198754; border-radius: 50%;
+        animation: ladehinweis-dreht 0.9s linear infinite;
+      }
+      @keyframes ladehinweis-dreht { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        #ladehinweis .kreisel { animation: none; }
+      }
     </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      React ersetzt den Inhalt von #root beim Start vollstaendig, der Hinweis
+      ist also nur bis zum Mounten sichtbar. Er ueberbrueckt die Ladezeit und
+      gibt der Spracherkennung des Browsers zugleich deutschen Text - siehe
+      Kommentar im <head>.
+    -->
+    <div id="root">
+      <div id="ladehinweis">
+        <div class="kreisel"></div>
+        <h1>Mach das Turnier!</h1>
+        <p>
+          Helferplanung, Spielplan und Verpflegung für das Vereinsturnier.
+          Einen Moment bitte, die Ansicht wird geladen …
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
