@@ -57,6 +57,26 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
     enabled: !!selectedTournament
   });
 
+  /**
+   * Zum Einplanen zaehlt der ganze Verein, nicht nur wer in diesem Turnier
+   * schon aktiv ist.
+   *
+   * Die turniergefilterte Liste oben zeigt nur Helfer mit Schicht,
+   * Mitgliedschaft oder passender Turnier-Praeferenz. Ein frisch angelegter
+   * Helfer hat nichts davon - und liesse sich deshalb nie eintragen, obwohl er
+   * genau dafuer angelegt wurde. Die Schicht-Zuweisung erzeugt die
+   * Zugehoerigkeit erst.
+   *
+   * Fuer Organisatoren lehnt der Server die ungefilterte Abfrage mit 403 ab;
+   * dann bleibt es bei der Turnierliste (siehe Zusammenfuehrung unten).
+   */
+  const { data: alleNutzer = [] } = useQuery<any[]>({
+    queryKey: ['volunteers', 'alle'],
+    queryFn: () => getVolunteers(),
+    enabled: !!selectedTournament,
+    retry: false
+  });
+
   const { data: jobSlots = [], isLoading: busySlots } = useQuery<Shift[]>({
     queryKey: ['shifts', selectedTournament],
     queryFn: () => getShifts(selectedTournament),
@@ -844,11 +864,34 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                     style={{ flex: 1, minWidth: 200, padding: isMobile ? '12px 14px' : '8px 12px', border: '1px solid #ced4da', borderRadius: 8, fontSize: 14, minHeight: 44 }}
                   >
                     <option value="">-- Helfer auswählen --</option>
-                    {allVolunteers
-                      .filter(v => !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id))
-                      .map(v => (
-                        <option key={v.id} value={v.id}>{v.name} {v.email ? `(${v.email})` : ''}</option>
-                      ))}
+                    {(() => {
+                      // Wer schon in diesem Turnier aktiv ist, steht oben - das ist der
+                      // Regelfall. Darunter der Rest des Vereins, damit auch ein gerade
+                      // erst angelegter Helfer eingeplant werden kann.
+                      const imTurnierIds = new Set(allVolunteers.map(v => v.id));
+                      const zusammen = [...allVolunteers];
+                      for (const v of alleNutzer) if (!imTurnierIds.has(v.id)) zusammen.push(v);
+
+                      const waehlbar = zusammen.filter(v =>
+                        !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id));
+                      const imTurnier = waehlbar.filter(v => imTurnierIds.has(v.id));
+                      const weitere = waehlbar.filter(v => !imTurnierIds.has(v.id));
+                      const eintrag = (v: Record<string, any>) => (
+                        <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
+                      );
+
+                      // Ohne weitere Helfer keine Gruppierung - sonst stuende eine
+                      // einzelne Ueberschrift ueber der gesamten Liste.
+                      if (weitere.length === 0) return waehlbar.map(eintrag);
+                      return (
+                        <>
+                          {imTurnier.length > 0 && (
+                            <optgroup label="In diesem Turnier aktiv">{imTurnier.map(eintrag)}</optgroup>
+                          )}
+                          <optgroup label="Weitere Helfer aus den Stammdaten">{weitere.map(eintrag)}</optgroup>
+                        </>
+                      );
+                    })()}
                   </select>
                   <button
                     onClick={async () => {
