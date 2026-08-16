@@ -114,7 +114,8 @@ export const removeTournamentClub = (tournamentId: number, clubId: number) =>
 
 export const getShifts = (tournamentId?: string | number | null) => 
   tournamentId ? apiFetch(`/api/shifts?tournamentId=${tournamentId}`) : Promise.resolve([]);
-export const createShift = (data: { tournamentId: number; tournamentDayId: number; daySlotId: number; tournamentWorkAreaId: number; minVolunteers?: number; maxVolunteers?: number }) =>
+/** allowParallel: bewusst eine weitere Schicht neben einer bestehenden im selben Zeitfenster. */
+export const createShift = (data: { tournamentId: number; tournamentDayId: number; daySlotId: number; tournamentWorkAreaId: number; minVolunteers?: number; maxVolunteers?: number; allowParallel?: boolean }) =>
   apiPost('/api/shifts', data);
 export const updateShift = <T = Record<string, unknown>>(id: number, data: T) => apiPatch(`/api/shifts/${id}`, data);
 export const updateShiftsBatch = (changes: { id: number; startMin: number; endMin: number }[]) =>

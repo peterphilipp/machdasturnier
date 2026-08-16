@@ -301,6 +301,58 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
   });
 
   /**
+   * Legt eine weitere Schicht parallel zur geöffneten an - gleicher Bereich,
+   * gleicher Tag, gleiches Zeitfenster.
+   *
+   * Ein Arbeitsbereich kann zur selben Zeit mehrfach besetzt sein: zwei
+   * Verkaufsstände laufen gleichzeitig, werden aber getrennt geplant und haben
+   * jeweils eigene Helfer und einen eigenen Stationszettel. Einfach die
+   * Helferzahl der bestehenden Schicht hochzusetzen würde alle in einen Topf
+   * werfen und die Trennung verlieren.
+   */
+  const parallelSchichtAnlegen = (shift: Record<string, any>) => guard(async () => {
+    if (!tid) return;
+    const name = shift.workArea?.name || shift.arbeitsbereich?.name || 'Schicht';
+    const areaId = shift.tournamentWorkAreaId ?? shift.arbeitsbereichId;
+    const startMin = shift.startMin ?? shift.daySlot?.startMin ?? 0;
+    const endMin = shift.endMin ?? shift.daySlot?.endMin ?? 0;
+    const bisher = jobSlots.filter((s: Record<string, any>) =>
+      s.tournamentDayId === shift.tournamentDayId
+      && s.daySlotId === shift.daySlotId
+      && (s.tournamentWorkAreaId ?? s.arbeitsbereichId) === areaId).length;
+
+    if (!(await modal.confirm({
+      title: '➕ Parallele Schicht anlegen',
+      message: `„${name}" läuft von ${minToTime(startMin)} bis ${minToTime(endMin)} bereits ${bisher}× parallel.\n\n`
+        + 'Eine weitere Schicht mit denselben Zeiten anlegen? Sie bekommt eigene Helfer und einen eigenen Stationszettel.',
+      confirmText: 'Anlegen'
+    }))) return;
+
+    const neu = await createShift({
+      tournamentId: tid,
+      tournamentDayId: shift.tournamentDayId,
+      daySlotId: shift.daySlotId,
+      tournamentWorkAreaId: areaId,
+      minVolunteers: shift.minVolunteers,
+      maxVolunteers: shift.maxVolunteers,
+      allowParallel: true
+    });
+
+    // Weicht die Vorlage vom Zeitfenster ab (im Diagramm zurechtgezogen), muss
+    // die Kopie dieselbe Abweichung bekommen - sonst stünde sie woanders.
+    if (shift.startMin != null || shift.endMin != null) {
+      await updateShift(neu.id, { startMin, endMin });
+    }
+
+    queryClient.invalidateQueries({ queryKey: ['shifts', tid] });
+    setSelectedShift(null);
+    await modal.alert({
+      title: 'Angelegt ✅',
+      message: `„${name}" läuft jetzt ${bisher + 1}× parallel von ${minToTime(startMin)} bis ${minToTime(endMin)}.`
+    });
+  });
+
+  /**
    * Zeit einer einzelnen Schicht per Dialog setzen.
    *
    * Auf dem Desktop zieht man die Ränder im Gantt-Diagramm; auf dem Handy gibt
@@ -626,6 +678,17 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                           const stufe = besetzungsStufe(count, max);
                           const farben = BESETZUNG_FARBEN[stufe];
 
+                          // Laeuft dieser Bereich zur selben Zeit mehrfach (zwei
+                          // Verkaufsstaende etwa), waeren die Karten sonst nicht
+                          // auseinanderzuhalten - im Diagramm trennen sie die Spuren,
+                          // hier braucht es eine Nummer.
+                          const parallele = slots.filter((x: Record<string, any>) =>
+                            x.daySlotId === s.daySlotId
+                            && (x.tournamentWorkAreaId ?? x.arbeitsbereichId) === (s.tournamentWorkAreaId ?? s.arbeitsbereichId));
+                          const parallelNr = parallele.length > 1
+                            ? parallele.findIndex((x: Record<string, any>) => x.id === s.id) + 1
+                            : 0;
+
                           return (
                             // Wie im Diagramm traegt die Besetzung die Farbe: die linke
                             // Kante der Karte, damit eine luckenhafte Liste schon beim
@@ -635,7 +698,10 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                               <div className="admin-core-style-201">
                                 <div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                                    <span className="admin-core-style-202">{areaIcon} {areaName}</span>
+                                    <span className="admin-core-style-202">
+                                      {areaIcon} {areaName}
+                                      {parallelNr > 0 && <span style={{ color: '#64748b', fontWeight: 500 }}> · {parallelNr} von {parallele.length}</span>}
+                                    </span>
                                     <span style={{
                                       display: 'inline-flex',
                                       alignItems: 'center',
@@ -958,6 +1024,13 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                 className="admin-core-style-230"
               >
                 🗑️ Schicht entfernen
+              </button>
+              <button
+                onClick={() => parallelSchichtAnlegen(selectedShift as unknown as Record<string, any>)}
+                style={{ ...btnStyle, background: '#e7f1ff', color: '#0d6efd' }}
+                title="Eine weitere Schicht mit denselben Zeiten anlegen (z.B. zweiter Verkaufsstand)"
+              >
+                ➕ Parallele Schicht
               </button>
               <button onClick={() => setSelectedShift(null)} className="admin-core-style-231">Schließen</button>
             </div>

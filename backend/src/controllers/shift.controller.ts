@@ -12,7 +12,9 @@ export const createShiftSchema = z.object({
   daySlotId: z.number().int().positive(),
   tournamentWorkAreaId: z.number().int().positive(),
   minVolunteers: z.number().int().min(0).max(200).optional(),
-  maxVolunteers: z.number().int().min(0).max(200).optional()
+  maxVolunteers: z.number().int().min(0).max(200).optional(),
+  /** Bewusst eine weitere Schicht parallel zur bestehenden anlegen. */
+  allowParallel: z.boolean().optional()
 });
 
 export const updateShiftSchema = z.object({
@@ -60,12 +62,24 @@ export const getShifts = async (req: Request, res: Response) => {
  * gebraucht wird - "+ Arbeitsbereich" (generateShifts) hilft dort nicht,
  * weil der Bereich an diesem Tag schon existiert.
  */
+/**
+ * Ein Arbeitsbereich darf zur selben Zeit mehrfach besetzt sein - zwei
+ * Verkaufsstaende etwa laufen parallel und werden getrennt geplant, mit
+ * eigenen Helfern und eigenem Stationszettel.
+ *
+ * Die Pruefung unten ist deshalb keine fachliche Regel mehr, sondern nur noch
+ * ein Schutz vor dem versehentlichen Doppelklick: Wer bewusst eine parallele
+ * Schicht anlegt, schickt `allowParallel` mit. Die Oberflaeche fragt an der
+ * Stelle nach, statt die Entscheidung stillschweigend zu treffen.
+ */
 export const createShift = async (req: Request, res: Response) => {
-  const { tournamentId, tournamentDayId, daySlotId, tournamentWorkAreaId, minVolunteers, maxVolunteers } = req.body;
+  const { tournamentId, tournamentDayId, daySlotId, tournamentWorkAreaId, minVolunteers, maxVolunteers, allowParallel } = req.body;
 
-  const existing = await prisma.shift.findFirst({ where: { tournamentDayId, daySlotId, tournamentWorkAreaId } });
-  if (existing) {
-    return res.status(409).json({ error: 'Für diesen Arbeitsbereich existiert in diesem Zeit-Slot bereits eine Schicht.' });
+  if (!allowParallel) {
+    const existing = await prisma.shift.findFirst({ where: { tournamentDayId, daySlotId, tournamentWorkAreaId } });
+    if (existing) {
+      return res.status(409).json({ error: 'Für diesen Arbeitsbereich existiert in diesem Zeit-Slot bereits eine Schicht.' });
+    }
   }
 
   const area = await prisma.tournamentWorkArea.findUnique({ where: { id: tournamentWorkAreaId } });

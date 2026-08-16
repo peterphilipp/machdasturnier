@@ -28,6 +28,44 @@ export interface GanttRow {
 }
 
 const GRID_MINUTES = 15;
+/** Hoehe einer einzelnen Balkenspur. Eine Zeile ist so hoch wie ihre Spuren zusammen. */
+const SPUR_HOEHE = 32;
+
+/**
+ * Verteilt die Balken einer Zeile auf Spuren, sodass sich gleichzeitige
+ * Schichten nicht verdecken.
+ *
+ * Ein Arbeitsbereich kann zur selben Zeit mehrfach besetzt sein - zwei
+ * Verkaufsstaende etwa laufen parallel und werden getrennt geplant. In einer
+ * einzigen Spur laegen ihre Balken uebereinander: weder lesbar noch einzeln
+ * anklickbar.
+ *
+ * Uebliches Gantt-Verfahren: nach Startzeit sortieren und jeden Balken in die
+ * erste Spur legen, die zu diesem Zeitpunkt frei ist. Ueberschneidungsfreie
+ * Schichten teilen sich damit weiterhin eine Spur, die Zeile bleibt so flach
+ * wie moeglich.
+ *
+ * Bewusst auf den gespeicherten Zeiten gerechnet, nicht auf den gezogenen:
+ * sonst wuerde ein Balken beim Ziehen die Spur wechseln und unter dem Finger
+ * wegspringen.
+ */
+function verteileAufSpuren(items: GanttItem[]): { spurVon: Map<number, number>; anzahl: number } {
+  const spurEnde: number[] = [];
+  const spurVon = new Map<number, number>();
+
+  for (const item of [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin)) {
+    let spur = spurEnde.findIndex(ende => ende <= item.startMin);
+    if (spur === -1) {
+      spur = spurEnde.length;
+      spurEnde.push(item.endMin);
+    } else {
+      spurEnde[spur] = item.endMin;
+    }
+    spurVon.set(item.id, spur);
+  }
+
+  return { spurVon, anzahl: Math.max(1, spurEnde.length) };
+}
 
 interface DragState {
   pointerId: number;
@@ -289,12 +327,16 @@ export function GanttTimeline({
           {rows.map(row => {
             const rowTintBg = getSoftTint(row.color, 16);
             const rowBorderTint = getSoftBorder(row.color, 45);
+            const { spurVon, anzahl: spurAnzahl } = verteileAufSpuren(row.items);
 
             return (
-              <div key={row.id} style={{ display: 'flex', alignItems: 'center', height: 32, position: 'relative' }}>
+              <div key={row.id} style={{ display: 'flex', alignItems: 'center', height: spurAnzahl * SPUR_HOEHE, position: 'relative' }}>
                 {/* Label links */}
                 <div style={{ position: 'absolute', left: -140, width: 130, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {row.icon} {row.label}
+                  {spurAnzahl > 1 && (
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{spurAnzahl} parallel</div>
+                  )}
                 </div>
 
                 {/* Add slot button */}
@@ -343,7 +385,9 @@ export function GanttTimeline({
                         onPointerDown={(e) => handlePointerDown(e, item, 'move')}
                         onClick={!canDrag && onItemClick ? () => onItemClick(item.id) : undefined}
                         style={{
-                          position: 'absolute', left: `${left}%`, width: `${width}%`, top: 2, bottom: 2,
+                          position: 'absolute', left: `${left}%`, width: `${width}%`,
+                          top: (spurVon.get(item.id) ?? 0) * SPUR_HOEHE + 2,
+                          height: SPUR_HOEHE - 4,
                           background: farben ? farben.flaeche : rowTintBg,
                           border: item.isPending ? '2px dashed #fd7e14' : item.border || `1px solid ${farben ? farben.rand : rowBorderTint}`,
                           borderLeft: `4px solid ${row.color}`,
