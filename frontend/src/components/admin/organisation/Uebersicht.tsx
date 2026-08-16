@@ -528,16 +528,25 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                   });
                 }
                 
+                if (uniqueYearGroupIds.size === 0) {
+                  uniqueYearGroupIds.add(-1); // "Ohne Zuordnung"
+                }
+                
                 uniqueYearGroupIds.forEach(ygId => {
                   ygCounts.set(ygId, (ygCounts.get(ygId) || 0) + 1);
                 });
               });
               const yearGroupStats = Array.from(ygCounts.entries())
                 .map(([ygId, count]) => {
+                  if (ygId === -1) return { name: 'Ohne Zuordnung', count };
                   const yg = currentTournament?.yearGroups?.find(y => y.id === ygId);
                   return { name: yg?.name || `JG ${ygId}`, count };
                 })
-                .sort((a, b) => b.count - a.count);
+                .sort((a, b) => {
+                  if (a.name === 'Ohne Zuordnung') return 1;
+                  if (b.name === 'Ohne Zuordnung') return -1;
+                  return b.count - a.count;
+                });
 
               const isExpanded = expandedDays.has(dateStr);
 
