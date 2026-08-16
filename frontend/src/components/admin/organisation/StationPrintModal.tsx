@@ -233,8 +233,10 @@ export default function StationPrintModal({
                         {sponsorLogo ? (
                           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                             <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
+                            {/* Kein Name unter dem Logo: das Logo traegt den Namen bereits.
+                                Fuer Vorlese-Software steht er im alt-Text, und ohne Logo
+                                greift ohnehin der Textfall darunter. */}
                             <img src={sponsorLogo} alt={sponsorName || 'Sponsor Logo'} className="station-print-logo" />
-                            {sponsorName && <div style={{ fontSize: 11, fontWeight: 700, color: '#0f172a' }}>{sponsorName}</div>}
                           </div>
                         ) : sponsorName ? (
                           <div style={{ textAlign: 'right' }}>
