@@ -55,7 +55,12 @@ export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary:
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Login fehlgeschlagen');
+        // Der Server antwortet durchgaengig mit { error: ... } - hier wurde
+        // nur `message` gelesen, sodass jeder Fehlschlag als nacktes "Login
+        // fehlgeschlagen" ankam. Damit war fuer den Nutzer nicht zu
+        // unterscheiden, ob Passwort und Kennung nicht stimmen (401) oder ob
+        // er nach zu vielen Fehlversuchen fuer 15 Minuten gesperrt ist (429).
+        throw new Error(errData.error || errData.message || 'Login fehlgeschlagen');
       }
       const data = await res.json();
       await applyLoginResult(data);

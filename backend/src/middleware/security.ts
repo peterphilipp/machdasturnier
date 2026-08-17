@@ -2,6 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import cors, { CorsOptions } from 'cors';
+import { logRateLimited } from '../utils/logger.js';
+
+/** Client-IP hinter dem Reverse-Proxy. Gleiche Logik wie in password.routes.ts. */
+function clientIp(req: Request): string | undefined {
+  return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+    || req.socket.remoteAddress;
+}
 
 /**
  * HTTP-Header-Härtung.
@@ -101,7 +108,17 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
-  message: { error: 'Zu viele Fehlversuche. Bitte warte 15 Minuten und versuche es dann erneut.' }
+  message: { error: 'Zu viele Fehlversuche. Bitte warte 15 Minuten und versuche es dann erneut.' },
+  /**
+   * Die Sperre greift VOR dem Handler, es entstand also kein LOGIN_FAILED im
+   * Log. Wer ein Anmeldeproblem untersuchte, sah schlicht nichts - und der
+   * Nutzer bekam dieselbe Fehlermeldung wie bei falschem Passwort. Deshalb
+   * hier eine eigene Zeile, damit der Fall im Log erkennbar ist.
+   */
+  handler: (req, res, _next, options) => {
+    logRateLimited(req.path, clientIp(req) || '');
+    res.status(options.statusCode).json(options.message);
+  }
 });
 
 /**

@@ -219,10 +219,27 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
                 <div className="helfer-action-btns">
                   <button onClick={() => openEdit(v)} className="helfer-btn-edit">✏️</button>
                   <button onClick={async () => {
-                    const result = await modal.form({ title: 'Passwort ändern', fields: [{ key: 'password', label: 'Neues Passwort', type: 'password' }] });
-                    if (!result) return;
-                    await apiPatch(`/api/volunteers/${v.id}/password`, { password: result?.password });
-                    await modal.alert({ title: 'Erfolg', message: 'Passwort gesetzt!' });
+                    const result = await modal.form({
+                      title: 'Passwort ändern',
+                      message: `Neues Passwort für „${v.name}". Damit meldet sich die Person danach an.`,
+                      fields: [{ key: 'password', label: 'Neues Passwort', type: 'password' }]
+                    });
+                    // modal.form liefert beim Abbrechen ein LEERES OBJEKT, nicht null.
+                    // Die alte Prüfung "if (!result)" griff deshalb nie: Abbrechen
+                    // schickte ein PATCH ohne Passwort los, der Server lehnte es mit
+                    // 400 ab, und weil der Fehler niemand auffing, passierte sichtbar
+                    // gar nichts - der Eindruck, das Passwort sei gesetzt, täuschte.
+                    const passwort = String(result?.password ?? '').trim();
+                    if (!passwort) return;
+                    try {
+                      await apiPatch(`/api/volunteers/${v.id}/password`, { password: passwort });
+                      await modal.alert({ title: 'Erfolg', message: `Passwort für „${v.name}" gesetzt.` });
+                    } catch (err: unknown) {
+                      await modal.alert({
+                        title: 'Nicht gesetzt',
+                        message: (err as Error).message || 'Das Passwort konnte nicht gesetzt werden.'
+                      });
+                    }
                   }} className="helfer-btn-password" title="Passwort setzen">🔑</button>
                   <button onClick={() => deleteVolunteer(v)} className="helfer-btn-delete">🗑️</button>
                 </div>

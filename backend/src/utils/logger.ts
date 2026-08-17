@@ -26,6 +26,15 @@ export function logLoginFailed(email: string, reason: string, ip?: string) {
   log('LOGIN_FAILED', { email, reason, ip });
 }
 
+/**
+ * Greift die Ratenbegrenzung, wird der Request abgewiesen BEVOR der Handler
+ * laeuft - es entstuende also kein LOGIN_FAILED. Wer einem Anmeldeproblem
+ * nachgeht, saehe im Log schlicht nichts, obwohl der Nutzer ausgesperrt ist.
+ */
+export function logRateLimited(pfad: string, ip?: string) {
+  log('RATE_LIMITED', { pfad, ip });
+}
+
 // ─── Registration Events ──────────────────────────────────────────────────
 export function logRegistrationCreated(name: string, email: string, ip?: string) {
   log('REGISTRATION_CREATED', { name, email, ip });
