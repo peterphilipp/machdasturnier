@@ -34,7 +34,7 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
   const [assigning, setAssigning] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
-  const [selectedYearGroupStats, setSelectedYearGroupStats] = useState<{ day: string, name: string, members: { name: string, count: number }[] } | null>(null);
+  const [selectedYearGroupStats, setSelectedYearGroupStats] = useState<{ day: string, name: string, members: { name: string, shifts: { role: string, slot: string }[] }[] } | null>(null);
 
   // Editiermodus für Zeiten: Änderungen werden lokal gesammelt (keyed by
   // Shift-ID) und erst per Commit als eine Business-Transaktion übernommen.
@@ -582,7 +582,7 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               }, 0);
               
               const assignedShiftsForDay = volunteerShifts.filter(vs => slots.some((s: any) => vs.shiftId === s.id));
-              const ygMembers = new Map<number, Map<number, { name: string, count: number }>>();
+              const ygMembers = new Map<number, Map<number, { name: string, shifts: { role: string, slot: string }[] }>>();
               
               assignedShiftsForDay.forEach(vs => {
                 const uniqueYearGroupIds = new Set<number>();
@@ -613,20 +613,26 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                   const userName = vs.user?.name || 'Unbekannt';
                   
                   if (!memberMap.has(userId)) {
-                    memberMap.set(userId, { name: userName, count: 0 });
+                    memberMap.set(userId, { name: userName, shifts: [] });
                   }
-                  memberMap.get(userId)!.count += 1;
+                  memberMap.get(userId)!.shifts.push({ role: vs.role || 'Unbekannt', slot: vs.slot || 'Unbekannt' });
                 });
               });
               
               const yearGroupStats = Array.from(ygMembers.entries())
                 .map(([ygId, memberMap]) => {
-                  const members = Array.from(memberMap.values()).sort((a, b) => b.count - a.count);
-                  const totalCount = members.reduce((sum, m) => sum + m.count, 0);
+                  const members = Array.from(memberMap.values()).sort((a, b) => b.shifts.length - a.shifts.length);
+                  const totalCount = members.reduce((sum, m) => sum + m.shifts.length, 0);
                   
                   if (ygId === -1) return { id: ygId, name: 'Ohne Zuordnung', count: totalCount, members };
                   const yg = currentTournament?.yearGroups?.find(y => y.id === ygId);
-                  return { id: ygId, name: yg?.name || `JG ${ygId}`, count: totalCount, members };
+                  
+                  let displayName = yg?.name || `JG ${ygId}`;
+                  if (!displayName.toLowerCase().startsWith('jahrgang')) {
+                    displayName = `Jahrgang: ${displayName}`;
+                  }
+                  
+                  return { id: ygId, name: displayName, count: totalCount, members };
                 })
                 .sort((a, b) => {
                   if (a.name === 'Ohne Zuordnung') return 1;
@@ -1066,9 +1072,20 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
              <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
                    {selectedYearGroupStats.members.map((m, i) => (
-                      <li key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: i < selectedYearGroupStats.members.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                        <span style={{ fontWeight: 600, color: '#334155' }}>👤 {m.name}</span>
-                        <span style={{ color: '#64748b', fontSize: 14 }}>{m.count} Schicht{m.count !== 1 ? 'en' : ''}</span>
+                      <li key={i} style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12, borderBottom: i < selectedYearGroupStats.members.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>👤 {m.name}</span>
+                          <span style={{ color: '#64748b', fontSize: 13, background: '#f8fafc', padding: '2px 6px', borderRadius: 6 }}>{m.shifts.length} Schicht{m.shifts.length !== 1 ? 'en' : ''}</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8, paddingLeft: 24 }}>
+                          {m.shifts.map((s, sidx) => (
+                            <div key={sidx} style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ color: '#94a3b8', fontSize: 10 }}>▶</span>
+                              <span style={{ fontWeight: 500 }}>{s.role}</span>
+                              <span style={{ color: '#94a3b8' }}>({s.slot})</span>
+                            </div>
+                          ))}
+                        </div>
                       </li>
                    ))}
                 </ul>
