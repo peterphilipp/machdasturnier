@@ -34,6 +34,7 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
   const [assigning, setAssigning] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [selectedYearGroupStats, setSelectedYearGroupStats] = useState<{ day: string, name: string, members: { name: string, count: number }[] } | null>(null);
 
   // Editiermodus für Zeiten: Änderungen werden lokal gesammelt (keyed by
   // Shift-ID) und erst per Commit als eine Business-Transaktion übernommen.
@@ -581,7 +582,8 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               }, 0);
               
               const assignedShiftsForDay = volunteerShifts.filter(vs => slots.some((s: any) => vs.shiftId === s.id));
-              const ygCounts = new Map<number, number>();
+              const ygMembers = new Map<number, Map<number, { name: string, count: number }>>();
+              
               assignedShiftsForDay.forEach(vs => {
                 const uniqueYearGroupIds = new Set<number>();
                 
@@ -605,14 +607,26 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                 }
                 
                 uniqueYearGroupIds.forEach(ygId => {
-                  ygCounts.set(ygId, (ygCounts.get(ygId) || 0) + 1);
+                  if (!ygMembers.has(ygId)) ygMembers.set(ygId, new Map());
+                  const memberMap = ygMembers.get(ygId)!;
+                  const userId = vs.user?.id || -1;
+                  const userName = vs.user?.name || 'Unbekannt';
+                  
+                  if (!memberMap.has(userId)) {
+                    memberMap.set(userId, { name: userName, count: 0 });
+                  }
+                  memberMap.get(userId)!.count += 1;
                 });
               });
-              const yearGroupStats = Array.from(ygCounts.entries())
-                .map(([ygId, count]) => {
-                  if (ygId === -1) return { name: 'Ohne Zuordnung', count };
+              
+              const yearGroupStats = Array.from(ygMembers.entries())
+                .map(([ygId, memberMap]) => {
+                  const members = Array.from(memberMap.values()).sort((a, b) => b.count - a.count);
+                  const totalCount = members.reduce((sum, m) => sum + m.count, 0);
+                  
+                  if (ygId === -1) return { id: ygId, name: 'Ohne Zuordnung', count: totalCount, members };
                   const yg = currentTournament?.yearGroups?.find(y => y.id === ygId);
-                  return { name: yg?.name || `JG ${ygId}`, count };
+                  return { id: ygId, name: yg?.name || `JG ${ygId}`, count: totalCount, members };
                 })
                 .sort((a, b) => {
                   if (a.name === 'Ohne Zuordnung') return 1;
@@ -650,9 +664,9 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                         {yearGroupStats.length > 0 && (
                           <div style={{ marginTop: 6, fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                             {yearGroupStats.map(yg => (
-                              <span key={yg.name} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                              <button key={yg.name} onClick={(e) => { e.stopPropagation(); setSelectedYearGroupStats({ day: dateStr, name: yg.name, members: yg.members }); }} style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, border: '1px solid #e2e8f0', cursor: 'pointer', textAlign: 'left', fontSize: 'inherit', color: 'inherit' }}>
                                 👶 {yg.name}: {yg.count}x
-                              </span>
+                              </button>
                             ))}
                           </div>
                         )}
@@ -773,9 +787,9 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                       {yearGroupStats.length > 0 && (
                         <div style={{ fontSize: 11, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                           {yearGroupStats.map(yg => (
-                            <span key={yg.name} style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 4, border: '1px solid #cbd5e1', fontWeight: 600 }}>
+                            <button key={yg.name} onClick={(e) => { e.stopPropagation(); setSelectedYearGroupStats({ day: dateStr, name: yg.name, members: yg.members }); }} style={{ background: '#f8fafc', padding: '2px 8px', borderRadius: 4, border: '1px solid #cbd5e1', fontWeight: 600, cursor: 'pointer', textAlign: 'left', fontSize: 'inherit', color: 'inherit' }}>
                               👶 {yg.name}: {yg.count}x
-                            </span>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1034,6 +1048,31 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
               </button>
               <button onClick={() => setSelectedShift(null)} className="admin-core-style-231">Schließen</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal für YearGroup Stats Details */}
+      {selectedYearGroupStats && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? 16 : 24 }} onClick={() => setSelectedYearGroupStats(null)}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 400, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+             <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 18, color: '#0f172a' }}>{selectedYearGroupStats.name}</h3>
+                  <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{selectedYearGroupStats.day}</div>
+                </div>
+                <button onClick={() => setSelectedYearGroupStats(null)} style={{ border: 'none', background: 'none', fontSize: 24, cursor: 'pointer', color: '#64748b' }}>×</button>
+             </div>
+             <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                   {selectedYearGroupStats.members.map((m, i) => (
+                      <li key={i} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: i < selectedYearGroupStats.members.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                        <span style={{ fontWeight: 600, color: '#334155' }}>👤 {m.name}</span>
+                        <span style={{ color: '#64748b', fontSize: 14 }}>{m.count} Schicht{m.count !== 1 ? 'en' : ''}</span>
+                      </li>
+                   ))}
+                </ul>
+             </div>
           </div>
         </div>
       )}
