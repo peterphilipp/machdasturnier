@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../../context/UserContext';
 import { tryConditionalPasskeyLogin, loginWithPasskey } from '../../utils/passkey';
@@ -35,6 +35,9 @@ export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary:
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  // Fallback, wenn der Browser die Felder ohne React-Event befüllt (s. login()).
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
   
   // We assume passkey is supported on modern browsers unless window.PublicKeyCredential is not available
@@ -46,12 +49,33 @@ export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary:
   };
 
   const login = async () => {
-    if (!loginEmail || !loginPassword) return;
+    /**
+     * Bewusst NICHT allein auf den React-State verlassen.
+     *
+     * Passwortmanager und die Autofill-Funktion mancher mobiler Browser
+     * schreiben direkt in das DOM-Feld, ohne ein Event auszulösen, das React
+     * mitbekommt. Der State bleibt dann leer, obwohl im Feld sichtbar etwas
+     * steht. Vorher stand hier ein blankes "return": Der Knopf tat in diesem
+     * Fall gar nichts - keine Anfrage, keine Meldung, kein Eintrag im
+     * Serverlog. Von außen sieht das aus wie ein defekter Server und ist
+     * entsprechend schwer zu finden.
+     */
+    const kennung = (loginEmail || emailRef.current?.value || '').trim();
+    const passwort = loginPassword || passwordRef.current?.value || '';
+
+    if (!kennung || !passwort) {
+      await modal.alert({
+        title: 'Angaben fehlen',
+        message: !kennung ? 'Bitte Name oder E-Mail eingeben.' : 'Bitte das Passwort eingeben.'
+      });
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+        body: JSON.stringify({ email: kennung, password: passwort })
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -124,8 +148,8 @@ export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary:
                 ersten Buchstaben sonst automatisch gross und korrigieren
                 Nachnamen zu Woerterbuch-Eintraegen - beides fuehrte zu
                 "Benutzer nicht gefunden". */}
-            <input type="text" placeholder="Name oder Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="input-base input-no-autofill-overlay" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus />
-            <input type="password" placeholder="Passwort" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') login(); }} className="input-base" autoComplete="current-password" />
+            <input ref={emailRef} type="text" placeholder="Name oder Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="input-base input-no-autofill-overlay" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus />
+            <input ref={passwordRef} type="password" placeholder="Passwort" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') login(); }} className="input-base" autoComplete="current-password" />
             <button onClick={login} className="btn btn-primary">Anmelden</button>
             <button onClick={() => navigate('/register')} className="btn btn-outline">Registrieren</button>
             <button onClick={() => navigate('/reset-password')} className="btn btn-text">Passwort vergessen?</button>
