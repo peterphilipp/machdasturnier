@@ -22,6 +22,66 @@ function RoleBadge({ role }: { role: string }) {
   );
 }
 
+/**
+ * Helfer ohne App-Zugang: meist Jugendliche, die mithelfen, aber kein eigenes
+ * Konto, Handy oder Internet haben und vom Organisator eingeplant werden.
+ *
+ * Ohne Kontaktperson erreicht sie keine Meldung - wird ihre Schicht
+ * verschoben, erfährt das niemand. Deshalb steht die Auswahl direkt unter dem
+ * Ankreuzfeld und nicht in einem Untermenü.
+ *
+ * Eigene Komponente, weil dieselben Felder im Anlegen-Formular UND im
+ * Bearbeiten-Dialog gebraucht werden.
+ */
+function OhneZugangFeld({ form, setForm, volunteers, editingVol }: {
+  form: { ohneZugang: boolean; kontaktpersonId: string };
+  setForm: (aendern: (f: any) => any) => void;
+  volunteers: Volunteer[];
+  editingVol: number | null;
+}) {
+  return (
+    <div style={{ background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={form.ohneZugang}
+          onChange={e => setForm((f: any) => ({ ...f, ohneZugang: e.target.checked, kontaktpersonId: e.target.checked ? f.kontaktpersonId : '' }))}
+          style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
+        />
+        <span>
+          <span style={{ fontSize: 14, fontWeight: 600, color: '#212529' }}>Helfer ohne App-Zugang</span>
+          <span style={{ display: 'block', fontSize: 12, color: '#6c757d', lineHeight: 1.5 }}>
+            Kein Konto, keine Anmeldung, keine Benachrichtigungen – z.B. Jugendliche, die vom
+            Organisator eingeplant werden.
+          </span>
+        </span>
+      </label>
+
+      {form.ohneZugang && (
+        <div style={{ marginTop: 10, paddingLeft: 26 }}>
+          <label className="helfer-label">📨 Benachrichtigungen gehen an</label>
+          <select
+            value={form.kontaktpersonId}
+            onChange={e => setForm((f: any) => ({ ...f, kontaktpersonId: e.target.value }))}
+            className="helfer-input"
+          >
+            <option value="">-- niemand (nicht empfohlen) --</option>
+            {volunteers
+              .filter(v => !v.ohneZugang && v.id !== editingVol)
+              .map(v => (
+                <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
+              ))}
+          </select>
+          <div style={{ fontSize: 12, color: '#6c757d', marginTop: 4, lineHeight: 1.5 }}>
+            In der Regel ein Elternteil. Wird die Schicht verschoben, bekommt diese Person die
+            Nachricht – mit dem Namen im Text.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: string, tournamentId: number | null }) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
@@ -147,50 +207,9 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
         </div>
       </div>
 
-      {/*
-        Helfer ohne App-Zugang: meist Jugendliche, die mithelfen, aber kein
-        eigenes Konto haben. Ohne Kontaktperson erreicht sie keine Meldung -
-        deshalb steht die Auswahl direkt daneben und nicht in einem Untermenü.
-      */}
       <div className="helfer-form-row">
-        <div style={{ flex: 1, background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={volForm.ohneZugang}
-              onChange={e => setVolForm({ ...volForm, ohneZugang: e.target.checked, kontaktpersonId: e.target.checked ? volForm.kontaktpersonId : '' })}
-              style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
-            />
-            <span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#212529' }}>Helfer ohne App-Zugang</span>
-              <span style={{ display: 'block', fontSize: 12, color: '#6c757d', lineHeight: 1.5 }}>
-                Kein Konto, keine Anmeldung, keine Benachrichtigungen – z.B. Jugendliche, die vom
-                Organisator eingeplant werden.
-              </span>
-            </span>
-          </label>
-
-          {volForm.ohneZugang && (
-            <div style={{ marginTop: 10, paddingLeft: 26 }}>
-              <label className="helfer-label">📨 Benachrichtigungen gehen an</label>
-              <select
-                value={volForm.kontaktpersonId}
-                onChange={e => setVolForm({ ...volForm, kontaktpersonId: e.target.value })}
-                className="helfer-input"
-              >
-                <option value="">-- niemand (nicht empfohlen) --</option>
-                {volunteers
-                  .filter(v => !v.ohneZugang && v.id !== editingVol)
-                  .map(v => (
-                    <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
-                  ))}
-              </select>
-              <div style={{ fontSize: 12, color: '#6c757d', marginTop: 4, lineHeight: 1.5 }}>
-                In der Regel ein Elternteil. Wird die Schicht verschoben, bekommt diese Person die
-                Nachricht – mit dem Namen im Text.
-              </div>
-            </div>
-          )}
+        <div style={{ flex: 1 }}>
+          <OhneZugangFeld form={volForm} setForm={setVolForm} volunteers={volunteers} editingVol={editingVol} />
         </div>
       </div>
       <div className="helfer-form-row">
@@ -369,12 +388,20 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
                 </div>
                 <div>
                   <label className="helfer-label">📧 E-Mail</label>
-                  <input value={volForm.email} onChange={e => setVolForm({ ...volForm, email: e.target.value })} placeholder="email@beispiel.de" className="helfer-modal-input" />
+                  <input
+                    value={volForm.email}
+                    onChange={e => setVolForm({ ...volForm, email: e.target.value })}
+                    placeholder={volForm.ohneZugang ? 'nicht nötig' : 'email@beispiel.de'}
+                    disabled={volForm.ohneZugang}
+                    className="helfer-modal-input"
+                  />
                 </div>
                 <div>
                   <label className="helfer-label">📞 Telefon</label>
                   <input value={volForm.phone} onChange={e => setVolForm({ ...volForm, phone: e.target.value })} onBlur={() => setVolForm({ ...volForm, phone: formatPhoneNumber(volForm.phone) || volForm.phone })} placeholder="+49 123 456789" className="helfer-modal-input" />
                 </div>
+
+                <OhneZugangFeld form={volForm} setForm={setVolForm} volunteers={volunteers} editingVol={editingVol} />
             
             <div><label className="helfer-label">🎭 Rolle</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
