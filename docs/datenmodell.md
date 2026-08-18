@@ -38,7 +38,7 @@ Das Schema umfasst **37 Modelle**.
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 15 |
-| [User](#user) | `users` | 26 |
+| [User](#user) | `users` | 30 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 8 |
 | [UserRole](#userrole) | `user_roles` | 4 |
@@ -607,6 +607,10 @@ Tabelle: `users`
 | `createdAt` | `DateTime` | Standard: `now()` |
 | `lastLoginAt` | `DateTime?` |  |
 | `lastActivityAt` | `DateTime?` |  |
+| `ohneZugang` | `Boolean` | Standard: `false` |
+| `kontaktpersonId` | `Int?` |  |
+| `kontaktperson` | `User?` | beim Löschen: SetNull, Gegenstück einer Beziehung |
+| `betreute` | `User[]` | Gegenstück einer Beziehung (Liste) |
 | `foodDonationSlots` | `FoodDonationSlot[]` | Gegenstück einer Beziehung (Liste) |
 | `foodDonations` | `FoodDonation[]` | Gegenstück einer Beziehung (Liste) |
 | `resetTokens` | `PasswordResetToken[]` | Gegenstück einer Beziehung (Liste) |

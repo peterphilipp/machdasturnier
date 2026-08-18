@@ -32,6 +32,9 @@ node scripts/backfill-tournament-membership.cjs
 echo "  Recovery-PINs hashen (falls noch im Klartext gespeichert)..."
 node scripts/migrate-hash-recovery-pins.cjs
 
+echo "  Platzhalter-Konten als Helfer ohne App-Zugang kennzeichnen..."
+node scripts/migrate-helfer-ohne-zugang.cjs
+
 echo "  Alten Aenderungsverlauf aufraeumen (aelter als 90 Tage)..."
 node scripts/cleanup-aenderungen.cjs
 

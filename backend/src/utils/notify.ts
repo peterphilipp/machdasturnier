@@ -21,6 +21,18 @@ export async function notifyUser(
   body: string,
   url: string = '/'
 ): Promise<void> {
+  // Helfer ohne App-Zugang koennen die Nachricht nicht empfangen: kein Konto
+  // zum Anmelden, keine E-Mail, kein Push. Sie an ihr eigenes Konto zu
+  // schicken hiesse, sie ins Leere zu schicken - eine verschobene Schicht
+  // erreichte niemanden. Deshalb geht sie an die hinterlegte Kontaktperson,
+  // in der Regel ein Elternteil, mit dem Namen im Text.
+  const empfaenger = await ermittleEmpfaenger(userId);
+  if (empfaenger === null) return;
+  if (empfaenger.userId !== userId) {
+    userId = empfaenger.userId;
+    body = `${empfaenger.fuerName}: ${body}`;
+  }
+
   try {
     await prisma.userNotification.create({ data: { userId, title, body, url } });
   } catch (err) {
@@ -42,4 +54,27 @@ export async function notifyUsers(
 ): Promise<void> {
   const eindeutig = Array.from(new Set(userIds.filter((id): id is number => id != null)));
   await Promise.all(eindeutig.map(id => notifyUser(id, title, body, url)));
+}
+
+/**
+ * Wer bekommt die Nachricht tatsaechlich?
+ *
+ * Normalfall: der Helfer selbst. Bei einem Helfer ohne App-Zugang die
+ * hinterlegte Kontaktperson - und wenn es keine gibt, niemand. Dann still zu
+ * scheitern ist besser, als eine Nachricht in ein Konto zu legen, das nie
+ * jemand oeffnet: So bleibt der Verlauf ehrlich, und im Log steht eine Zeile.
+ */
+async function ermittleEmpfaenger(userId: number): Promise<{ userId: number; fuerName: string } | null> {
+  const nutzer = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, ohneZugang: true, kontaktpersonId: true }
+  });
+  if (!nutzer) return null;
+  if (!nutzer.ohneZugang) return { userId, fuerName: nutzer.name };
+
+  if (!nutzer.kontaktpersonId) {
+    console.warn(`[Notify] ${nutzer.name} hat keinen App-Zugang und keine Kontaktperson - Nachricht entfaellt.`);
+    return null;
+  }
+  return { userId: nutzer.kontaktpersonId, fuerName: nutzer.name };
 }

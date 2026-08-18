@@ -29,7 +29,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
   const { data: volunteers = [] } = useQuery<Volunteer[]>({ queryKey: ['volunteers'], queryFn: () => getVolunteers() });
   const { data: yearGroups = [] } = useQuery<YearGroup[]>({ queryKey: ['yearGroups'], queryFn: getYearGroups });
 
-  const [volForm, setVolForm] = useState<{ name: string; email: string; phone: string; roles: string[]; children: { childName: string; childYear: string }[]; trainedYearGroupIds: number[] }>({ name: '', email: '', phone: '', roles: ['HELPER'], children: [], trainedYearGroupIds: [] });
+  const [volForm, setVolForm] = useState<{ name: string; email: string; phone: string; roles: string[]; children: { childName: string; childYear: string }[]; trainedYearGroupIds: number[]; ohneZugang: boolean; kontaktpersonId: string }>({ name: '', email: '', phone: '', roles: ['HELPER'], children: [], trainedYearGroupIds: [], ohneZugang: false, kontaktpersonId: '' });
   const [editingVol, setEditingVol] = useState<number | null>(null);
   // Aufklappbare Geräte-Detailansicht pro User (welche Geräte haben Push
   // aktiviert) - hilft bei der Fehlersuche, wenn ein Helfer mehrere Geräte
@@ -49,7 +49,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
   
   const { items: sortedVolunteers, requestSort, getSortIndicator } = useSortableData(filtered, { key: 'name', direction: 'asc' });
 
-  const EMPTY_FORM = { name: '', email: '', phone: '', roles: ['HELPER'] as string[], children: [] as { childName: string; childYear: string }[], trainedYearGroupIds: [] as number[] };
+  const EMPTY_FORM = { name: '', email: '', phone: '', roles: ['HELPER'] as string[], children: [] as { childName: string; childYear: string }[], trainedYearGroupIds: [] as number[], ohneZugang: false, kontaktpersonId: '' as string };
 
   /** Rolle an-/abwählen; ohne Auswahl bleibt HELPER als Grundstufe. */
   const toggleRole = (wert: string) => setVolForm(f => {
@@ -67,8 +67,21 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
       const y = parseInt(c.childYear);
       if (isNaN(y) || y < 1990 || y > 2030) return await modal.alert({ title: 'Hinweis', message: 'Geburtsjahr eines Kindes muss zwischen 1990 und 2030 liegen.' });
     }
+    if (volForm.ohneZugang && !volForm.kontaktpersonId) {
+      const trotzdem = await modal.confirm({
+        title: 'Ohne Kontaktperson speichern?',
+        message: 'Dieser Helfer hat keinen App-Zugang. Ohne Kontaktperson erreicht ihn keine '
+          + 'Benachrichtigung – wird seine Schicht verschoben, erfährt das niemand. '
+          + 'Trotzdem so speichern?',
+        confirmText: 'Trotzdem speichern',
+        variant: 'warning'
+      });
+      if (!trotzdem) return;
+    }
+
     const payload = {
       ...volForm,
+      kontaktpersonId: volForm.ohneZugang && volForm.kontaktpersonId ? Number(volForm.kontaktpersonId) : null,
       children: volForm.children
         .filter(c => c.childName.trim() && c.childYear.trim())
         .map(c => ({ childName: c.childName.trim(), childYear: parseInt(c.childYear) }))
@@ -94,7 +107,9 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
     setVolForm({
       name: v.name, email: v.email || '', phone: v.phone || '', roles: (v.roles && v.roles.length > 0) ? [...v.roles] : [v.role || 'HELPER'],
       children: (v.children || []).map(c => ({ childName: c.childName, childYear: String(c.childYear) })),
-      trainedYearGroupIds: (v.trainedYearGroups || []).map(yg => yg.id)
+      trainedYearGroupIds: (v.trainedYearGroups || []).map(yg => yg.id),
+      ohneZugang: !!v.ohneZugang,
+      kontaktpersonId: v.kontaktpersonId ? String(v.kontaktpersonId) : ''
     });
   };
   const closeEdit = () => { setEditingVol(null); setVolForm(EMPTY_FORM); };
@@ -122,7 +137,60 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
         </div>
         <div className="helfer-form-col-1">
           <label className="helfer-label">📧 E-Mail</label>
-          <input value={volForm.email} onChange={e => setVolForm({ ...volForm, email: e.target.value })} placeholder="email@beispiel.de" className="helfer-input" />
+          <input
+            value={volForm.email}
+            onChange={e => setVolForm({ ...volForm, email: e.target.value })}
+            placeholder={volForm.ohneZugang ? 'nicht nötig' : 'email@beispiel.de'}
+            disabled={volForm.ohneZugang}
+            className="helfer-input"
+          />
+        </div>
+      </div>
+
+      {/*
+        Helfer ohne App-Zugang: meist Jugendliche, die mithelfen, aber kein
+        eigenes Konto haben. Ohne Kontaktperson erreicht sie keine Meldung -
+        deshalb steht die Auswahl direkt daneben und nicht in einem Untermenü.
+      */}
+      <div className="helfer-form-row">
+        <div style={{ flex: 1, background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={volForm.ohneZugang}
+              onChange={e => setVolForm({ ...volForm, ohneZugang: e.target.checked, kontaktpersonId: e.target.checked ? volForm.kontaktpersonId : '' })}
+              style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
+            />
+            <span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: '#212529' }}>Helfer ohne App-Zugang</span>
+              <span style={{ display: 'block', fontSize: 12, color: '#6c757d', lineHeight: 1.5 }}>
+                Kein Konto, keine Anmeldung, keine Benachrichtigungen – z.B. Jugendliche, die vom
+                Organisator eingeplant werden.
+              </span>
+            </span>
+          </label>
+
+          {volForm.ohneZugang && (
+            <div style={{ marginTop: 10, paddingLeft: 26 }}>
+              <label className="helfer-label">📨 Benachrichtigungen gehen an</label>
+              <select
+                value={volForm.kontaktpersonId}
+                onChange={e => setVolForm({ ...volForm, kontaktpersonId: e.target.value })}
+                className="helfer-input"
+              >
+                <option value="">-- niemand (nicht empfohlen) --</option>
+                {volunteers
+                  .filter(v => !v.ohneZugang && v.id !== editingVol)
+                  .map(v => (
+                    <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
+                  ))}
+              </select>
+              <div style={{ fontSize: 12, color: '#6c757d', marginTop: 4, lineHeight: 1.5 }}>
+                In der Regel ein Elternteil. Wird die Schicht verschoben, bekommt diese Person die
+                Nachricht – mit dem Namen im Text.
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <div className="helfer-form-row">
@@ -210,6 +278,16 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
               <td data-label="Rolle" className="helfer-table-td-normal">
                 <div className="helfer-flex-row">
                   {((v.roles && v.roles.length > 0) ? v.roles : [v.role || 'HELPER']).map(r => <RoleBadge key={r} role={r} />)}
+                  {v.ohneZugang && (
+                    <span
+                      style={{ fontSize: 11, fontWeight: 600, borderRadius: 999, padding: '2px 8px', background: '#F1EFE8', color: '#5F5E5A', border: '1px solid #D3D1C7', whiteSpace: 'nowrap' }}
+                      title={v.kontaktperson?.name
+                        ? `Kein App-Zugang. Benachrichtigungen gehen an ${(v as any).kontaktperson.name}.`
+                        : 'Kein App-Zugang und keine Kontaktperson - Benachrichtigungen erreichen niemanden.'}
+                    >
+                      {v.kontaktperson?.name ? 'Ohne Zugang' : '⚠️ Ohne Zugang'}
+                    </span>
+                  )}
                 </div>
               </td>
               <td data-label="Letzte Aktivität" title={v.lastActivityAt ? new Date(v.lastActivityAt).toLocaleString('de-DE') : 'Nie'} className={`helfer-table-td-normal helfer-date-text ${v.lastActivityAt ? 'helfer-date-active' : 'helfer-date-inactive'}`}>
@@ -218,6 +296,8 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
               <td className="helfer-table-td-actions">
                 <div className="helfer-action-btns">
                   <button onClick={() => openEdit(v)} className="helfer-btn-edit">✏️</button>
+                  {/* Ohne App-Zugang gibt es kein Konto, an dem ein Passwort haengen koennte. */}
+                  {!v.ohneZugang && (
                   <button onClick={async () => {
                     const result = await modal.form({
                       title: 'Passwort ändern',
@@ -241,6 +321,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
                       });
                     }
                   }} className="helfer-btn-password" title="Passwort setzen">🔑</button>
+                  )}
                   <button onClick={() => deleteVolunteer(v)} className="helfer-btn-delete">🗑️</button>
                 </div>
               </td>

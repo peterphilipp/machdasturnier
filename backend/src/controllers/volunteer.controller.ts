@@ -37,6 +37,10 @@ export const volunteerSchema = z.object({
   role: z.enum(['HELPER', 'ORGANIZER', 'ADMIN', 'TRAINER']).optional(),
   roles: z.array(z.enum(['HELPER', 'ORGANIZER', 'ADMIN', 'TRAINER'])).optional(),
   password: z.string().min(1).optional(),
+  /** Helfer ohne App-Zugang (meist Jugendliche ohne eigenes Konto). */
+  ohneZugang: z.boolean().optional(),
+  /** An wen gehen Benachrichtigungen zu seinen Schichten - in der Regel ein Elternteil. */
+  kontaktpersonId: z.number().int().positive().nullable().optional(),
   tournamentId: z.number().int().nullable().optional(),
   children: z.array(childSchema).max(20).optional(),
   trainedYearGroupIds: z.array(z.number().int()).optional()
@@ -99,7 +103,7 @@ export const getVolunteers = async (req: AuthRequest, res: Response) => {
       ]
     } : undefined,
     orderBy: { name: 'asc' },
-    include: { children: true, trainedYearGroups: true, userRoles: true, pushSubscriptions: { select: { id: true, userAgent: true, createdAt: true } } }
+    include: { children: true, trainedYearGroups: true, userRoles: true, kontaktperson: { select: { id: true, name: true } }, pushSubscriptions: { select: { id: true, userAgent: true, createdAt: true } } }
   });
   // Rolle als String zurückgeben; Passwort-Hash niemals ausliefern; Geräte-
   // Label serverseitig aus dem User-Agent ableiten (Detailansicht "auf

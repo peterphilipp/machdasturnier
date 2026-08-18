@@ -175,6 +175,21 @@ model User {
   createdAt             DateTime               @default(now()) @map("created_at")
   lastLoginAt           DateTime?              @map("last_login_at")
   lastActivityAt        DateTime?              @map("last_activity_at")
+  // Helfer OHNE App-Zugang: meist Jugendliche, die mithelfen, aber kein
+  // eigenes Konto, Handy oder Internet haben. Sie werden vom Organisator
+  // eingeplant und koennen ihren Dienstplan nicht selbst einsehen.
+  //
+  // Bewusst ein Merkmal am Helfer und keine eigene Tabelle: Sie halten echte
+  // Schichten, tauchen auf Stationszetteln auf und zaehlen in Auswertungen -
+  // eine Parallelwelt muesste all das doppelt fuehren. Was ihnen fehlt, ist
+  // kein anderer Datentyp, sondern ein Zugang.
+  ohneZugang            Boolean                @default(false) @map("ohne_zugang")
+  // An wen gehen Benachrichtigungen zu ihren Schichten - in der Regel ein
+  // Elternteil. Ohne das verpuffte jede Verschiebung ins Leere: Das Konto hat
+  // weder E-Mail noch Push und meldet sich nie an.
+  kontaktpersonId       Int?                   @map("kontaktperson_id")
+  kontaktperson         User?                  @relation("Kontaktperson", fields: [kontaktpersonId], references: [id], onDelete: SetNull)
+  betreute              User[]                 @relation("Kontaktperson")
   foodDonationSlots     FoodDonationSlot[]
   foodDonations         FoodDonation[]
   resetTokens           PasswordResetToken[]
