@@ -4,12 +4,13 @@
 > Quelle ist [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 > Neu erzeugen mit `npm run docs:datamodel` im Ordner `backend`.
 
-Das Schema umfasst **36 Modelle**.
+Das Schema umfasst **37 Modelle**.
 
 ## Überblick
 
 | Modell | Tabelle | Felder |
 |--------|---------|--------|
+| [Aenderung](#aenderung) | `aenderungen` | 11 |
 | [Club](#club) | `clubs` | 9 |
 | [DaySlot](#dayslot) | `day_slots` | 9 |
 | [Field](#field) | `fields` | 8 |
@@ -31,13 +32,13 @@ Das Schema umfasst **36 Modelle**.
 | [Team](#team) | `teams` | 16 |
 | [TemplateWorkArea](#templateworkarea) | `template_work_areas` | 8 |
 | [TimeSlot](#timeslot) | `time_slots` | 11 |
-| [Tournament](#tournament) | `tournaments` | 39 |
+| [Tournament](#tournament) | `tournaments` | 40 |
 | [TournamentClub](#tournamentclub) | `tournament_clubs` | 5 |
 | [TournamentDay](#tournamentday) | `tournament_days` | 10 |
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 15 |
-| [User](#user) | `users` | 25 |
+| [User](#user) | `users` | 26 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 8 |
 | [UserRole](#userrole) | `user_roles` | 4 |
@@ -48,6 +49,26 @@ Das Schema umfasst **36 Modelle**.
 | [YearGroup](#yeargroup) | `year_groups` | 15 |
 
 ---
+
+## Aenderung
+
+Wer hat wann was am Dienstplan geaendert. Mehrere Organisatoren planen inzwischen gleichzeitig und ueberschreiben sich dabei gelegentlich gegenseitig, ohne dass es jemandem auffaellt. Diese Tabelle macht die Aenderungen sichtbar - im Reiter "Verlauf" und als Zeile im Schicht-Dialog.
+
+Tabelle: `aenderungen`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `tournamentId` | `Int?` |  |
+| `userId` | `Int?` |  |
+| `userName` | `String` |  |
+| `art` | `String` |  |
+| `beschreibung` | `String` |  |
+| `objektTyp` | `String?` |  |
+| `objektId` | `Int?` |  |
+| `createdAt` | `DateTime` | Standard: `now()` |
+| `tournament` | `Tournament?` | Beziehung über `tournamentId`, beim Löschen: Cascade |
+| `user` | `User?` | Beziehung über `userId`, beim Löschen: SetNull |
 
 ## Club
 
@@ -457,6 +478,7 @@ Tabelle: `tournaments`
 | `sponsorUrl` | `String?` |  |
 | `estimatedVisitors` | `Int?` |  |
 | `teamCount` | `Int?` |  |
+| `aenderungen` | `Aenderung[]` | Gegenstück einer Beziehung (Liste) |
 | `fields` | `Field[]` | Gegenstück einer Beziehung (Liste) |
 | `foodDonationSlots` | `FoodDonationSlot[]` | Gegenstück einer Beziehung (Liste) |
 | `donations` | `FoodDonation[]` | Gegenstück einer Beziehung (Liste) |
@@ -590,6 +612,7 @@ Tabelle: `users`
 | `resetTokens` | `PasswordResetToken[]` | Gegenstück einer Beziehung (Liste) |
 | `pushSubscriptions` | `PushSubscription[]` | Gegenstück einer Beziehung (Liste) |
 | `notifications` | `UserNotification[]` | Gegenstück einer Beziehung (Liste) |
+| `aenderungen` | `Aenderung[]` | Gegenstück einer Beziehung (Liste) |
 | `tournamentMemberships` | `TournamentMembership[]` | Gegenstück einer Beziehung (Liste) |
 | `tournament` | `Tournament?` | Beziehung über `tournamentId` |
 | `children` | `UserChild[]` | Gegenstück einer Beziehung (Liste) |

@@ -112,6 +112,17 @@ export const addTournamentClub = (tournamentId: number, clubId: number) =>
 export const removeTournamentClub = (tournamentId: number, clubId: number) =>
   apiDelete(`/api/tournament-clubs?tournamentId=${tournamentId}&clubId=${clubId}`);
 
+// ===================== Aenderungsverlauf =====================
+/** Wer hat wann was am Dienstplan geaendert. `vor` blaettert aelter (Id-basiert, nicht Offset). */
+export const getAenderungen = (tournamentId: number, opts?: { vor?: number | null; art?: string | null; userId?: number | null; limit?: number }) => {
+  const q = new URLSearchParams({ tournamentId: String(tournamentId) });
+  if (opts?.vor) q.set('vor', String(opts.vor));
+  if (opts?.art) q.set('art', opts.art);
+  if (opts?.userId) q.set('userId', String(opts.userId));
+  if (opts?.limit) q.set('limit', String(opts.limit));
+  return apiFetch(`/api/changes?${q.toString()}`);
+};
+
 export const getShifts = (tournamentId?: string | number | null) => 
   tournamentId ? apiFetch(`/api/shifts?tournamentId=${tournamentId}`) : Promise.resolve([]);
 /** allowParallel: bewusst eine weitere Schicht neben einer bestehenden im selben Zeitfenster. */

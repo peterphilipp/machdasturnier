@@ -27,6 +27,7 @@ model Tournament {
   sponsorUrl             String?                @map("sponsor_url")
   estimatedVisitors      Int?                   @map("estimated_visitors")
   teamCount              Int?                   @map("team_count")
+  aenderungen            Aenderung[]
   fields                 Field[]
   foodDonationSlots      FoodDonationSlot[]
   donations              FoodDonation[]
@@ -179,6 +180,7 @@ model User {
   resetTokens           PasswordResetToken[]
   pushSubscriptions     PushSubscription[]
   notifications         UserNotification[]
+  aenderungen           Aenderung[]
   tournamentMemberships TournamentMembership[]
   tournament            Tournament?            @relation(fields: [tournamentId], references: [id])
   children              UserChild[]
@@ -686,4 +688,36 @@ model TournamentClub {
   @@unique([tournamentId, clubId])
   @@index([clubId])
   @@map("tournament_clubs")
+}
+
+// Wer hat wann was am Dienstplan geaendert.
+//
+// Mehrere Organisatoren planen inzwischen gleichzeitig und ueberschreiben sich
+// dabei gelegentlich gegenseitig, ohne dass es jemandem auffaellt. Diese
+// Tabelle macht die Aenderungen sichtbar - im Reiter "Verlauf" und als Zeile
+// im Schicht-Dialog.
+model Aenderung {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int?     @map("tournament_id")
+  userId       Int?     @map("user_id")
+  // Name als Momentaufnahme, nicht als Verweis: der Eintrag muss lesbar
+  // bleiben, auch wenn die Person spaeter umbenannt oder geloescht wird.
+  userName     String   @map("user_name")
+  // schicht | helfer | stammdaten | geloescht - steuert Farbe und Filter.
+  art          String
+  // Fertig formulierter deutscher Satz, gebildet BEIM SCHREIBEN. Nachtraeglich
+  // liesse er sich nicht mehr bilden: nach einer Loeschung gibt es das
+  // Bezugsobjekt nicht mehr - also genau dort nicht, wo der Eintrag am
+  // wichtigsten ist.
+  beschreibung String
+  objektTyp    String?  @map("objekt_typ")
+  objektId     Int?     @map("objekt_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId, createdAt])
+  @@index([objektTyp, objektId])
+  @@map("aenderungen")
 }

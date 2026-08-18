@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/prisma.js';
 import { notifyUser, notifyUsers } from '../utils/notify.js';
+import { AuthRequest } from '../middleware/auth.js';
+import { protokolliere, datumKurz, zeitKurz } from '../utils/protokoll.js';
 
 // Hinweis: Das Erzeugen von Shifts erfolgt künftig über die Tag-/Template-basierte
 // Generierung (Etappe 2), nicht mehr über manuelles Anlegen einzelner Slots.
@@ -72,7 +74,7 @@ export const getShifts = async (req: Request, res: Response) => {
  * Schicht anlegt, schickt `allowParallel` mit. Die Oberflaeche fragt an der
  * Stelle nach, statt die Entscheidung stillschweigend zu treffen.
  */
-export const createShift = async (req: Request, res: Response) => {
+export const createShift = async (req: AuthRequest, res: Response) => {
   const { tournamentId, tournamentDayId, daySlotId, tournamentWorkAreaId, minVolunteers, maxVolunteers, allowParallel } = req.body;
 
   if (!allowParallel) {
@@ -96,6 +98,20 @@ export const createShift = async (req: Request, res: Response) => {
     },
     include: { day: true, daySlot: true, workArea: true }
   });
+
+  const zeit = shift.startMin ?? shift.daySlot?.startMin;
+  const ende = shift.endMin ?? shift.daySlot?.endMin;
+  await protokolliere({
+    tournamentId: shift.tournamentId,
+    userId: req.userId,
+    art: 'schicht',
+    beschreibung: `hat die Schicht ${shift.workArea?.name || 'Job'}${shift.day ? ` am ${datumKurz(shift.day.date)}` : ''}`
+      + `${zeit != null && ende != null ? `, ${zeitKurz(zeit)}-${zeitKurz(ende)}` : ''} angelegt`
+      + `${allowParallel ? ' (parallel zu einer bestehenden)' : ''}`,
+    objektTyp: 'shift',
+    objektId: shift.id
+  });
+
   return res.status(201).json(shift);
 };
 
@@ -105,7 +121,7 @@ export const createShift = async (req: Request, res: Response) => {
 // den ganzen Turnier-Plan. Bereits eingeplante Helfer werden vor dem
 // Löschen (die Zuweisungen kaskadieren mit) per Push benachrichtigt, statt
 // einfach kommentarlos aus ihrem Dienstplan zu verschwinden.
-export const deleteShift = async (req: Request, res: Response) => {
+export const deleteShift = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const shift = await prisma.shift.findUnique({
     where: { id },
@@ -124,10 +140,20 @@ export const deleteShift = async (req: Request, res: Response) => {
     '/'
   );
 
+  await protokolliere({
+    tournamentId: shift.tournamentId,
+    userId: req.userId,
+    art: 'geloescht',
+    beschreibung: `hat die Schicht ${areaName}${dateStr ? ` am ${dateStr}` : ''} entfernt`
+      + `${shift.volunteerShifts.length > 0 ? ` (${shift.volunteerShifts.length} eingeplante Helfer wurden ausgeplant)` : ''}`,
+    objektTyp: 'shift',
+    objektId: shift.id
+  });
+
   return res.json({ deletedVolunteerAssignments: shift.volunteerShifts.length });
 };
 
-export const updateShift = async (req: Request, res: Response) => {
+export const updateShift = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { startMin, endMin, minVolunteers, maxVolunteers, description } = req.body;
   
@@ -157,8 +183,50 @@ export const updateShift = async (req: Request, res: Response) => {
   });
 
   await benachrichtigeBeiZeitaenderung(vorher, updated);
+  await protokolliereSchichtaenderung(vorher, updated, req.userId);
   return res.json(updated);
 };
+
+/**
+ * Haelt fest, WAS sich an einer Schicht geaendert hat - in einem Satz, den ein
+ * Mensch auf dem Handy lesen kann. Ohne Aenderung kein Eintrag: ein Speichern,
+ * das nichts bewegt, soll den Verlauf nicht zumuellen.
+ */
+async function protokolliereSchichtaenderung(
+  vorher: { id: number; tournamentId: number; startMin: number | null; endMin: number | null; minVolunteers: number; maxVolunteers: number; daySlot?: { startMin: number; endMin: number } | null; day?: { date: Date } | null; workArea?: { name: string } | null },
+  nachher: { startMin: number | null; endMin: number | null; minVolunteers: number; maxVolunteers: number; daySlot?: { startMin: number; endMin: number } | null },
+  userId?: number
+): Promise<void> {
+  const altStart = vorher.startMin ?? vorher.daySlot?.startMin ?? null;
+  const altEnde = vorher.endMin ?? vorher.daySlot?.endMin ?? null;
+  const neuStart = nachher.startMin ?? nachher.daySlot?.startMin ?? null;
+  const neuEnde = nachher.endMin ?? nachher.daySlot?.endMin ?? null;
+
+  const teile: string[] = [];
+  if (altStart !== neuStart || altEnde !== neuEnde) {
+    const alt = altStart != null && altEnde != null ? `${zeitKurz(altStart)}-${zeitKurz(altEnde)}` : 'ohne Zeit';
+    const neu = neuStart != null && neuEnde != null ? `${zeitKurz(neuStart)}-${zeitKurz(neuEnde)}` : 'ohne Zeit';
+    teile.push(`von ${alt} auf ${neu} verschoben`);
+  }
+  if (vorher.maxVolunteers !== nachher.maxVolunteers) {
+    teile.push(`die Helferzahl von ${vorher.maxVolunteers} auf ${nachher.maxVolunteers} gesetzt`);
+  }
+  if (vorher.minVolunteers !== nachher.minVolunteers) {
+    teile.push(`die Mindestbesetzung von ${vorher.minVolunteers} auf ${nachher.minVolunteers} gesetzt`);
+  }
+  if (teile.length === 0) return;
+
+  const bereich = vorher.workArea?.name || 'Schicht';
+  const datum = vorher.day?.date ? ` am ${datumKurz(vorher.day.date)}` : '';
+  await protokolliere({
+    tournamentId: vorher.tournamentId,
+    userId,
+    art: 'schicht',
+    beschreibung: `hat ${bereich}${datum} ${teile.join(' und ')}`,
+    objektTyp: 'shift',
+    objektId: vorher.id
+  });
+}
 
 /**
  * Meldet eine verschobene Schicht an die bereits eingeplanten Helfer.
@@ -205,7 +273,7 @@ function minToTime(m: number): string {
  * Verhindert einen Teil-Zustand, falls z. B. Schicht 3 von 5 an einer
  * verletzten Constraint scheitert.
  */
-export const updateShiftsBatch = async (req: Request, res: Response) => {
+export const updateShiftsBatch = async (req: AuthRequest, res: Response) => {
   const { changes } = req.body as { changes: { id: number; startMin: number; endMin: number }[] };
 
   const vorherListe = await prisma.shift.findMany({
@@ -227,7 +295,10 @@ export const updateShiftsBatch = async (req: Request, res: Response) => {
   // geaendert und es darf auch nichts gemeldet werden.
   for (const nachher of updated) {
     const vorher = vorherListe.find(v => v.id === nachher.id);
-    if (vorher) await benachrichtigeBeiZeitaenderung(vorher, nachher);
+    if (vorher) {
+      await benachrichtigeBeiZeitaenderung(vorher, nachher);
+      await protokolliereSchichtaenderung(vorher, nachher, req.userId);
+    }
   }
 
   return res.json(updated);

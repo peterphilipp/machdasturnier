@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma.js';
 import { z } from 'zod';
 import { notifyUser } from '../utils/notify.js';
+import { AuthRequest } from '../middleware/auth.js';
+import { protokolliere, datumKurz } from '../utils/protokoll.js';
 
 export const volunteerShiftSchema = z.object({
   userId: z.union([z.number(), z.string()]).transform(Number),
@@ -28,7 +30,7 @@ export const getVolunteerShifts = async (req: Request, res: Response) => {
   return res.json(shifts || []);
 };
 
-export const createVolunteerShift = async (req: Request, res: Response) => {
+export const createVolunteerShift = async (req: AuthRequest, res: Response) => {
   const { userId, tournamentId, shiftId, date, slot, role, areaId } = req.body;
   const s = await prisma.volunteerShift.create({
     data: {
@@ -49,6 +51,15 @@ export const createVolunteerShift = async (req: Request, res: Response) => {
       '/'
     );
   }
+
+  await protokolliere({
+    tournamentId: s.tournamentId,
+    userId: req.userId,
+    art: 'helfer',
+    beschreibung: `hat ${s.user?.name || 'einen Helfer'} für ${s.role} am ${datumKurz(s.date)}, ${s.slot} eingeplant`,
+    objektTyp: 'shift',
+    objektId: s.shiftId
+  });
 
   return res.status(201).json(s);
 };
@@ -100,9 +111,9 @@ export const updateVolunteerShift = async (req: Request, res: Response) => {
   return res.json(updated);
 };
 
-export const deleteVolunteerShift = async (req: Request, res: Response) => {
+export const deleteVolunteerShift = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
-  const existing = await prisma.volunteerShift.findUnique({ where: { id } });
+  const existing = await prisma.volunteerShift.findUnique({ where: { id }, include: { user: true } });
   await prisma.volunteerShift.delete({ where: { id } });
   
   if (existing && existing.userId) {
@@ -114,6 +125,17 @@ export const deleteVolunteerShift = async (req: Request, res: Response) => {
     );
   }
   
+  if (existing) {
+    await protokolliere({
+      tournamentId: existing.tournamentId,
+      userId: req.userId,
+      art: 'helfer',
+      beschreibung: `hat ${existing.user?.name || 'einen Helfer'} aus ${existing.role} am ${datumKurz(existing.date)}, ${existing.slot} ausgeplant`,
+      objektTyp: 'shift',
+      objektId: existing.shiftId
+    });
+  }
+
   return res.status(204).send();
 };
 

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.js';
+import { protokolliere } from '../utils/protokoll.js';
 import prisma from '../config/prisma.js';
 import { z } from 'zod';
 
@@ -229,7 +231,7 @@ export const syncTournamentWorkAreas = async (req: Request, res: Response) => {
  *
  * Idempotent: ein bereits vorhandener Bereich wird nur aktiviert.
  */
-export const adoptTournamentWorkArea = async (req: Request, res: Response) => {
+export const adoptTournamentWorkArea = async (req: AuthRequest, res: Response) => {
   const { tournamentId, workAreaId } = req.body as z.infer<typeof tournamentWorkAreaAdoptSchema>;
 
   const katalog = await prisma.workArea.findUnique({ where: { id: workAreaId } });
@@ -245,6 +247,13 @@ export const adoptTournamentWorkArea = async (req: Request, res: Response) => {
     const aktiviert = vorhanden.active
       ? vorhanden
       : await prisma.tournamentWorkArea.update({ where: { id: vorhanden.id }, data: { active: true } });
+    if (!vorhanden.active) {
+      await protokolliere({
+        tournamentId, userId: req.userId, art: 'stammdaten',
+        beschreibung: `hat den Arbeitsbereich ${aktiviert.name} im Turnier wieder aktiviert`,
+        objektTyp: 'tournamentWorkArea', objektId: aktiviert.id
+      });
+    }
     return res.status(200).json(aktiviert);
   }
 
@@ -263,6 +272,12 @@ export const adoptTournamentWorkArea = async (req: Request, res: Response) => {
       active: true
     }
   });
+  await protokolliere({
+    tournamentId, userId: req.userId, art: 'stammdaten',
+    beschreibung: `hat den Arbeitsbereich ${erstellt.name} ins Turnier geholt`,
+    objektTyp: 'tournamentWorkArea', objektId: erstellt.id
+  });
+
   return res.status(201).json(erstellt);
 };
 

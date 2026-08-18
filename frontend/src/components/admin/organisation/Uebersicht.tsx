@@ -4,7 +4,7 @@ import { Shift, VolunteerShift, TournamentWorkArea, TournamentDay, Tournament, W
 import {
   getShifts, getVolunteerShifts, getVolunteers, updateShiftsBatch, updateShift,
   getTournamentWorkAreas, getTournamentDays, addDaySlot, getWorkAreas, adoptTournamentWorkArea,
-  exportDayToTemplate, createShift, apiDelete, apiPost, getTournaments
+  exportDayToTemplate, createShift, apiDelete, apiPost, getTournaments, getAenderungen
 } from '../../../api';
 import { modal } from '../Modal';
 import { btnStyle, inputStyle, tdStyle, thStyle, BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from '../shared';
@@ -24,7 +24,24 @@ function useWindowWidth() {
 }
 
 const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
-export default function Uebersicht({ selectedTournament }: { selectedTournament: number | null }) {
+
+/**
+ * "vor 8 Minuten" - grobe, aber sofort verständliche Angabe. Eine Uhrzeit
+ * müsste man im Kopf mit der aktuellen verrechnen; hier zählt nur, ob die
+ * Änderung frisch genug ist, um sich vor dem eigenen Eingriff abzustimmen.
+ */
+function vorWieLange(iso: string): string {
+  const sekunden = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (sekunden < 60) return 'gerade eben';
+  const minuten = Math.round(sekunden / 60);
+  if (minuten < 60) return `vor ${minuten} Minute${minuten === 1 ? '' : 'n'}`;
+  const stunden = Math.round(minuten / 60);
+  if (stunden < 24) return `vor ${stunden} Stunde${stunden === 1 ? '' : 'n'}`;
+  const tage = Math.round(stunden / 24);
+  return `vor ${tage} Tag${tage === 1 ? '' : 'en'}`;
+}
+
+export default function Uebersicht({ selectedTournament }: { selectedTournament: number | null }) {
   const [showPrintModal, setShowPrintModal] = useState(false);
   const queryClient = useQueryClient();
   const windowWidth = useWindowWidth();
@@ -99,6 +116,24 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
   // Der Stammdaten-Katalog: damit "➕ Schicht" auch Bereiche anbieten kann,
   // die dieses Turnier noch nicht kennt.
   const { data: catalogAreas = [] } = useQuery<WorkArea[]>({ queryKey: ['work-areas'], queryFn: getWorkAreas, enabled: !!tid });
+
+  /**
+   * Letzte Änderungen, um im Schicht-Dialog "zuletzt geändert von ..." zu
+   * zeigen. Genau dort steht jemand kurz davor, die Arbeit eines anderen zu
+   * überschreiben - der Verlauf im eigenen Reiter erklärt es erst hinterher.
+   */
+  const { data: verlauf } = useQuery<{ eintraege: { objektTyp: string | null; objektId: number | null; userName: string; createdAt: string; beschreibung: string }[] }>({
+    queryKey: ['aenderungen-kurz', tid],
+    queryFn: () => getAenderungen(tid as number, { limit: 100 }),
+    enabled: !!tid,
+    refetchInterval: 30000
+  });
+
+  /** Jüngster Eintrag zu genau dieser Schicht, oder null. */
+  const letzteAenderung = useMemo(() => {
+    if (!selectedShift || !verlauf?.eintraege) return null;
+    return verlauf.eintraege.find(e => e.objektTyp === 'shift' && e.objektId === selectedShift.id) || null;
+  }, [selectedShift, verlauf]);
 
   /** Einheitliche Fehlerbehandlung für Setup-Mutationen (401 -> klarer Hinweis, kein Uncaught). */
   const guard = async (fn: () => Promise<void>) => {
@@ -940,6 +975,20 @@ const toDateOnly = (d: Date): string => d.toISOString().slice(0, 10);
                   </div>
                 );
               })()}
+
+              {letzteAenderung && (
+                <div style={{
+                  display: 'flex', gap: 8, alignItems: 'flex-start',
+                  background: '#FAEEDA', border: '1px solid #EF9F27', borderRadius: 8,
+                  padding: '9px 11px', marginBottom: 12
+                }}>
+                  <span style={{ fontSize: 14 }} aria-hidden="true">🕓</span>
+                  <span style={{ fontSize: 12, color: '#633806', lineHeight: 1.5 }}>
+                    Zuletzt geändert von <strong>{letzteAenderung.userName}</strong>,{' '}
+                    {vorWieLange(letzteAenderung.createdAt)}
+                  </span>
+                </div>
+              )}
 
               <div className="admin-core-style-227">
                 <h5 className="admin-core-style-228">➕ Helfer in Schicht einplanen</h5>

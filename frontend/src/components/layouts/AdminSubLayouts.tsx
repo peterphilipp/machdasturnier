@@ -188,7 +188,8 @@ export function OrganisationLayout() {
     { to: 'uebersicht', icon: '📋', label: 'Dienstplan' },
     { to: 'food-donation-slots', icon: '🍰', label: 'Verpflegung' },
     { to: 'shopping-list', icon: '🛒', label: 'Einkaufsliste' },
-    { to: 'push-broadcast', icon: '🔔', label: 'Push-Nachrichten' }
+    { to: 'push-broadcast', icon: '🔔', label: 'Push-Nachrichten' },
+    { to: 'verlauf', icon: '🕓', label: 'Verlauf' }
   ];
 
   return (

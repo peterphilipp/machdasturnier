@@ -30,6 +30,7 @@ import Uebersicht from './components/admin/organisation/Uebersicht';
 import FoodDonationSlots from './components/admin/organisation/FoodDonationSlots';
 import ShoppingList from './components/admin/organisation/ShoppingList';
 import PushBroadcast from './components/admin/organisation/PushBroadcast';
+import Verlauf from './components/admin/organisation/Verlauf';
 
 // --- Admin Pages: Stammdaten ---
 import Turniere from './components/admin/stammdaten/Turniere';
@@ -101,6 +102,7 @@ export default function App() {
               <Route path="food-donation-slots" element={<FoodDonationSlotsWrapper />} />
               <Route path="shopping-list" element={<ShoppingListWrapper />} />
               <Route path="push-broadcast" element={<PushBroadcastWrapper />} />
+              <Route path="verlauf" element={<VerlaufWrapper />} />
             </Route>
 
             {/* Level 1: Stammdaten */}
@@ -152,6 +154,10 @@ function TurnierModusWrapper() {
 function SpielplanWrapper({ phase }: { phase: 'gruppenphase' | 'ko' }) {
   const ctx = useOutletContext<any>();
   return <Spielplan tournamentId={ctx.selectedTournamentId} yearGroupId={ctx.selectedYearGroupId} phase={phase} />;
+}
+function VerlaufWrapper() {
+  const ctx = useOutletContext<any>();
+  return <Verlauf selectedTournament={ctx.selectedTournamentId} />;
 }
 function UebersichtWrapper() {
   const ctx = useOutletContext<any>();
