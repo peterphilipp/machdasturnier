@@ -203,8 +203,8 @@ export function OrganisationLayout() {
       <TournamentSelectCard context={context} showYearGroup={false} />
       <SubNav tabs={tabs} activeColor="#198754" />
       {hilfe && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 0' }}>
-          <span style={{ flex: 1, fontSize: 13, color: '#6c757d', lineHeight: 1.5 }}>{hilfe.zweck}</span>
+        <div className="admin-seitenhilfe">
+          <span className="admin-seitenhilfe-text">{hilfe.zweck}</span>
           <Seitenhilfe pfad={location.pathname} />
         </div>
       )}
@@ -238,9 +238,20 @@ export function StammdatenLayout() {
     { to: 'db-management', icon: '🗄️', label: 'DB-Management', reqAdmin: true }
   ];
 
+  // Bei Stammdaten geht es weniger darum, WIE man ein Feld ausfüllt, als
+  // darum, WAS anderswo davon abhängt - deshalb steht die Hilfe hier genauso
+  // wie im Bereich Organisation.
+  const hilfeStamm = SEITENHILFE[seitenSchluessel(location.pathname)];
+
   return (
     <>
       <SubNav tabs={tabs.filter(t => !t.reqAdmin || isAdmin)} activeColor="#6c757d" />
+      {hilfeStamm && (
+        <div className="admin-seitenhilfe">
+          <span className="admin-seitenhilfe-text">{hilfeStamm.zweck}</span>
+          <Seitenhilfe pfad={location.pathname} />
+        </div>
+      )}
       <main>
         <Outlet context={context} />
       </main>

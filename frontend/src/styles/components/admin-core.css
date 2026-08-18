@@ -1761,3 +1761,62 @@
   visibility: visible;
   transform: translateX(-50%) scale(1);
 }
+/* ---- Kontexthilfe im Seitenkopf ----
+   Eigene Karte statt freischwebender Text: Darunter folgt immer eine Karte,
+   und ohne eigenen Rahmen klebte die Zeile daran, als waere sie versehentlich
+   dort gelandet. Gleiche Radien, Raender und Abstaende wie die uebrigen
+   Karten, nur flacher. */
+.admin-seitenhilfe {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 14px 18px;
+  margin-bottom: 24px;
+}
+
+.admin-seitenhilfe-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: #6c757d;
+  line-height: 1.5;
+}
+
+.admin-seitenhilfe-knopf {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #f8f9fa;
+  color: #495057;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.admin-seitenhilfe-knopf:hover {
+  background: #e9ecef;
+}
+
+@media (max-width: 767px) {
+  .admin-seitenhilfe {
+    padding: 12px 14px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .admin-seitenhilfe-knopf {
+    width: 100%;
+    justify-content: center;
+  }
+}

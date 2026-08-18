@@ -85,6 +85,118 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
       'Einträge älter als 90 Tage werden automatisch entfernt.',
       'Im Schicht-Dialog steht zusätzlich, wer die Schicht zuletzt angefasst hat – dort siehst du es, bevor du selbst etwas änderst.'
     ]
+  },
+
+  // ---------------- Stammdaten ----------------
+  // Hier gilt durchgehend: Es geht weniger darum, WIE man ein Feld ausfüllt,
+  // als darum, WAS anderswo davon abhängt. Wer Stammdaten pflegt, sieht die
+  // Folgen sonst erst, wenn sie eintreten.
+
+  vereine: {
+    zweck: 'Der eigene Verein und die Gastvereine – Grundlage für Teams und das Erscheinungsbild.',
+    ablauf: [
+      'Den eigenen Verein mit Logo und den beiden Vereinsfarben anlegen.',
+      'Gastvereine ergänzen, sobald die Zusagen für ein Turnier stehen.'
+    ],
+    hinweise: [
+      'Logo und Farben des eigenen Vereins erscheinen in der ganzen App und im Kopf jedes Stationszettels.',
+      'An einem Verein hängen die Teams. Wird er gelöscht, verschwinden sie mit – prüfe vorher, ob noch ein Turnier darauf verweist.'
+    ]
+  },
+
+  turniere: {
+    zweck: 'Der Rahmen, an dem alles andere hängt: Spielplan, Dienstplan, Spenden.',
+    ablauf: [
+      'Turnier mit Zeitraum anlegen und dem Verein zuordnen.',
+      'Status auf „aktiv" setzen, sobald Helfer es sehen sollen.',
+      'Nach dem Turnier auf „archiviert" setzen.'
+    ],
+    hinweise: [
+      'Der Status steuert, was Helfer im Self-Service sehen: „Entwurf" bleibt für sie unsichtbar, während du planst.',
+      'Der Zeitraum begrenzt, welche Turniertage sich anlegen lassen. Verschiebt sich das Turnier, zuerst hier korrigieren.',
+      'Löschen entfernt den kompletten Plan samt Schichten, Zusagen und Spenden. Archivieren erhält alles und nimmt es nur aus dem Blickfeld.'
+    ]
+  },
+
+  jahrgaenge: {
+    zweck: 'Geburtsjahr-Bereiche wie „Jahrgang 2016" – sie steuern, wer was zu sehen bekommt.',
+    ablauf: [
+      'Je Jahrgang den Bereich von/bis Geburtsjahr festlegen.',
+      'Nicht mehr benötigte Jahrgänge inaktiv setzen statt löschen.'
+    ],
+    hinweise: [
+      'Eltern sehen im Self-Service genau die Spenden-Ziele der Jahrgänge, in die das Geburtsjahr ihrer hinterlegten Kinder fällt. Wer keine Kinder eingetragen hat, sieht keine.',
+      'Verschiebst du die Grenzen, verschiebt sich diese Zuordnung rückwirkend – auch für bereits zugesagte Spenden.',
+      'Trainer werden Jahrgängen zugeordnet und sehen in ihrer Ansicht nur die eigenen.'
+    ]
+  },
+
+  'work-areas': {
+    zweck: 'Der Katalog aller Arbeitsbereiche – Küche, Grillstand, Aufbau und so weiter.',
+    ablauf: [
+      'Bereich mit Symbol, Farbe und der üblichen Helferzahl anlegen.',
+      'Betriebszeiten hinterlegen, falls der Bereich nicht den ganzen Tag läuft.',
+      'Beim Einrichten eines Turniers werden die Bereiche dorthin übernommen.'
+    ],
+    hinweise: [
+      'Wichtig: Ein Turnier arbeitet mit einer KOPIE des Katalogs. Änderungen hier wirken deshalb NICHT rückwirkend in laufende Turniere – dort passt du den Bereich direkt im Dienstplan an.',
+      'Min- und Max-Helfer sind die Vorgabe für neu erzeugte Schichten, nicht für bestehende.',
+      'Statt zu löschen, einen Bereich lieber als veraltet markieren: Gelöschte Bereiche reißen Lücken in ausgewertete Turniere.'
+    ]
+  },
+
+  'global-time-slots': {
+    zweck: 'Bauplan eines Turniertags: welcher Arbeitsbereich von wann bis wann arbeitet.',
+    ablauf: [
+      'Vorlage anlegen, z.B. „Turniersamstag".',
+      'Je Arbeitsbereich die Zeitfenster eintragen – im Diagramm mit der Maus.',
+      'Beim Anlegen eines Turniertags die Vorlage auswählen; daraus entstehen die Zeitfenster und Schichten.'
+    ],
+    hinweise: [
+      'Änderungen wirken erst beim NÄCHSTEN Turniertag, der aus der Vorlage entsteht. Bereits angelegte Tage bleiben, wie sie sind.',
+      'Umgekehrt geht es auch: Einen fertig geplanten Tag kannst du im Dienstplan über „✨ Als Vorlage" hierher zurückspeichern.',
+      'Mehrere Bereiche dürfen dasselbe Zeitfenster haben – daraus wird ein gemeinsames Fenster mit mehreren Schichten.'
+    ]
+  },
+
+  lebensmittel: {
+    zweck: 'Artikel und Kategorien für Verpflegung – die Grundlage für Spenden und Einkauf.',
+    ablauf: [
+      'Kategorien anlegen (Kuchen, Getränke, Grillgut …).',
+      'Artikel mit Einheit und Preis darin einsortieren.'
+    ],
+    hinweise: [
+      'Aus diesen Artikeln baust du später die Spenden-Ziele je Jahrgang und die Einkaufsliste.',
+      'Wird ein Artikel gelöscht, verlieren bestehende Zusagen ihren Bezug. Umbenennen ist meist die bessere Wahl.'
+    ]
+  },
+
+  helfer: {
+    zweck: 'Alle Personen – wer sich anmelden kann, wer welche Rechte hat, wer wie erreichbar ist.',
+    ablauf: [
+      'Helfer legen sich in der Regel selbst an; hier ergänzt du Rollen und Kinder.',
+      'Rolle vergeben: Helfer, Trainer, Organisator oder Admin – mehrere gleichzeitig sind möglich.',
+      'Über 🔑 ein Passwort setzen, wenn jemand nicht mehr hineinkommt.'
+    ],
+    hinweise: [
+      'Die hinterlegten Kinder steuern, welche Jahrgangs-Spenden ein Elternteil zu sehen bekommt – ohne Kind keine Spendenansicht.',
+      '„Helfer ohne App-Zugang" ist für Jugendliche ohne eigenes Konto gedacht. Trage dort unbedingt eine Kontaktperson ein, sonst erreicht eine verschobene Schicht niemanden.',
+      'Rollen wirken sofort, auch bei bereits angemeldeten Personen – die Rechte werden bei jeder Anfrage neu geprüft.',
+      'Löschen entfernt auch alle Zusagen und Spenden dieser Person.'
+    ]
+  },
+
+  'db-management': {
+    zweck: 'Export und Import der gesamten Datenbank – für Sicherungen und Umzüge.',
+    ablauf: [
+      'Export lädt den kompletten Datenbestand als Datei herunter.',
+      'Import spielt eine solche Datei wieder ein.'
+    ],
+    hinweise: [
+      'Ein Import überschreibt den vorhandenen Bestand. Vorher exportieren, sonst gibt es keinen Weg zurück.',
+      'Die Datei enthält alle Personendaten des Vereins. Sie gehört nicht in eine Cloud und nicht in einen E-Mail-Anhang.',
+      'Für den Normalbetrieb brauchst du das nicht: Der Server sichert die Datenbank bei jedem Start automatisch.'
+    ]
   }
 };
 

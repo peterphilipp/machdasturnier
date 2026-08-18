@@ -18,18 +18,14 @@ export default function Seitenhilfe({ pfad }: { pfad: string }) {
 
   return (
     <>
+      {/* Beschrifteter Knopf statt Fragezeichen-Kreis: Der Kreis schwebte
+          neben dem Text, ohne zur Formensprache der Seite zu gehoeren. */}
       <button
         onClick={() => setOffen(true)}
         aria-label="Hilfe zu dieser Seite"
-        title="Wofür ist diese Seite da?"
-        style={{
-          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-          border: '1px solid #badbcc', background: '#d1e7dd', color: '#0f5132',
-          fontSize: 15, fontWeight: 700, cursor: 'pointer',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center'
-        }}
+        className="admin-seitenhilfe-knopf"
       >
-        ?
+        <span aria-hidden="true">❓</span> Hilfe
       </button>
 
       {offen && (
