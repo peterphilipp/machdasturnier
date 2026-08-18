@@ -574,6 +574,34 @@ Table Recreation — deshalb läuft im Entrypoint vor jedem Push ein Backup
 
 ---
 
+## Testumgebung kennzeichnen
+
+Test und Produktion laufen aus demselben Image. Damit niemand versehentlich auf
+der Testumgebung landet und dort vergeblich sein echtes Passwort probiert, wird
+sie über zwei Umgebungsvariablen als solche markiert — **nur auf dem Testhost**:
+
+```yaml
+APP_ENV: "test"                                            # oder "staging"
+PRODUCTION_URL: "https://machdasturnier.mygate.dedyn.io"   # Ziel des Absprung-Knopfes
+```
+
+Dann zeigt die App ein schwarz-gelbes Streifenband am oberen Rand und —
+solange niemand angemeldet ist — einen blockierenden Hinweis mit dem Knopf
+„Zur echten App wechseln". Zusätzlich tragen Browsertitel (`[TEST] …`) und
+Themenfarbe die Kennzeichnung, damit auch eine auf dem Startbildschirm
+abgelegte Testversion erkennbar bleibt.
+
+**Ohne `APP_ENV` ändert sich nichts.** Der Standard ist bewusst „Produktion":
+Eine vergessene Variable macht die Testumgebung still, ein fälschlich als Test
+markiertes Produktivsystem würde dagegen alle Nutzer verunsichern und sie zum
+Wegklicken erziehen.
+
+Abfragen lässt sich der Zustand über `GET /api/environment` (öffentlich, weil
+die Anmeldeseite ihn braucht).
+
+---
+
+
 ## Lokaler Start
 
 ```bash

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ModalRoot } from './components/admin/Modal';
-import { UserProvider } from './context/UserContext';
+import { UserProvider, useUser } from './context/UserContext';
+import { useUmgebung, TestumgebungsBand, TestumgebungsHinweis } from './components/Testumgebung';
 
 // --- SelfService & Public ---
 import Privacy from './components/Privacy';
@@ -40,9 +41,27 @@ import Helfer from './components/admin/stammdaten/Helfer';
 import Jahrgaenge from './components/admin/stammdaten/Jahrgaenge';
 import DbManagement from './components/admin/stammdaten/DbManagement';
 
+/**
+ * Kennzeichnung der Testumgebung. Das Band steht ueberall, der blockierende
+ * Hinweis nur, solange niemand angemeldet ist - dort landet der Fehlgeleitete,
+ * und dort waere ein schlankes Band neben dem Anmeldeformular zu leise.
+ * Sitzt innerhalb von UserProvider, weil es den Anmeldestatus braucht.
+ */
+function Umgebungshinweis() {
+  const info = useUmgebung();
+  const { isLoggedIn, isInitializing } = useUser();
+  return (
+    <>
+      <TestumgebungsBand info={info} />
+      {!isInitializing && !isLoggedIn && <TestumgebungsHinweis info={info} />}
+    </>
+  );
+}
+
 export default function App() {
   return (
     <UserProvider>
+      <Umgebungshinweis />
       <BrowserRouter>
         <Routes>
           {/* Public / Static */}

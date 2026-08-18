@@ -9,6 +9,22 @@ services:
 
       FRONTEND_URL: "https://machdasturnier.mygate.dedyn.io"
 
+      # --- Kennzeichnung der Testumgebung ---------------------------------
+      # NUR auf dem Testhost setzen, hier bewusst auskommentiert.
+      #
+      # Ohne APP_ENV verhaelt sich alles wie bisher. Mit "test" zeigt die App
+      # ein gestreiftes Band am oberen Rand und - solange niemand angemeldet
+      # ist - einen blockierenden Hinweis mit Knopf zur echten App.
+      #
+      # Anlass: Ein Helfer bekam den Link zur Testumgebung geschickt, sah eine
+      # Anmeldemaske, die von der echten nicht zu unterscheiden war, und
+      # probierte dort vergeblich sein richtiges Passwort - bis zur Sperre.
+      #
+      # PRODUCTION_URL ist das Ziel des "Zur echten App"-Knopfes. Fehlt sie,
+      # bleibt der Hinweis stehen, aber ohne Absprung.
+      # APP_ENV: "test"
+      # PRODUCTION_URL: "https://machdasturnier.mygate.dedyn.io"
+
       # Pflicht: JWT-Secret aus der Host-Umgebung (kein Default im Code!).
       # `docker compose up` bricht mit klarer Meldung ab, wenn nicht gesetzt.
       JWT_SECRET: "${JWT_SECRET:?JWT_SECRET muss gesetzt sein (z.B. via .env oder Shell-Env)}"
