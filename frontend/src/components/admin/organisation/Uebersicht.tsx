@@ -12,6 +12,7 @@ import ShiftFeedbackModal from './ShiftFeedbackModal';
 import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
 import StationPrintModal from './StationPrintModal';
+import { Ladefehler } from '../../Verbindung';
 
 function useWindowWidth() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -95,7 +96,7 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
     retry: false
   });
 
-  const { data: jobSlots = [], isLoading: busySlots } = useQuery<Shift[]>({
+  const { data: jobSlots = [], isLoading: busySlots, isError: schichtenFehler, error: schichtenFehlerObj, refetch: schichtenNeu } = useQuery<Shift[]>({
     queryKey: ['shifts', selectedTournament],
     queryFn: () => getShifts(selectedTournament),
     enabled: !!selectedTournament,
@@ -520,6 +521,14 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
       boxShadow: isMobile ? 'none' : '0 2px 12px rgba(0,0,0,0.08)',
       border: isMobile ? 'none' : '1px solid #e9ecef'
     }}>
+      {/* Ohne diesen Kasten sähe ein nicht erreichbarer Server hier aus wie
+          ein Turnier ganz ohne Dienstplan - und jemand legt ihn neu an. */}
+      {schichtenFehler && (
+        <div style={{ marginBottom: 16 }}>
+          <Ladefehler was="Der Dienstplan" fehler={schichtenFehlerObj} erneut={() => schichtenNeu()} />
+        </div>
+      )}
+
       {tid && (
         <RosterSetupPanel
           selectedTournamentId={tid}

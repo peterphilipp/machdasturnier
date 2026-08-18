@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
+import { aktuellerVerbindungsfehler, beiAenderung } from '../verbindungsstatus';
+
+/** Abonniert die Meldestelle aus verbindungsstatus.ts. */
+function useVerbindungsfehler(): unknown {
+  const [wert, setWert] = useState<unknown>(aktuellerVerbindungsfehler());
+  useEffect(() => beiAenderung(() => setWert(aktuellerVerbindungsfehler())), []);
+  return wert;
+}
 
 /**
  * Sichtbarer Verbindungszustand.
@@ -10,11 +18,19 @@ import { useIsFetching, useQueryClient } from '@tanstack/react-query';
  * Fehler - deshalb muss der Zustand sichtbar sein, egal auf welcher Seite.
  */
 
-/** Band am oberen Rand, solange keine Verbindung besteht. */
+/**
+ * Band am oberen Rand, solange keine Verbindung besteht ODER Abfragen
+ * fehlgeschlagen sind.
+ *
+ * Der zweite Fall ist der wichtigere: Ein Gerät kann online sein, während der
+ * Server nicht antwortet. Dann sind Listen leer, ohne dass irgendetwas darauf
+ * hinweist - und genau daraus schloss ein Helfer, er sei nicht eingeteilt.
+ */
 export function Verbindungsband() {
   const [offline, setOffline] = useState(!navigator.onLine);
   const queryClient = useQueryClient();
   const laeuft = useIsFetching() > 0;
+  const fehlgeschlagen = useVerbindungsfehler();
 
   useEffect(() => {
     const wiederDa = () => {
@@ -32,19 +48,33 @@ export function Verbindungsband() {
     };
   }, [queryClient]);
 
-  if (!offline) return null;
+  if (!offline && fehlgeschlagen == null) return null;
 
   return (
     <div style={{
       background: '#FCEBEB', borderBottom: '1px solid #F09595',
-      display: 'flex', alignItems: 'center', gap: 8,
+      display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       padding: '8px 12px', position: 'relative', zIndex: 9996
     }}>
       <span style={{ fontSize: 15 }} aria-hidden="true">📡</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: '#791F1F', lineHeight: 1.4, flex: 1 }}>
-        Keine Verbindung – angezeigte Daten können unvollständig sein.
+      <span style={{ fontSize: 13, fontWeight: 600, color: '#791F1F', lineHeight: 1.4, flex: 1, minWidth: 180 }}>
+        {offline
+          ? 'Keine Verbindung – angezeigte Daten können unvollständig sein.'
+          : 'Nicht alle Daten konnten geladen werden – Listen können unvollständig oder leer erscheinen.'}
       </span>
-      {laeuft && <span style={{ fontSize: 12, color: '#A32D2D' }}>versuche erneut …</span>}
+      {laeuft ? (
+        <span style={{ fontSize: 12, color: '#A32D2D' }}>versuche erneut …</span>
+      ) : (
+        <button
+          onClick={() => queryClient.refetchQueries()}
+          style={{
+            background: '#A32D2D', color: '#fff', border: 'none', borderRadius: 6,
+            padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', minHeight: 34
+          }}
+        >
+          Erneut laden
+        </button>
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ export function getAuthToken(): string {
   return currentToken || localStorage.getItem('token') || '';
 }
 
+import { verbindungGestoert, verbindungWiederDa } from './verbindungsstatus';
+
 // ===================== Error Types =====================
 export class ApiError extends Error {
   status: number;
@@ -64,10 +66,12 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
   try {
     res = await fetch(url, options);
   } catch {
-    throw new ApiError(
+    const fehler = new ApiError(
       'Keine Verbindung zum Server. Prüfe deine Internetverbindung und versuche es erneut.',
       KEINE_VERBINDUNG
     );
+    verbindungGestoert(fehler);
+    throw fehler;
   }
 
   if (!res.ok) {
@@ -133,15 +137,20 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
      * zweiter Versuch lohnt sich genauso.
      */
     if (res.status >= 500 && !vomServer) {
-      throw new ApiError(
+      const fehler = new ApiError(
         'Der Server ist gerade nicht erreichbar. Bitte versuche es in einem Moment erneut.',
         KEINE_VERBINDUNG
       );
+      verbindungGestoert(fehler);
+      throw fehler;
     }
 
     throw new ApiError(errorMsg, res.status);
   }
   
+  // Der Server antwortet wieder - ein etwaiges Warnband darf verschwinden.
+  verbindungWiederDa();
+
   // Für 204 No Content
   if (res.status === 204) return null as T;
   return res.json();
