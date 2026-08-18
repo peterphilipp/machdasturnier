@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ModalRoot } from './components/admin/Modal';
 import { UserProvider, useUser } from './context/UserContext';
 import { useUmgebung, TestumgebungsBand, TestumgebungsHinweis } from './components/Testumgebung';
+import { Verbindungsband } from './components/Verbindung';
 
 // --- SelfService & Public ---
 import Privacy from './components/Privacy';
@@ -53,6 +54,7 @@ function Umgebungshinweis() {
   const { isLoggedIn, isInitializing } = useUser();
   return (
     <>
+      <Verbindungsband />
       <TestumgebungsBand info={info} />
       {!isInitializing && !isLoggedIn && <TestumgebungsHinweis info={info} />}
     </>

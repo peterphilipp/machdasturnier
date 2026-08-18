@@ -39,6 +39,20 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: true,
       staleTime: 1000 * 60 * 5, // 5 minutes
+      // Nach einem Funkloch von selbst nachladen, statt bis zum naechsten
+      // Fenster-Wechsel eine leere oder veraltete Ansicht zu zeigen.
+      refetchOnReconnect: true,
+      /**
+       * Bei fehlender Verbindung lohnt ein zweiter Versuch fast immer, bei
+       * einem echten Serverfehler selten - und bei 401/403 nie. Deshalb wird
+       * hier nach Fehlerart entschieden statt pauschal dreimal zu wiederholen.
+       */
+      retry: (versuch: number, fehler: any) => {
+        const status = fehler?.status;
+        if (status === 401 || status === 403 || status === 404) return false;
+        if (status === 0) return versuch < 3;
+        return versuch < 1;
+      }
     },
   },
 })

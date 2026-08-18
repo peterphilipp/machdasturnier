@@ -7,6 +7,7 @@ import { modal } from '../admin/Modal';
 import { btnStyle } from '../admin/shared';
 import { useUser, VolunteerData } from '../../context/UserContext';
 import { apiFetch, apiPost, apiDelete } from '../../api';
+import { Ladefehler } from '../Verbindung';
 import '../../styles/components/dashboard.css';
 
 interface Shift { id: number; date: string; slot: string; startMin?: number | null; endMin?: number | null; zeitslot: { name: string; startTime: string; endTime: string; color: string; order?: number } | null; arbeitsbereich: { name: string; icon: string; color: string; order?: number } | null; arbeitsbereichId: number | null; maxVolunteers: number; }
@@ -64,6 +65,13 @@ export default function DashboardView() {
   // Wann spielen die eigenen Kinder? Wenige Zeitfenster je Jahrgang; die
   // Ueberschneidung mit einer Schicht wird hier gerechnet.
   const [childPlaySlots, setChildPlaySlots] = useState<{ date: string; startMin: number; endMin: number; yearGroupName: string; children: string[] }[]>([]);
+  // Fehler beim Laden der Verpflegung - damit die Liste nicht fälschlich leer
+  // erscheint, wenn der Server nicht erreichbar war.
+  const [foodFehler, setFoodFehler] = useState<unknown>(null);
+  // Dasselbe für die Schichten. Wichtigster Fall überhaupt: Ohne diesen
+  // Zustand sah ein nicht erreichbarer Server aus wie "du bist nirgends
+  // eingeteilt" - und genau das glaubt dann auch der Helfer.
+  const [schichtFehler, setSchichtFehler] = useState<unknown>(null);
   // Meldungen zu Planaenderungen. Sie stehen ganz oben, weil Push nur eine
   // Minderheit erreicht - sonst wuerde eine Verschiebung schlicht uebersehen.
   const [notifications, setNotifications] = useState<{ id: number; title: string; body: string; createdAt: string }[]>([]);
@@ -122,16 +130,20 @@ export default function DashboardView() {
 
   const loadFood = async () => {
     try {
+      setFoodFehler(null);
+      // Bewusst OHNE catch(() => []): Ein gescheiterter Aufruf sah vorher aus
+      // wie "es gibt keine Spenden". Der Fehler muss bis zum catch unten
+      // durchkommen, damit die Oberfläche ihn anzeigen kann.
       const [cats, dons] = await Promise.all([
-        apiFetch('/api/food/categories').catch(() => []),
-        apiFetch('/api/food/donations').catch(() => ({ donations: [] }))
+        apiFetch('/api/food/categories'),
+        apiFetch('/api/food/donations')
       ]);
       setFoodCategories(cats);
       setMyDonations(dons.donations || []);
 
       const tId = selectedTournamentId || volunteer?.tournamentId;
       if (tId) {
-        const allSlots = await apiFetch('/api/food-donation-slots?tournamentId=' + tId).catch(() => []);
+        const allSlots = await apiFetch('/api/food-donation-slots?tournamentId=' + tId);
         const childYears = volunteer?.children?.map((c: any) => c.childYear).filter((y: any) => y != null) || [];
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -154,6 +166,7 @@ export default function DashboardView() {
       }
     } catch (e) {
       console.error(e);
+      setFoodFehler(e);
     }
   };
 
@@ -218,11 +231,13 @@ export default function DashboardView() {
       const url = tId ? `/api/self/available?tournamentId=${tId}` : '/api/self/available';
       const d = await apiFetch(url);
       applyAvailableData(d);
+      setSchichtFehler(null);
       if (d.volunteer) {
         login(token, d.volunteer);
       }
     } catch (e) {
       console.error(e);
+      setSchichtFehler(e);
     }
   };
 
@@ -548,6 +563,15 @@ export default function DashboardView() {
       <div className="dashboard-content">
         {activeSection === 'jobs' && (
           <>
+            {/* Konnte der Dienstplan nicht geladen werden, darf hier NICHT
+                "keine Schichten" stehen - sonst hält sich jemand für nicht
+                eingeteilt, obwohl er es ist. */}
+            {schichtFehler != null && (
+              <div style={{ marginBottom: 16 }}>
+                <Ladefehler was="Deine Schichten" fehler={schichtFehler} erneut={() => loadAvailable()} />
+              </div>
+            )}
+
             {/* My Shifts */}
             {sortedMyShifts.length > 0 && (
               <div id="tour-myshifts" className="dashboard-my-shifts-container" style={{ background: '#fff', border: `2px solid ${clubPrimary}`, borderRadius: 16 }}>
@@ -697,7 +721,10 @@ export default function DashboardView() {
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : schichtFehler != null ? null : (
+              /* Der leere Zustand gilt nur, wenn wirklich nichts da ist.
+                 Bei einem Ladefehler steht oben bereits die Fehlermeldung -
+                 beides zugleich hiesse "es gibt nichts UND es ging schief". */
               <div className="dashboard-empty-state">
                 <img src="/404-dog.webp" alt="Keine Schichten" style={{ maxWidth: 200, margin: '0 auto 16px', display: 'block' }} />
                 <div className="dashboard-empty-title">Keine Schichten gefunden</div>
@@ -709,6 +736,12 @@ export default function DashboardView() {
 
         {activeSection === 'verpflegung' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* Konnte nicht geladen werden? Dann NICHT so tun, als gäbe es
+                nichts zu spenden - das war der gemeldete Fehler. */}
+            {foodFehler != null && (
+              <Ladefehler was="Die Verpflegung" fehler={foodFehler} erneut={loadFood} />
+            )}
+
             {/* Meine Einträge */}
             {myDonations.length > 0 && (
               <div className="dashboard-my-shifts-container" style={{ background: '#fff', border: `2px solid ${clubPrimary}`, borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>

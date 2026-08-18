@@ -19,6 +19,19 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Status 0 bedeutet: Der Server hat gar nicht geantwortet - Funkloch, WLAN weg,
+ * Server aus. Bewusst von echten HTTP-Fehlern unterschieden, weil die
+ * Oberfläche anders darauf reagieren muss: Bei 500 hilft ein zweiter Versuch
+ * selten, bei 0 fast immer.
+ */
+export const KEINE_VERBINDUNG = 0;
+
+/** True, wenn der Fehler daher kommt, dass der Server nicht erreichbar war. */
+export function istVerbindungsfehler(err: unknown): boolean {
+  return err instanceof ApiError && err.status === KEINE_VERBINDUNG;
+}
+
 // Generic fetch wrapper to handle errors and JSON parsing
 export const apiFetch = async <T = any>(url: string, options?: RequestInit): Promise<T> => {
   // Automatisch Token hinzufügen wenn noch nicht in Options
@@ -38,8 +51,25 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
     }
   }
 
-  const res = await fetch(url, options);
-  
+  /**
+   * Netzwerkfehler abfangen, statt sie durchfliegen zu lassen.
+   *
+   * Ohne das wirft fetch ein englisches "TypeError: Failed to fetch", das
+   * ungefiltert bis in die Oberfläche durchschlägt - oder, schlimmer, von
+   * einem catch zu einer leeren Liste gemacht wird. Dann sieht ein fehlender
+   * Server aus wie "es gibt hier nichts", und der Helfer glaubt, er sei
+   * nicht eingeteilt.
+   */
+  let res: Response;
+  try {
+    res = await fetch(url, options);
+  } catch {
+    throw new ApiError(
+      'Keine Verbindung zum Server. Prüfe deine Internetverbindung und versuche es erneut.',
+      KEINE_VERBINDUNG
+    );
+  }
+
   if (!res.ok) {
     // Spezielle Behandlung für 403 Forbidden
     if (res.status === 403) {
@@ -59,6 +89,8 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
     }
 
     let errorMsg = 'Ein Fehler ist aufgetreten';
+    /** Konnte eine echte Fehlermeldung des Servers gelesen werden? */
+    let vomServer = false;
     const text = await res.text();
     console.error(`[API Error ${res.status}] ${options?.method || 'GET'} ${url}`, text);
     try {
@@ -76,10 +108,13 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
 
         if (errorData.error && errorData.error !== 'Validierungsfehler') {
           errorMsg = errorData.error;
+          vomServer = true;
         } else if (detailMsg) {
           errorMsg = detailMsg;
+          vomServer = true;
         } else {
           errorMsg = errorData.error || errorData.message || errorMsg;
+          vomServer = !!(errorData.error || errorData.message);
         }
       } catch (e) {
         // Fallback to text if not JSON
@@ -90,6 +125,20 @@ export const apiFetch = async <T = any>(url: string, options?: RequestInit): Pro
     } catch (e) {
       // Ignore text read error
     }
+    /**
+     * Ein 5xx OHNE verwertbare Meldung kommt nicht von uns: Das Backend
+     * antwortet auf Fehler immer mit JSON. Leerer Rumpf oder HTML heisst also,
+     * dass ein Proxy stellvertretend fuer einen toten Server geantwortet hat.
+     * Fuer den Nutzer ist das derselbe Fall wie gar keine Antwort - und ein
+     * zweiter Versuch lohnt sich genauso.
+     */
+    if (res.status >= 500 && !vomServer) {
+      throw new ApiError(
+        'Der Server ist gerade nicht erreichbar. Bitte versuche es in einem Moment erneut.',
+        KEINE_VERBINDUNG
+      );
+    }
+
     throw new ApiError(errorMsg, res.status);
   }
   
