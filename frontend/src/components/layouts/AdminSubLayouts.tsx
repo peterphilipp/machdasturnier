@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useOutletContext, useLocation, Navigate } from 'react-router-dom';
 import { Tournament } from '../admin/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import Seitenhilfe from '../admin/Seitenhilfe';
+import { SEITENHILFE, seitenSchluessel } from '../admin/hilfe';
 
 /**
  * Reiter-Zeile der Unternavigation. Auf dem Desktop unveraendert umbrechend,
@@ -192,10 +194,20 @@ export function OrganisationLayout() {
     { to: 'verlauf', icon: '🕓', label: 'Verlauf' }
   ];
 
+  // Kurzfassung und "?" stammen aus derselben Quelle (hilfe.ts) - so gibt es
+  // den Text nur einmal und Untertitel und Hilfe koennen nicht auseinanderlaufen.
+  const hilfe = SEITENHILFE[seitenSchluessel(location.pathname)];
+
   return (
     <>
       <TournamentSelectCard context={context} showYearGroup={false} />
       <SubNav tabs={tabs} activeColor="#198754" />
+      {hilfe && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 0' }}>
+          <span style={{ flex: 1, fontSize: 13, color: '#6c757d', lineHeight: 1.5 }}>{hilfe.zweck}</span>
+          <Seitenhilfe pfad={location.pathname} />
+        </div>
+      )}
       <main>
         <Outlet context={context} />
       </main>

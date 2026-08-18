@@ -315,7 +315,7 @@ export default function FoodDonationSlots({ selectedTournament, tournament, admi
       </div>
 
       {slots.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#666', padding: 20 }}>Noch keine Verpflegungs-Ziele angelegt.</div>
+        <div style={{ textAlign: 'center', color: '#6c757d', padding: 20, lineHeight: 1.6, fontSize: 14 }}>Noch keine Verpflegungs-Ziele angelegt.<br /><span style={{ fontSize: 13 }}>Lege je Jahrgang fest, welcher Artikel in welcher Menge gebraucht wird – die Eltern sehen im Self-Service nur die Ziele ihres eigenen Jahrgangs und sagen dort zu.</span></div>
       ) : isMobile ? (
         <div className="mobile-food-cards-list">
           {slots

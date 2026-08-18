@@ -423,7 +423,7 @@ export default function ShoppingList({ selectedTournament, tournaments }: { sele
 
         {/* Liste */}
         {items.length === 0 ? (
-          <div style={{ color: '#6c757d', fontStyle: 'italic', padding: 20, textAlign: 'center' }}>Noch keine Artikel auf der Liste.</div>
+          <div style={{ color: '#6c757d', padding: 20, textAlign: 'center', lineHeight: 1.6, fontSize: 14 }}>Noch keine Artikel auf der Liste.<br /><span style={{ fontSize: 13 }}>Hier steht, was der Verein selbst einkauft – im Unterschied zu den Spenden der Eltern. Am schnellsten geht es per Barcode oder indem du die Liste eines vergangenen Turniers übernimmst.</span></div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {items.map(item => {

@@ -717,7 +717,7 @@ export default function RosterSetupPanel({
               Helfer einplanen und einzelne Schichten entfernen geschieht weiter unten in der
               Tages-Übersicht – oder direkt über „➕ Schicht" bei jedem Tag.
             </p>
-            {jobSlots.length === 0 && <p className="admin-core-style-183">Noch keine Schichten. Arbeitsbereiche + Tage oben einrichten und „Schichten generieren" klicken.</p>}
+            {jobSlots.length === 0 && <div className="admin-core-style-183" style={{ lineHeight: 1.6 }}><strong>Noch keine Schichten im Dienstplan.</strong><br />So kommst du hin: oben die <strong>Arbeitsbereiche</strong> für dieses Turnier festlegen, dann die <strong>Turniertage</strong> aus einer Tagesvorlage anlegen – und zuletzt „Schichten generieren". Danach ziehst du die Zeiten im Diagramm zurecht und planst die Helfer ein.</div>}
           </section>
         </div>
       )}
