@@ -49,8 +49,43 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
   const windowWidth = useWindowWidth();
   const isMobile = windowWidth < 768;
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
-  const [selectedVolunteerToAssign, setSelectedVolunteerToAssign] = useState<number | ''>('');
   const [assigning, setAssigning] = useState(false);
+
+  /**
+   * Plant einen Helfer in die gerade geöffnete Schicht ein.
+   *
+   * Wird unmittelbar beim Auswählen aufgerufen - siehe Kommentar am
+   * Auswahlfeld im Schicht-Dialog.
+   */
+  const helferEinplanen = async (userId: number) => {
+    if (!selectedShift || assigning) return;
+    setAssigning(true);
+    try {
+      const shiftDate = (selectedShift as Record<string, any>).day?.date || selectedShift.date;
+      const startMin = (selectedShift as Record<string, any>).startMin ?? (selectedShift as Record<string, any>).daySlot?.startMin ?? 0;
+      const endMin = (selectedShift as Record<string, any>).endMin ?? (selectedShift as Record<string, any>).daySlot?.endMin ?? 0;
+      const slotLabel = `${minToTime(startMin)}-${minToTime(endMin)}`;
+      const roleName = (selectedShift as Record<string, any>).workArea?.name || (selectedShift as Record<string, any>).arbeitsbereich?.name || 'Helfer';
+      const areaIdStr = (selectedShift as Record<string, any>).tournamentWorkAreaId ? String((selectedShift as Record<string, any>).tournamentWorkAreaId) : null;
+
+      await apiPost('/api/volunteer-shifts', {
+        userId,
+        tournamentId: selectedShift.tournamentId || selectedTournament,
+        shiftId: selectedShift.id,
+        date: shiftDate,
+        slot: slotLabel,
+        role: roleName,
+        areaId: areaIdStr
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['volunteerShifts'] });
+    } catch (err: unknown) {
+      const e = err as Error;
+      await modal.alert({ title: 'Fehler', message: e.message || 'Fehler beim Einplanen' });
+    } finally {
+      setAssigning(false);
+    }
+  };
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedYearGroupStats, setSelectedYearGroupStats] = useState<{ day: string, name: string, members: { name: string, shifts: { role: string, slot: string }[] }[] } | null>(null);
@@ -1002,82 +1037,56 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
 
               <div className="admin-core-style-227">
                 <h5 className="admin-core-style-228">➕ Helfer in Schicht einplanen</h5>
-                <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap' }}>
-                  <div style={{ flex: 1, minWidth: 200 }}>
-                    {/* Suchbare Auswahl statt Scroll-Liste: Bei über fünfzig
-                        Helfern war das native Auswahlfeld am Handy nicht mehr
-                        bedienbar. Wer im Turnier schon aktiv ist, steht oben -
-                        das ist der Regelfall; darunter der Rest des Vereins,
-                        damit auch ein gerade erst angelegter Helfer eingeplant
-                        werden kann. */}
-                    <PersonenAuswahl
-                      wert={selectedVolunteerToAssign}
-                      onWaehlen={setSelectedVolunteerToAssign}
-                      leerText="-- Helfer auswählen --"
-                      platzhalter="Name oder E-Mail eingeben …"
-                      personen={(() => {
-                        const imTurnierIds = new Set(allVolunteers.map(v => v.id));
-                        const zusammen = [...allVolunteers];
-                        for (const v of alleNutzer) if (!imTurnierIds.has(v.id)) zusammen.push(v);
+                {/* Die Wahl plant sofort ein. Vorher waren es zwei Schritte -
+                    wählen, dann "Einplanen" - und der kräftige Knopf gehörte
+                    zum zweiten, während das blasse Auswahlfeld daneben
+                    überlesen wurde. Ein Fehlgriff ist unkritisch: Die
+                    Zuweisung steht sofort darüber und lässt sich dort wieder
+                    entfernen.
 
-                        const waehlbar = zusammen.filter(v =>
-                          !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id));
-                        const mehrereGruppen = waehlbar.some(v => !imTurnierIds.has(v.id))
-                          && waehlbar.some(v => imTurnierIds.has(v.id));
+                    Suchbare Auswahl statt Scroll-Liste: Bei über fünfzig
+                    Helfern war das native Auswahlfeld am Handy nicht mehr
+                    bedienbar. Wer im Turnier schon aktiv ist, steht oben -
+                    das ist der Regelfall; darunter der Rest des Vereins,
+                    damit auch ein gerade erst angelegter Helfer eingeplant
+                    werden kann. */}
+                <PersonenAuswahl
+                  key={selectedShift.id}
+                  variante="aktion"
+                  startetOffen={volunteerShifts.filter(vs => vs.shiftId === selectedShift.id).length === 0}
+                  erlaubeLeer={false}
+                  wert=""
+                  leerText={assigning ? 'wird eingeplant …' : '🔍 Helfer suchen und einplanen'}
+                  platzhalter="Name oder E-Mail eingeben …"
+                  onWaehlen={id => { if (id !== '') helferEinplanen(Number(id)); }}
+                  personen={(() => {
+                    const imTurnierIds = new Set(allVolunteers.map(v => v.id));
+                    const zusammen = [...allVolunteers];
+                    for (const v of alleNutzer) if (!imTurnierIds.has(v.id)) zusammen.push(v);
 
-                        return waehlbar
-                          .slice()
-                          .sort((a, b) => Number(imTurnierIds.has(b.id)) - Number(imTurnierIds.has(a.id)))
-                          .map(v => ({
-                            id: v.id,
-                            name: v.name,
-                            email: v.email,
-                            // Ohne zweite Gruppe keine Ueberschrift - sonst stuende
-                            // eine einzelne ueber der gesamten Liste.
-                            gruppe: mehrereGruppen
-                              ? (imTurnierIds.has(v.id) ? 'In diesem Turnier aktiv' : 'Weitere Helfer aus den Stammdaten')
-                              : undefined
-                          }));
-                      })()}
-                    />
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (!selectedVolunteerToAssign || !selectedShift) return;
-                      setAssigning(true);
-                      try {
-                        const shiftDate = (selectedShift as Record<string, any>).day?.date || selectedShift.date;
-                        const startMin = (selectedShift as Record<string, any>).startMin ?? (selectedShift as Record<string, any>).daySlot?.startMin ?? 0;
-                        const endMin = (selectedShift as Record<string, any>).endMin ?? (selectedShift as Record<string, any>).daySlot?.endMin ?? 0;
-                        const slotLabel = `${minToTime(startMin)}-${minToTime(endMin)}`;
-                        const roleName = (selectedShift as Record<string, any>).workArea?.name || (selectedShift as Record<string, any>).arbeitsbereich?.name || 'Helfer';
-                        const areaIdStr = (selectedShift as Record<string, any>).tournamentWorkAreaId ? String((selectedShift as Record<string, any>).tournamentWorkAreaId) : null;
+                    const waehlbar = zusammen.filter(v =>
+                      !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id));
+                    const mehrereGruppen = waehlbar.some(v => !imTurnierIds.has(v.id))
+                      && waehlbar.some(v => imTurnierIds.has(v.id));
 
-                        await apiPost('/api/volunteer-shifts', {
-                          userId: Number(selectedVolunteerToAssign),
-                          tournamentId: selectedShift.tournamentId || selectedTournament,
-                          shiftId: selectedShift.id,
-                          date: shiftDate,
-                          slot: slotLabel,
-                          role: roleName,
-                          areaId: areaIdStr
-                        });
-
-                        queryClient.invalidateQueries({ queryKey: ['volunteerShifts'] });
-                        setSelectedVolunteerToAssign('');
-                        await modal.alert({ title: 'Eingeplant ✅', message: 'Der Helfer wurde eingeplant und per Web-Push benachrichtigt!' });
-                      } catch (err: unknown) { const e = err as Error;
-                        await modal.alert({ title: 'Fehler', message: e.message || 'Fehler beim Einplanen' });
-                      } finally {
-                        setAssigning(false);
-                      }
-                    }}
-                    disabled={!selectedVolunteerToAssign || assigning}
-                    style={{ padding: '12px 20px', minHeight: 44, background: '#0d6efd', color: '#fff', border: 'none', borderRadius: 8, cursor: !selectedVolunteerToAssign || assigning ? 'not-allowed' : 'pointer', fontWeight: 600, opacity: !selectedVolunteerToAssign || assigning ? 0.6 : 1, width: isMobile ? '100%' : undefined }}
-                  >
-                    {assigning ? '...' : '✅ Einplanen'}
-                  </button>
-                </div>
+                    return waehlbar
+                      .slice()
+                      .sort((a, b) => Number(imTurnierIds.has(b.id)) - Number(imTurnierIds.has(a.id)))
+                      .map(v => ({
+                        id: v.id,
+                        name: v.name,
+                        email: v.email,
+                        // Ohne zweite Gruppe keine Ueberschrift - sonst stuende
+                        // eine einzelne ueber der gesamten Liste.
+                        gruppe: mehrereGruppen
+                          ? (imTurnierIds.has(v.id) ? 'In diesem Turnier aktiv' : 'Weitere Helfer aus den Stammdaten')
+                          : undefined
+                      }));
+                  })()}
+                />
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#6c757d', lineHeight: 1.5 }}>
+                  Wer hier gewählt wird, ist sofort eingeplant und bekommt eine Push-Benachrichtigung.
+                </p>
               </div>
             </div>
 

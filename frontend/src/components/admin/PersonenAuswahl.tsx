@@ -26,7 +26,9 @@ export default function PersonenAuswahl({
   onWaehlen,
   platzhalter = 'Name oder E-Mail eingeben …',
   leerText = '-- niemand --',
-  erlaubeLeer = true
+  erlaubeLeer = true,
+  variante = 'feld',
+  startetOffen = false
 }: {
   personen: AuswahlPerson[];
   wert: number | '';
@@ -34,23 +36,40 @@ export default function PersonenAuswahl({
   platzhalter?: string;
   leerText?: string;
   erlaubeLeer?: boolean;
+  /**
+   * 'feld'   - unauffälliges Auswahlfeld in einem Formular.
+   * 'aktion' - eigenständige Handlung. Der zugeklappte Zustand sieht dann wie
+   *            ein Knopf aus und die Trefferliste steht im Textfluss statt
+   *            darüber zu schweben.
+   *
+   * Anlass für 'aktion': Im Schicht-Dialog übersah man das blasse Feld, weil
+   * daneben ein kräftiger Knopf stand und die modale Box direkt danach zu Ende
+   * war. Eine schwebende Liste wäre dort zusätzlich vom Dialogrand
+   * abgeschnitten worden.
+   */
+  variante?: 'feld' | 'aktion';
+  /** Startet aufgeklappt - z.B. wenn die Schicht noch unbesetzt ist. */
+  startetOffen?: boolean;
 }) {
-  const [offen, setOffen] = useState(false);
+  const [offen, setOffen] = useState(startetOffen);
   const [suche, setSuche] = useState('');
   const huelle = useRef<HTMLDivElement>(null);
 
+  const aktion = variante === 'aktion';
   const gewaehlt = personen.find(p => p.id === wert) || null;
 
   // Klick nach außen schließt - sonst bliebe die Liste über dem Formular
   // stehen, sobald man woanders weiterarbeitet.
   useEffect(() => {
-    if (!offen) return;
+    // Die Liste der Variante 'aktion' steht im Fluss und ist Teil des Layouts -
+    // sie darf nicht verschwinden, nur weil man daneben tippt.
+    if (!offen || aktion) return;
     const beiKlick = (e: MouseEvent) => {
       if (huelle.current && !huelle.current.contains(e.target as Node)) setOffen(false);
     };
     document.addEventListener('mousedown', beiKlick);
     return () => document.removeEventListener('mousedown', beiKlick);
-  }, [offen]);
+  }, [offen, aktion]);
 
   const treffer = useMemo(() => {
     const q = suche.trim().toLowerCase();
@@ -85,14 +104,20 @@ export default function PersonenAuswahl({
           onClick={() => setOffen(true)}
           style={{
             width: '100%', textAlign: 'left', padding: '12px 14px', minHeight: 44,
-            border: '1px solid #ced4da', borderRadius: 8, background: '#fff',
+            border: aktion ? '1px solid #0d6efd' : '1px solid #ced4da',
+            borderRadius: 8, background: aktion ? '#e7f1ff' : '#fff',
             fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8
           }}
         >
-          <span style={{ flex: 1, color: gewaehlt ? '#212529' : '#6c757d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span aria-hidden="true" style={{ color: aktion ? '#0d6efd' : '#6c757d' }}>🔍</span>
+          <span style={{
+            flex: 1,
+            color: aktion ? '#0a58ca' : (gewaehlt ? '#212529' : '#6c757d'),
+            fontWeight: aktion ? 600 : 400,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+          }}>
             {gewaehlt ? `${gewaehlt.name}${gewaehlt.email ? ` (${gewaehlt.email})` : ''}` : leerText}
           </span>
-          <span aria-hidden="true" style={{ color: '#6c757d' }}>🔍</span>
         </button>
       ) : (
         <>
@@ -111,7 +136,12 @@ export default function PersonenAuswahl({
             }}
           />
 
-          <div style={{
+          <div style={aktion ? {
+            // Im Fluss: Der Schicht-Dialog scrollt selbst und schneidet alles
+            // ab, was über seinen Rand hinausragt.
+            background: '#fff', border: '1px solid #dee2e6', borderRadius: 8,
+            marginTop: 6, maxHeight: 260, overflowY: 'auto'
+          } : {
             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60,
             background: '#fff', border: '1px solid #dee2e6', borderRadius: 8,
             marginTop: 4, maxHeight: 280, overflowY: 'auto',
