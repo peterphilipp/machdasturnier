@@ -2,31 +2,17 @@ import { useState, useRef, useEffect } from 'react';
 import { modal } from '../Modal';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getClubs, apiPost, apiPut, apiDelete } from '../../../api';
-import { btnStyleSecondary, Club, confirmWithImpact } from '../shared';
-import EditModal from '../EditModal';
+import { btnStyleSecondary, Club, useSortableData, confirmWithImpact } from '../shared';
 import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
-
-interface GroupedClub { city: string; clubs: Club[]; }
 
 export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
   const queryClient = useQueryClient();
   const { data: clubs = [] } = useQuery<Club[]>({ queryKey: ['clubs'], queryFn: getClubs });
-  
-  const groupedClubs = ((): GroupedClub[] => {
-    const groups = new Map<string, Club[]>();
-    for (const club of clubs) {
-      const city = club.city || 'Ohne Stadt';
-      if (!groups.has(city)) groups.set(city, []);
-      groups.get(city)!.push(club);
-    }
-    return Array.from(groups.entries())
-      .map(([city, clubs]) => ({ city, clubs }))
-      .sort((a, b) => {
-        if (a.city === 'Ohne Stadt') return 1;
-        if (b.city === 'Ohne Stadt') return -1;
-        return a.city.localeCompare(b.city);
-      });
-  })();
+
+  // Sortierbare Tabelle statt Kartenraster gruppiert nach Stadt - wie auf
+  // allen anderen Stammdatenseiten. Die Stadt ist jetzt eine Spalte wie jede
+  // andere, statt eine feste Gruppierung vorzugeben.
+  const { items: sortedClubs, requestSort, getSortIndicator } = useSortableData(clubs, { key: 'name', direction: 'asc' });
 
   // Form state – nur noch 2 Farben: Vereinsfarbe + Aktionsfarbe
   const [clubForm, setClubForm] = useState({ name: '', city: '', primaryColor: '#0d6efd', secondaryColor: '#198754', logo: '' });
@@ -147,16 +133,15 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
   );
 
   return (
-    <>
-      <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e9ecef' }}>
-        <StammdatenKopf
-          titel="🛡️ Vereine & Clubs"
-          untertitel="Vereine mit Logo und Farben – sie erscheinen im Turnier und im Spielplan."
-          neuText="Neuer Verein"
-          onNeu={() => setAnlegenOffen(true)}
-          farbe={adminPrimary}
-        />
-        
+    <div className="vereine-card">
+      <StammdatenKopf
+        titel="🛡️ Vereine & Clubs"
+        untertitel="Vereine mit Logo und Farben – sie erscheinen im Turnier und im Spielplan."
+        neuText="Neuer Verein"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
+
       {anlegenOffen && (
         <AnlegenDialog
           titel="🛡️ Neuen Verein anlegen"
@@ -166,7 +151,6 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
           breite={520}
           farbe={adminPrimary}
         >
-          {/* Neue Verein Form */}
           <div className="vereine-style-5">
             <div className="vereine-style-6">
               <label className="vereine-style-7">📝 Name</label>
@@ -180,38 +164,49 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
         </AnlegenDialog>
       )}
 
-      </div>
-
-      {/* Vereinsliste */}
-      <div className="vereine-style-13">
-        {groupedClubs.map(group => (
-          <div key={group.city}>
-            <h3 className="vereine-style-14">📍 {group.city} ({group.clubs.length})</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
-              {group.clubs.map(club => (
-                <div key={club.id} className="vereine-style-15">
-                  {club.logo ? <img src={club.logo} alt={club.name} className="vereine-style-16" /> : <div style={{ width: 48, height: 48, borderRadius: 10, background: club.primaryColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 'bold' }}>{club.name.charAt(0)}</div>}
-                  <div className="vereine-style-17">
-                    <h4 className="vereine-style-18">{club.name}</h4>
-                    {club.city && <div className="vereine-style-19">📍 {club.city}</div>}
-                    <div className="vereine-style-20">
-                      <span title="Vereinsfarbe" style={{ width: 10, height: 10, borderRadius: '50%', background: club.primaryColor }} />
-                      <span title="Aktionsfarbe" style={{ width: 10, height: 10, borderRadius: '50%', background: club.secondaryColor }} />
-                    </div>
-                  </div>
-                  <button onClick={() => openEdit(club)} className="vereine-style-21">✏️</button>
-                  <button onClick={() => deleteClub(club)} className="vereine-style-22">🗑️</button>
+      <div className="admin-table-scroll">
+      <table className="vereine-table admin-cards-mobile">
+        <thead>
+          <tr className="vereine-table-header-row">
+            <th className="vereine-th-no-cursor">Logo</th>
+            <th onClick={() => requestSort('name')} className="vereine-th-left-pointer">Name{getSortIndicator('name')}</th>
+            <th onClick={() => requestSort('city')} className="vereine-th-left-pointer">Stadt{getSortIndicator('city')}</th>
+            <th className="vereine-th-no-cursor">Farben</th>
+            <th className="vereine-th-no-cursor">Aktion</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedClubs.length === 0 ? (
+            <tr><td colSpan={5} className="vereine-empty-td">Noch keine Vereine angelegt.</td></tr>
+          ) : sortedClubs.map(club => (
+            <tr key={club.id} className="vereine-tr">
+              <td data-label="Logo" className="vereine-td-center">
+                {club.logo
+                  ? <img src={club.logo} alt={club.name} className="vereine-table-logo" />
+                  : <span className="vereine-table-logo-placeholder" style={{ background: club.primaryColor }}>{club.name.charAt(0)}</span>}
+              </td>
+              <td data-label="Name" className="vereine-td-bold">{club.name}</td>
+              <td data-label="Stadt" className="vereine-td">{club.city || <span className="vereine-gray-text">–</span>}</td>
+              <td data-label="Farben" className="vereine-td">
+                <span title="Vereinsfarbe" className="vereine-color-dot" style={{ background: club.primaryColor }} />
+                <span title="Aktionsfarbe" className="vereine-color-dot" style={{ background: club.secondaryColor }} />
+              </td>
+              <td className="vereine-td-actions">
+                <div className="vereine-actions-container">
+                  <button onClick={() => openEdit(club)} className="vereine-btn-edit">✏️</button>
+                  <button onClick={() => deleteClub(club)} className="vereine-btn-delete">🗑️</button>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       </div>
 
       {/* Edit Modal */}
       {editingClub && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: '#fff', borderRadius: 16, padding: '28px 32px 24px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', width: '90%', maxWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="vereine-modal-overlay">
+          <div className="vereine-modal-content">
             <div className="vereine-style-23">
               <h3 className="vereine-style-24">✏️ Verein bearbeiten</h3>
               <button onClick={closeEdit} className="vereine-style-25">×</button>
@@ -219,7 +214,7 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
             {/* Scrollbarer Inhalt */}
             <div className="vereine-style-26">
               <div className="vereine-style-27">
-                
+
                 {/* Name & Stadt – mit Labels (§13.1) */}
                 <div>
                   <label className="vereine-style-28">📝 Name</label>
@@ -260,18 +255,18 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
             {clubLogo && (
               <div className="vereine-style-41">
                 <label className="vereine-style-42">🎨 Vereinsfarben</label>
-                
+
                 {/* Detaillierte Legende – was die Farben bewirken */}
                 <div className="vereine-style-43">
                   <span>🔵 <strong>Vereinsfarbe</strong>: Aktive Tabs, Header-Hintergrund, Club-Avatar. Wähle die dominante Farbe deines Logos/Vereinsbrandings.</span>
                   <span>🟢 <strong>Aktionsfarbe</strong>: Push-Banner-Button, wichtige CTAs. Sollte auf weißem Grund gut lesbar sein!</span>
                 </div>
-                
+
                 {/* Pipette-Hinweis */}
                 <div className="vereine-style-44">
                   💡 Tipp: Klicke auf einen Farbwähler → Pipette aktivieren → Farbe vom Logo oben auswählen
                 </div>
-                
+
                 {/* ColorPicker mit Tausch-Button */}
                 <div className="vereine-style-45">
                   <ColorPicker label="Vereinsfarbe" value={extractedColors ? extractedColors.primary : clubForm.primaryColor} onChange={v => { if (extractedColors) setExtractedColors({ ...extractedColors, primary: v }); else setClubForm({ ...clubForm, primaryColor: v }); }} />
@@ -289,8 +284,8 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
             </div>
           </div>
         </div>
-      </div>
+        </div>
       )}
-    </>
+    </div>
   );
 }
