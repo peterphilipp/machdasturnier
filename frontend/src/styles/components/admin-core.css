@@ -1820,3 +1820,57 @@
     justify-content: center;
   }
 }
+
+/* ---- Stammdatenseiten: Kopfzeile und Anlegen-Dialog ---- */
+.stammdaten-kopf {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.stammdaten-kopf-text { flex: 1; min-width: 200px; }
+.stammdaten-kopf-titel { margin: 0; font-size: 20px; font-weight: 700; color: #212529; }
+.stammdaten-kopf-untertitel { margin: 4px 0 0; color: #6c757d; font-size: 14px; }
+.stammdaten-neu-knopf {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 11px 18px; min-height: 44px; border: none; border-radius: 8px;
+  color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.stammdaten-neu-knopf:hover { filter: brightness(1.1); }
+.stammdaten-neu-plus { font-size: 18px; font-weight: 700; line-height: 1; }
+
+.stammdaten-dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.stammdaten-dialog {
+  background: #fff; border-radius: 16px; width: 100%;
+  max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.stammdaten-dialog-kopf {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px; border-bottom: 1px solid #e9ecef;
+}
+.stammdaten-dialog-titel { margin: 0; font-size: 18px; font-weight: 600; color: #212529; }
+.stammdaten-dialog-schliessen {
+  background: none; border: none; font-size: 26px; line-height: 1;
+  color: #6c757d; cursor: pointer; padding: 0 4px; min-height: 44px; min-width: 44px;
+}
+.stammdaten-dialog-inhalt { padding: 20px 24px; overflow-y: auto; flex: 1; }
+.stammdaten-dialog-fuss {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 14px 24px; border-top: 1px solid #e9ecef; background: #f8f9fa;
+  border-radius: 0 0 16px 16px;
+}
+.stammdaten-dialog-abbrechen {
+  padding: 11px 18px; min-height: 44px; border: 1px solid #dee2e6; border-radius: 8px;
+  background: #fff; color: #495057; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.stammdaten-dialog-anlegen {
+  padding: 11px 22px; min-height: 44px; border: none; border-radius: 8px;
+  color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+@media (max-width: 767px) {
+  .stammdaten-dialog-overlay { padding: 10px; align-items: flex-end; }
+  .stammdaten-dialog { max-height: 92vh; }
+  .stammdaten-neu-knopf { width: 100%; }
+}

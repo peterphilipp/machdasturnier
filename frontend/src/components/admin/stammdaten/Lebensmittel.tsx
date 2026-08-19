@@ -5,6 +5,7 @@ import { getFoodCategories, getFoodItems, apiPost, apiPatch, apiDelete } from '.
 import { btnStyleSecondary, useSortableData, confirmWithImpact } from '../shared';
 import type { FoodCategory, FoodItem } from '../shared';
 import EditModal from '../EditModal';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 
 const EMOJI_PICKER = ['🍞', '🥖', '🧀', '🥩', '🐟', '🥚', '🥛', '🍰', '🎂', '🍪', '🍫', '☕', '🍵', '🧃', '🍺', '🥤', '🍎', '🍌', '🥬', '🥕', '🍅', '🧅', '🥔', '🌽', '🍄', '🫒', '🧈', '🍯', '🧂', '🥜'];
 const FOOD_UNITS = ['Stk', 'Portion', 'Packung', 'kg', 'Liter', 'Tüte', 'Set'];
@@ -19,6 +20,8 @@ export default function Lebensmittel({ adminPrimary }: LebensmittelProps) {
   // Kategorien state
   const [editingFoodCat, setEditingFoodCat] = useState<number | null>(null);
   const [foodCatForm, setFoodCatForm] = useState({ name: '', icon: '🍽️', order: 0 });
+  const [katAnlegenOffen, setKatAnlegenOffen] = useState(false);
+  const [artikelAnlegenOffen, setArtikelAnlegenOffen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // Artikel state
@@ -48,6 +51,7 @@ export default function Lebensmittel({ adminPrimary }: LebensmittelProps) {
     queryClient.invalidateQueries({ queryKey: ['foodDonationSlots'] });
     setFoodCatForm({ name: '', icon: '🍽️', order: 0 });
     setEditingFoodCat(null);
+    setKatAnlegenOffen(false);
   };
 
   const deleteFoodCategory = async (cat: FoodCategory) => {
@@ -69,6 +73,7 @@ export default function Lebensmittel({ adminPrimary }: LebensmittelProps) {
       queryClient.invalidateQueries({ queryKey: ['foodDonationSlots'] });
       setFoodItemForm({ categoryId: 0, name: '', price: '', unit: 'Stk' });
       setEditingFoodItem(null);
+      setArtikelAnlegenOffen(false);
     } catch (err) { await modal.alert({ title: 'Fehler', message: `Speichern fehlgeschlagen: ${(err as Error).message}` }); }
   };
 
@@ -92,29 +97,44 @@ export default function Lebensmittel({ adminPrimary }: LebensmittelProps) {
     <div className="lebensmittel-container">
       {/* Kategorien */}
       <div className="lebensmittel-card">
-        <h3 className="lebensmittel-card-title">📂 Kategorien</h3>
+        <StammdatenKopf
+          titel="📂 Kategorien"
+          untertitel="Gruppieren die Artikel – z.B. Getränke, Kuchen, Grillgut."
+          neuText="Neue Kategorie"
+          onNeu={() => setKatAnlegenOffen(true)}
+          farbe={adminPrimary}
+        />
         
-        {/* Emoji Picker */}
-        {showEmojiPicker && (
-          <div className="lebensmittel-emoji-picker-container">
-            {EMOJI_PICKER.map(emoji => (<button key={emoji} onClick={() => selectEmoji(emoji)} className={`lebensmittel-emoji-btn ${foodCatForm.icon === emoji ? 'lebensmittel-emoji-btn-active' : ''}`}>{emoji}</button>))}
-          </div>
-        )}
+        {katAnlegenOffen && (
+          <AnlegenDialog
+            titel="📂 Neue Kategorie anlegen"
+            onAbbrechen={() => setKatAnlegenOffen(false)}
+            onAnlegen={saveFoodCategory}
+            anlegenText="Kategorie anlegen"
+            breite={460}
+            farbe={adminPrimary}
+          >
+          {/* Emoji Picker */}
+          {showEmojiPicker && (
+            <div className="lebensmittel-emoji-picker-container">
+              {EMOJI_PICKER.map(emoji => (<button key={emoji} onClick={() => selectEmoji(emoji)} className={`lebensmittel-emoji-btn ${foodCatForm.icon === emoji ? 'lebensmittel-emoji-btn-active' : ''}`}>{emoji}</button>))}
+            </div>
+          )}
 
-        {/* Kategorie Neu hinzufügen */}
-        <div className="lebensmittel-form-row">
-          <div className="lebensmittel-form-group-flex2">
-            <label className="lebensmittel-form-label">📝 Name</label>
-            <input value={foodCatForm.name} onChange={e => setFoodCatForm(f => ({ ...f, name: e.target.value }))} placeholder="z.B. Getränke" className="lebensmittel-form-input" />
+          {/* Kategorie Neu hinzufügen */}
+          <div className="lebensmittel-form-row">
+            <div className="lebensmittel-form-group-flex2">
+              <label className="lebensmittel-form-label">📝 Name</label>
+              <input value={foodCatForm.name} onChange={e => setFoodCatForm(f => ({ ...f, name: e.target.value }))} placeholder="z.B. Getränke" className="lebensmittel-form-input" />
+            </div>
+            <div className="lebensmittel-form-group-w70">
+              <label className="lebensmittel-form-label">😀 Icon</label>
+              <div onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`lebensmittel-emoji-toggle ${showEmojiPicker ? 'lebensmittel-emoji-toggle-active' : ''}`} title="Emoji auswählen">{foodCatForm.icon}</div>
+            </div>
           </div>
-          <div className="lebensmittel-form-group-w70">
-            <label className="lebensmittel-form-label">😀 Icon</label>
-            <div onClick={() => setShowEmojiPicker(!showEmojiPicker)} className={`lebensmittel-emoji-toggle ${showEmojiPicker ? 'lebensmittel-emoji-toggle-active' : ''}`} title="Emoji auswählen">{foodCatForm.icon}</div>
-          </div>
-          <button onClick={saveFoodCategory} className="lebensmittel-add-btn" style={{ background: adminPrimary }}>
-            <span className="lebensmittel-add-btn-icon" aria-hidden="true">+</span><span>Hinzufügen</span>
-          </button>
-        </div>
+
+          </AnlegenDialog>
+        )}
 
         <div className="admin-table-scroll">
         <table className="lebensmittel-table admin-cards-mobile">
@@ -172,36 +192,50 @@ export default function Lebensmittel({ adminPrimary }: LebensmittelProps) {
 
       {/* Artikel */}
       <div className="lebensmittel-card">
-        <h3 className="lebensmittel-card-title">📦 Artikel</h3>
+        <StammdatenKopf
+          titel="📦 Artikel"
+          untertitel="Die einzelnen Spenden-Artikel mit Preis und Einheit."
+          neuText="Neuer Artikel"
+          onNeu={() => setArtikelAnlegenOffen(true)}
+          farbe={adminPrimary}
+        />
         
-        {/* Artikel Neu hinzufügen */}
-        <div className="lebensmittel-form-row">
-          <div className="lebensmittel-form-group-flex2">
-            <label className="lebensmittel-form-label">📝 Name</label>
-            <input value={foodItemForm.name} onChange={e => setFoodItemForm(f => ({ ...f, name: e.target.value }))} placeholder="z.B. Wasser" className="lebensmittel-form-input-p12" />
+        {artikelAnlegenOffen && (
+          <AnlegenDialog
+            titel="📦 Neuen Artikel anlegen"
+            onAbbrechen={() => setArtikelAnlegenOffen(false)}
+            onAnlegen={saveFoodItem}
+            anlegenText="Artikel anlegen"
+            breite={520}
+            farbe={adminPrimary}
+          >
+          <div className="lebensmittel-form-row">
+            <div className="lebensmittel-form-group-flex2">
+              <label className="lebensmittel-form-label">📝 Name</label>
+              <input value={foodItemForm.name} onChange={e => setFoodItemForm(f => ({ ...f, name: e.target.value }))} placeholder="z.B. Wasser" className="lebensmittel-form-input-p12" />
+            </div>
+            <div className="lebensmittel-form-group-flex1">
+              <label className="lebensmittel-form-label">📂 Kategorie</label>
+              <select value={foodItemForm.categoryId} onChange={e => setFoodItemForm(f => ({ ...f, categoryId: parseInt(e.target.value) }))} className="lebensmittel-form-input-p12">
+                <option value={0}>-- Kategorie --</option>
+                {foodCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              </select>
+            </div>
+            <div className="lebensmittel-form-group-w90">
+              <label className="lebensmittel-form-label">💰 Preis</label>
+              <input value={foodItemForm.price} onChange={e => setFoodItemForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" type="number" step="0.01" className="lebensmittel-form-input-p8" />
+            </div>
+            <div className="lebensmittel-form-group-w100">
+              <label className="lebensmittel-form-label">📏 Einheit</label>
+              <select value={foodItemForm.unit} onChange={e => setFoodItemForm(f => ({ ...f, unit: e.target.value }))} className="lebensmittel-form-input-p8">
+                {FOOD_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
           </div>
-          <div className="lebensmittel-form-group-flex1">
-            <label className="lebensmittel-form-label">📂 Kategorie</label>
-            <select value={foodItemForm.categoryId} onChange={e => setFoodItemForm(f => ({ ...f, categoryId: parseInt(e.target.value) }))} className="lebensmittel-form-input-p12">
-              <option value={0}>-- Kategorie --</option>
-              {foodCategories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
-            </select>
-          </div>
-          <div className="lebensmittel-form-group-w90">
-            <label className="lebensmittel-form-label">💰 Preis</label>
-            <input value={foodItemForm.price} onChange={e => setFoodItemForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" type="number" step="0.01" className="lebensmittel-form-input-p8" />
-          </div>
-          <div className="lebensmittel-form-group-w100">
-            <label className="lebensmittel-form-label">📏 Einheit</label>
-            <select value={foodItemForm.unit} onChange={e => setFoodItemForm(f => ({ ...f, unit: e.target.value }))} className="lebensmittel-form-input-p8">
-              {FOOD_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-          </div>
-          <button onClick={saveFoodItem} className="lebensmittel-add-btn" style={{ background: adminPrimary }}>
-            <span className="lebensmittel-add-btn-icon" aria-hidden="true">+</span><span>Hinzufügen</span>
-          </button>
-        </div>
 
+
+          </AnlegenDialog>
+        )}
 
         <div className="admin-table-scroll">
         <table className="lebensmittel-table admin-cards-mobile">

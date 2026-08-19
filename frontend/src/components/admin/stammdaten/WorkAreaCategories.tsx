@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getWorkAreaCategories, createWorkAreaCategory, updateWorkAreaCategory, deleteWorkAreaCategory, updateWorkAreaCategoryOrder } from '../../../api';
 import { modal } from '../Modal';
@@ -10,6 +11,7 @@ export default function WorkAreaCategories({ adminPrimary = '#6c757d' }: { admin
   const { data: categories = [] } = useQuery<WorkAreaCategory[]>({ queryKey: ['work-area-categories'], queryFn: getWorkAreaCategories });
 
   const [newName, setNewName] = useState('');
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
 
   const dragItemIndex = useRef<number | null>(null);
@@ -40,6 +42,7 @@ export default function WorkAreaCategories({ adminPrimary = '#6c757d' }: { admin
     const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
     await createWorkAreaCategory({ name: newName.trim(), color: randomColor });
     setNewName('');
+    setAnlegenOffen(false);
     refresh();
   });
 
@@ -83,26 +86,38 @@ export default function WorkAreaCategories({ adminPrimary = '#6c757d' }: { admin
 
   return (
     <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e9ecef' }}>
-      <h3 className="wa-categories-style-1">🏷️ Arbeitsbereich-Kategorien</h3>
-      <p className="wa-categories-style-2">
-        Verwalte Kategorien (z.B. Aufbau, Spielbetrieb), die Arbeitsbereichen zugeordnet werden können. 
-        Tagesvorlagen generieren ihren Namen vollautomatisch aus diesen Kategorien.
-      </p>
+      <StammdatenKopf
+        titel="🏷️ Arbeitsbereich-Kategorien"
+        untertitel="Kategorien (z.B. Aufbau, Spielbetrieb) für Arbeitsbereiche. Tagesvorlagen bilden ihren Namen daraus."
+        neuText="Neue Kategorie"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
 
-      {/* Neue Kategorie */}
-      <div className="wa-categories-style-3">
-        <label className="wa-categories-style-4">📝 Name</label>
-        <div className="wa-categories-style-5">
-          <input 
-            style={{ ...inputStyle, flex: 1, minWidth: 200 }} 
-            placeholder="z. B. Siegerehrung" 
-            value={newName}
-            onChange={e => setNewName(e.target.value)} 
-            onKeyDown={e => e.key === 'Enter' && addCategory()} 
-          />
-          <button style={{ ...btnStyle, background: adminPrimary, color: '#fff', minHeight: 44 }} onClick={addCategory}><span className="wa-categories-style-6">+</span> Hinzufügen</button>
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="🏷️ Neue Kategorie anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={addCategory}
+          anlegenText="Kategorie anlegen"
+          breite={440}
+          farbe={adminPrimary}
+        >
+        <div className="wa-categories-style-3">
+          <label className="wa-categories-style-4">📝 Name</label>
+          <div className="wa-categories-style-5">
+            <input 
+              style={{ ...inputStyle, flex: 1, minWidth: 200 }} 
+              placeholder="z. B. Siegerehrung" 
+              value={newName}
+              onChange={e => setNewName(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && addCategory()} 
+            />
+          </div>
         </div>
-      </div>
+
+        </AnlegenDialog>
+      )}
 
       {categories.length === 0 && <p className="wa-categories-style-7">Keine Kategorien vorhanden.</p>}
 

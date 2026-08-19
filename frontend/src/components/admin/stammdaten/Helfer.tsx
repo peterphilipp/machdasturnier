@@ -5,6 +5,7 @@ import { getVolunteers, getYearGroups, apiPost, apiPatch, apiDelete } from '../.
 import { btnStyleSecondary, Volunteer, YearGroup, useSortableData, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
 import PersonenAuswahl from '../PersonenAuswahl';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 import { formatPhoneNumber } from '../../../utils/phone';
 
 const ROLES = [
@@ -92,6 +93,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
    */
   const LEERER_FILTER = { name: '', email: '', phone: '', rolle: '', zugang: '', aktivitaet: '' };
   const [filter, setFilter] = useState(LEERER_FILTER);
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const setzeFilter = (feld: keyof typeof LEERER_FILTER, wert: string) =>
     setFilter(f => ({ ...f, [feld]: wert }));
   const filterAktiv = Object.values(filter).some(v => v !== '');
@@ -190,6 +192,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
     queryClient.invalidateQueries({ queryKey: ['volunteers'] });
     setVolForm(EMPTY_FORM);
     setEditingVol(null);
+    setAnlegenOffen(false);
   };
 
   const deleteVolunteer = async (v: Volunteer) => {
@@ -212,12 +215,18 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
 
   return (
     <div className="helfer-container">
-      <h2 className="helfer-title">👤 Benutzer & Personal</h2>
-      <p className="helfer-subtitle">Alle registrierten Benutzer und zugewiesene Helfer</p>
+      <StammdatenKopf
+        titel="👤 Benutzer & Personal"
+        untertitel="Alle registrierten Benutzer und zugewiesene Helfer"
+        neuText="Neuer Benutzer"
+        onNeu={() => { setVolForm(EMPTY_FORM); setAnlegenOffen(true); }}
+        farbe={adminPrimary}
+      />
       
       {/* Filter je Spalte. Bewusst als eigener Block über der Tabelle und nicht
           als Zeile im Tabellenkopf: Auf schmalen Geräten wird die Tabelle zu
           Karten, eine Kopfzeile gäbe es dort gar nicht mehr. */}
+      <div className="helfer-liste">
       <div className="helfer-filter">
         <div className="helfer-filter-feld">
           <label className="helfer-label">📝 Name</label>
@@ -273,75 +282,6 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
           </button>
         )}
       </div>
-
-      {/* Neue Helfer Form */}
-      <div className="helfer-form-row">
-        <div className="helfer-form-col-2">
-          <label className="helfer-label">📝 Name</label>
-          <input value={volForm.name} onChange={e => setVolForm({ ...volForm, name: e.target.value })} placeholder="Vor- und Nachname" className="helfer-input" />
-        </div>
-        <div className="helfer-form-col-1">
-          <label className="helfer-label">📧 E-Mail</label>
-          <input
-            value={volForm.email}
-            onChange={e => setVolForm({ ...volForm, email: e.target.value })}
-            placeholder={volForm.ohneZugang ? 'nicht nötig' : 'email@beispiel.de'}
-            disabled={volForm.ohneZugang}
-            className="helfer-input"
-          />
-        </div>
-      </div>
-
-      <div className="helfer-form-row">
-        <div style={{ flex: 1 }}>
-          <OhneZugangFeld form={volForm} setForm={setVolForm} volunteers={volunteers} editingVol={editingVol} />
-        </div>
-      </div>
-      <div className="helfer-form-row">
-        <div className="helfer-form-col-fixed">
-          <label className="helfer-label">📞 Telefon</label>
-          <input value={volForm.phone} onChange={e => setVolForm({ ...volForm, phone: e.target.value })} onBlur={() => setVolForm({ ...volForm, phone: formatPhoneNumber(volForm.phone) || volForm.phone })} placeholder="+49 123 456789" className="helfer-input" />
-        </div>
-        <div className="helfer-form-col-2">
-          <label className="helfer-label">🎭 Rolle</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {ROLES.map(r => (
-              <label key={r.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, border: '1px solid #dee2e6', borderRadius: 8, padding: '8px 10px', minHeight: 40, cursor: 'pointer', background: volForm.roles.includes(r.value) ? '#e7f1ff' : '#fff' }}>
-                <input type="checkbox" checked={volForm.roles.includes(r.value)} onChange={() => toggleRole(r.value)} />
-                {r.label}
-              </label>
-            ))}
-          </div>
-        </div>
-        <button onClick={saveVolunteer} className="helfer-btn-primary" style={{ background: adminPrimary }}>
-          <span className="helfer-btn-primary-icon" aria-hidden="true">+</span><span>Hinzufügen</span>
-        </button>
-      </div>
-      {volForm.roles.includes('TRAINER') && (
-        <div className="helfer-form-row" style={{ marginTop: '-12px' }}>
-          <div className="helfer-form-col-2">
-            <label className="helfer-label">Zuständige Jahrgänge (Trainer)</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', padding: '12px', background: '#f8f9fa', borderRadius: '10px', border: '1px solid #dee2e6' }}>
-              {yearGroups.map(yg => (
-                <label key={yg.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px', color: '#495057' }}>
-                  <input
-                    type="checkbox"
-                    checked={volForm.trainedYearGroupIds.includes(yg.id)}
-                    onChange={(e) => {
-                      const newIds = e.target.checked
-                        ? [...volForm.trainedYearGroupIds, yg.id]
-                        : volForm.trainedYearGroupIds.filter(id => id !== yg.id);
-                      setVolForm({ ...volForm, trainedYearGroupIds: newIds });
-                    }}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  {yg.name}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="admin-table-scroll">
       <table className="helfer-table admin-cards-mobile">
@@ -459,6 +399,84 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
         </tbody>
       </table>
       </div>
+      </div>
+
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="👤 Neuen Benutzer anlegen"
+          onAbbrechen={() => { setAnlegenOffen(false); setVolForm(EMPTY_FORM); }}
+          onAnlegen={saveVolunteer}
+          anlegenText="Benutzer anlegen"
+          breite={620}
+          farbe={adminPrimary}
+        >
+        <div className="helfer-form-row">
+          <div className="helfer-form-col-2">
+            <label className="helfer-label">📝 Name</label>
+            <input value={volForm.name} onChange={e => setVolForm({ ...volForm, name: e.target.value })} placeholder="Vor- und Nachname" className="helfer-input" />
+          </div>
+          <div className="helfer-form-col-1">
+            <label className="helfer-label">📧 E-Mail</label>
+            <input
+              value={volForm.email}
+              onChange={e => setVolForm({ ...volForm, email: e.target.value })}
+              placeholder={volForm.ohneZugang ? 'nicht nötig' : 'email@beispiel.de'}
+              disabled={volForm.ohneZugang}
+              className="helfer-input"
+            />
+          </div>
+        </div>
+
+        <div className="helfer-form-row">
+          <div style={{ flex: 1 }}>
+            <OhneZugangFeld form={volForm} setForm={setVolForm} volunteers={volunteers} editingVol={editingVol} />
+          </div>
+        </div>
+        <div className="helfer-form-row">
+          <div className="helfer-form-col-fixed">
+            <label className="helfer-label">📞 Telefon</label>
+            <input value={volForm.phone} onChange={e => setVolForm({ ...volForm, phone: e.target.value })} onBlur={() => setVolForm({ ...volForm, phone: formatPhoneNumber(volForm.phone) || volForm.phone })} placeholder="+49 123 456789" className="helfer-input" />
+          </div>
+          <div className="helfer-form-col-2">
+            <label className="helfer-label">🎭 Rolle</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {ROLES.map(r => (
+                <label key={r.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, border: '1px solid #dee2e6', borderRadius: 8, padding: '8px 10px', minHeight: 40, cursor: 'pointer', background: volForm.roles.includes(r.value) ? '#e7f1ff' : '#fff' }}>
+                  <input type="checkbox" checked={volForm.roles.includes(r.value)} onChange={() => toggleRole(r.value)} />
+                  {r.label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        {volForm.roles.includes('TRAINER') && (
+          <div className="helfer-form-row" style={{ marginTop: '-12px' }}>
+            <div className="helfer-form-col-2">
+              <label className="helfer-label">Zuständige Jahrgänge (Trainer)</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', padding: '12px', background: '#f8f9fa', borderRadius: '10px', border: '1px solid #dee2e6' }}>
+                {yearGroups.map(yg => (
+                  <label key={yg.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '14px', color: '#495057' }}>
+                    <input
+                      type="checkbox"
+                      checked={volForm.trainedYearGroupIds.includes(yg.id)}
+                      onChange={(e) => {
+                        const newIds = e.target.checked
+                          ? [...volForm.trainedYearGroupIds, yg.id]
+                          : volForm.trainedYearGroupIds.filter(id => id !== yg.id);
+                        setVolForm({ ...volForm, trainedYearGroupIds: newIds });
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    {yg.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        </AnlegenDialog>
+      )}
 
       {/* Edit Modal */}
       {editingVol && (

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getWorkAreas, getWorkAreaCategories, apiPost, apiPatch, apiDelete, updateWorkAreaOrder } from '../../../api';
 import { WorkArea, WorkAreaCategory, useSortableData, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 import WorkAreaCategories from './WorkAreaCategories';
 
 const emojiList = ['🏪', '🍳', '🔥', '🎪', '🎯', '⚽', '🍰', '☕', '🥤', '🏆', '📦', '🗑️', '💰', '🎁', '🎵', '🎠', '🧸', '🎴', '🎲', '🏅', '🥇', '🎖️', '📋', '✅', '❌', '⏰', '📍', '📞', '🔧', '📢', '📣', '📝'];
@@ -17,6 +18,7 @@ export default function WorkAreas({ adminPrimary }: { adminPrimary: string }) {
 
   const [abForm, setAbForm] = useState({ name: '', icon: '📍', color: '#3b98f8', minVolunteers: 2, maxVolunteers: 8, isStandard: false, categoryIds: [] as number[] });
   const [editingAb, setEditingAb] = useState<number | null>(null);
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const dragItemIndex = useRef<number | null>(null);
@@ -47,6 +49,7 @@ export default function WorkAreas({ adminPrimary }: { adminPrimary: string }) {
     queryClient.invalidateQueries({ queryKey: ['day-templates'] }); // in case template tags change
     setAbForm({ name: '', icon: '📍', color: '#3b98f8', minVolunteers: 2, maxVolunteers: 8, isStandard: false, categoryIds: [] });
     setEditingAb(null);
+    setAnlegenOffen(false);
   };
 
   const deleteWorkArea = async (ab: WorkArea) => {
@@ -63,41 +66,55 @@ export default function WorkAreas({ adminPrimary }: { adminPrimary: string }) {
     <WorkAreaCategories adminPrimary={adminPrimary} />
 
     <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e9ecef' }}>
-      <h3 className="work-areas-style-2">📍 Arbeitsbereiche</h3>
+      <StammdatenKopf
+        titel="📍 Arbeitsbereiche"
+        untertitel="Die Bereiche, für die Schichten geplant werden – z.B. Küche, Grillstand, Kasse."
+        neuText="Neuer Arbeitsbereich"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
 
-      {/* Emoji Picker */}
-      {emojiPickerOpen && (
-        <div className="work-areas-style-3">
-          {emojiList.map(e => (<button key={e} onClick={() => { setAbForm({ ...abForm, icon: e }); setEmojiPickerOpen(false); }} style={{ fontSize: 20, padding: '4px 6px', border: abForm.icon === e ? '2px solid #0d6efd' : '1px solid #dee2e6', background: abForm.icon === e ? '#e8f4fd' : '#fff', borderRadius: 6, cursor: 'pointer' }}>{e}</button>))}
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="📍 Neuen Arbeitsbereich anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={saveWorkArea}
+          anlegenText="Arbeitsbereich anlegen"
+          breite={560}
+          farbe={adminPrimary}
+        >
+        {/* Emoji Picker */}
+        {emojiPickerOpen && (
+          <div className="work-areas-style-3">
+            {emojiList.map(e => (<button key={e} onClick={() => { setAbForm({ ...abForm, icon: e }); setEmojiPickerOpen(false); }} style={{ fontSize: 20, padding: '4px 6px', border: abForm.icon === e ? '2px solid #0d6efd' : '1px solid #dee2e6', background: abForm.icon === e ? '#e8f4fd' : '#fff', borderRadius: 6, cursor: 'pointer' }}>{e}</button>))}
+          </div>
+        )}
+
+        {/* Neue ARB Form */}
+        <div className="work-areas-style-4">
+          <div className="work-areas-style-5">
+            <label className="work-areas-style-6">📝 Name</label>
+            <input value={abForm.name} onChange={e => setAbForm({ ...abForm, name: e.target.value })} placeholder="z.B. Kasse" className="work-areas-style-7" />
+          </div>
+          <div className="work-areas-style-8">
+            <label className="work-areas-style-9">😀 Icon</label>
+            <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="work-areas-style-10">{abForm.icon}</button>
+          </div>
+          <div className="work-areas-style-11">
+            <label className="work-areas-style-12">🎨 Farbe</label>
+            <input type="color" value={abForm.color} onChange={e => setAbForm({ ...abForm, color: e.target.value })} className="work-areas-style-13" />
+          </div>
+          <div className="work-areas-style-14">
+            <label className="work-areas-style-15">👥 Min</label>
+            <input type="number" value={abForm.minVolunteers || ''} onChange={e => setAbForm({ ...abForm, minVolunteers: parseInt(e.target.value) || 0 })} placeholder="–" className="work-areas-style-16" />
+          </div>
+          <div className="work-areas-style-17">
+            <label className="work-areas-style-18">👥 Max</label>
+            <input type="number" value={abForm.maxVolunteers || ''} onChange={e => setAbForm({ ...abForm, maxVolunteers: parseInt(e.target.value) || 0 })} placeholder="–" className="work-areas-style-19" />
+          </div>
         </div>
+        </AnlegenDialog>
       )}
-
-      {/* Neue ARB Form */}
-      <div className="work-areas-style-4">
-        <div className="work-areas-style-5">
-          <label className="work-areas-style-6">📝 Name</label>
-          <input value={abForm.name} onChange={e => setAbForm({ ...abForm, name: e.target.value })} placeholder="z.B. Kasse" className="work-areas-style-7" />
-        </div>
-        <div className="work-areas-style-8">
-          <label className="work-areas-style-9">😀 Icon</label>
-          <button onClick={() => setEmojiPickerOpen(!emojiPickerOpen)} className="work-areas-style-10">{abForm.icon}</button>
-        </div>
-        <div className="work-areas-style-11">
-          <label className="work-areas-style-12">🎨 Farbe</label>
-          <input type="color" value={abForm.color} onChange={e => setAbForm({ ...abForm, color: e.target.value })} className="work-areas-style-13" />
-        </div>
-        <div className="work-areas-style-14">
-          <label className="work-areas-style-15">👥 Min</label>
-          <input type="number" value={abForm.minVolunteers || ''} onChange={e => setAbForm({ ...abForm, minVolunteers: parseInt(e.target.value) || 0 })} placeholder="–" className="work-areas-style-16" />
-        </div>
-        <div className="work-areas-style-17">
-          <label className="work-areas-style-18">👥 Max</label>
-          <input type="number" value={abForm.maxVolunteers || ''} onChange={e => setAbForm({ ...abForm, maxVolunteers: parseInt(e.target.value) || 0 })} placeholder="–" className="work-areas-style-19" />
-        </div>
-        <button onClick={saveWorkArea} style={{ padding: '8px 20px', background: adminPrimary, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, height: 44, minWidth: 120, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 15 }}>
-          <span className="work-areas-style-20" aria-hidden="true">+</span><span>Hinzufügen</span>
-        </button>
-      </div>
 
 
     </div>

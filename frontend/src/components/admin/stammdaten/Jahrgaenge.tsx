@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getYearGroups, apiPost, apiPatch, apiDelete } from '../../../api';
 import { btnStyleSecondary, YearGroup, useSortableData, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 
 export default function Jahrgaenge({ adminPrimary }: { adminPrimary: string }) {
   const queryClient = useQueryClient();
@@ -18,6 +19,7 @@ export default function Jahrgaenge({ adminPrimary }: { adminPrimary: string }) {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: '', birthYearStart: 0, birthYearEnd: 0, order: 0, isActive: true });
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
 
   const save = async () => {
     if (!form.name || !form.birthYearStart || !form.birthYearEnd) return await modal.alert({ title: 'Hinweis', message: 'Alle Felder ausfüllen!' });
@@ -31,6 +33,7 @@ export default function Jahrgaenge({ adminPrimary }: { adminPrimary: string }) {
       await queryClient.refetchQueries({ queryKey: ['yearGroups'] });
       setForm({ name: '', birthYearStart: 0, birthYearEnd: 0, order: 0, isActive: true });
       setEditingId(null);
+      setAnlegenOffen(false);
     } catch (err: any) { await modal.alert({ title: 'Fehler', message: 'Fehler: ' + (err as Error).message }); }
   };
 
@@ -45,31 +48,44 @@ export default function Jahrgaenge({ adminPrimary }: { adminPrimary: string }) {
 
   return (
     <div className="jahrgaenge-container">
-      <h3 className="jahrgaenge-title">📅 Jahrgänge</h3>
-      <p className="jahrgaenge-subtitle">Definiere hier die Jahrgänge mit Geburtsjahr-Bereich.</p>
+      <StammdatenKopf
+        titel="📅 Jahrgänge"
+        untertitel="Definiere hier die Jahrgänge mit Geburtsjahr-Bereich."
+        neuText="Neuer Jahrgang"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
 
-      {/* Neue YG Form */}
-      <div className="jahrgaenge-form-row">
-        <div className="jahrgaenge-form-col-2">
-          <label className="jahrgaenge-label">📝 Name</label>
-          <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="z.B. Jahrgang 2016" className="jahrgaenge-input" />
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="📅 Neuen Jahrgang anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={save}
+          anlegenText="Jahrgang anlegen"
+          breite={520}
+          farbe={adminPrimary}
+        >
+        <div className="jahrgaenge-form-row">
+          <div className="jahrgaenge-form-col-2">
+            <label className="jahrgaenge-label">📝 Name</label>
+            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="z.B. Jahrgang 2016" className="jahrgaenge-input" />
+          </div>
+          <div className="jahrgaenge-form-col-small">
+            <label className="jahrgaenge-label">📅 Von</label>
+            <input type="number" value={form.birthYearStart || ''} onChange={e => setForm({ ...form, birthYearStart: parseInt(e.target.value) || 0 })} placeholder="–" className="jahrgaenge-input-small" />
+          </div>
+          <div className="jahrgaenge-form-col-small">
+            <label className="jahrgaenge-label">📅 Bis</label>
+            <input type="number" value={form.birthYearEnd || ''} onChange={e => setForm({ ...form, birthYearEnd: parseInt(e.target.value) || 0 })} placeholder="–" className="jahrgaenge-input-small" />
+          </div>
+          <div className="jahrgaenge-form-col-tiny">
+            <label className="jahrgaenge-label">📊 Aktiv</label>
+            <input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} className="jahrgaenge-checkbox-large" />
+          </div>
         </div>
-        <div className="jahrgaenge-form-col-small">
-          <label className="jahrgaenge-label">📅 Von</label>
-          <input type="number" value={form.birthYearStart || ''} onChange={e => setForm({ ...form, birthYearStart: parseInt(e.target.value) || 0 })} placeholder="–" className="jahrgaenge-input-small" />
-        </div>
-        <div className="jahrgaenge-form-col-small">
-          <label className="jahrgaenge-label">📅 Bis</label>
-          <input type="number" value={form.birthYearEnd || ''} onChange={e => setForm({ ...form, birthYearEnd: parseInt(e.target.value) || 0 })} placeholder="–" className="jahrgaenge-input-small" />
-        </div>
-        <div className="jahrgaenge-form-col-tiny">
-          <label className="jahrgaenge-label">📊 Aktiv</label>
-          <input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} className="jahrgaenge-checkbox-large" />
-        </div>
-        <button onClick={save} className="jahrgaenge-btn-primary" style={{ background: adminPrimary }}>
-          <span className="jahrgaenge-btn-icon" aria-hidden="true">+</span><span>Hinzufügen</span>
-        </button>
-      </div>
+
+        </AnlegenDialog>
+      )}
 
       <div className="admin-table-scroll">
       <table className="jahrgaenge-table admin-cards-mobile">

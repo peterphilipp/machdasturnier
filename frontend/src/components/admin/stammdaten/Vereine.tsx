@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getClubs, apiPost, apiPut, apiDelete } from '../../../api';
 import { btnStyleSecondary, Club, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 
 interface GroupedClub { city: string; clubs: Club[]; }
 
@@ -30,6 +31,7 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
   // Form state – nur noch 2 Farben: Vereinsfarbe + Aktionsfarbe
   const [clubForm, setClubForm] = useState({ name: '', city: '', primaryColor: '#0d6efd', secondaryColor: '#198754', logo: '' });
   const [editingClub, setEditingClub] = useState<number | null>(null);
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const [clubLogo, setClubLogo] = useState<string | null>(null);
   const [extractedColors, setExtractedColors] = useState<{ primary: string; secondary: string } | null>(null);
   const [colorStrategyIndex, setColorStrategyIndex] = useState(0);
@@ -77,7 +79,7 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
     }
     queryClient.invalidateQueries({ queryKey: ['clubs'] });
     resetAnalysis(); setClubForm({ name: '', city: '', primaryColor: '#0d6efd', secondaryColor: '#198754', logo: '' });
-    setClubLogo(null); setEditingClub(null);
+    setClubLogo(null); setEditingClub(null); setAnlegenOffen(false);
   };
 
   const deleteClub = async (club: Club) => {
@@ -147,22 +149,37 @@ export default function Vereine({ adminPrimary }: { adminPrimary: string }) {
   return (
     <>
       <div style={{ background: '#fff', padding: 24, borderRadius: 16, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', border: '1px solid #e9ecef' }}>
-        <h3 className="vereine-style-4">🛡️ Vereine & Clubs</h3>
+        <StammdatenKopf
+          titel="🛡️ Vereine & Clubs"
+          untertitel="Vereine mit Logo und Farben – sie erscheinen im Turnier und im Spielplan."
+          neuText="Neuer Verein"
+          onNeu={() => setAnlegenOffen(true)}
+          farbe={adminPrimary}
+        />
         
-        {/* Neue Verein Form */}
-        <div className="vereine-style-5">
-          <div className="vereine-style-6">
-            <label className="vereine-style-7">📝 Name</label>
-            <input value={clubForm.name} onChange={e => setClubForm({ ...clubForm, name: e.target.value })} placeholder="z.B. TSV Holm" className="vereine-style-8" />
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="🛡️ Neuen Verein anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={saveClub}
+          anlegenText="Verein anlegen"
+          breite={520}
+          farbe={adminPrimary}
+        >
+          {/* Neue Verein Form */}
+          <div className="vereine-style-5">
+            <div className="vereine-style-6">
+              <label className="vereine-style-7">📝 Name</label>
+              <input value={clubForm.name} onChange={e => setClubForm({ ...clubForm, name: e.target.value })} placeholder="z.B. TSV Holm" className="vereine-style-8" />
+            </div>
+            <div className="vereine-style-9">
+              <label className="vereine-style-10">🏙️ Stadt</label>
+              <input value={clubForm.city} onChange={e => setClubForm({ ...clubForm, city: e.target.value })} placeholder="z.B. Holm" className="vereine-style-11" />
+            </div>
           </div>
-          <div className="vereine-style-9">
-            <label className="vereine-style-10">🏙️ Stadt</label>
-            <input value={clubForm.city} onChange={e => setClubForm({ ...clubForm, city: e.target.value })} placeholder="z.B. Holm" className="vereine-style-11" />
-          </div>
-          <button onClick={saveClub} style={{ padding: '14px 20px', background: adminPrimary, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 600, minHeight: 44, minWidth: 120, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 15 }}>
-            <span className="vereine-style-12" aria-hidden="true">+</span><span>Hinzufügen</span>
-          </button>
-        </div>
+        </AnlegenDialog>
+      )}
+
       </div>
 
       {/* Vereinsliste */}

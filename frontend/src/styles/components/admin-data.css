@@ -1096,11 +1096,16 @@
 /* ---- Filter je Spalte in der Benutzerliste ----
    Wandert auf schmalen Geraeten in eine Spalte: Sechs Felder nebeneinander
    waeren dort einzeln nicht mehr treffsicher zu bedienen. */
-.helfer-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.helfer-liste { border: 1px solid #e9ecef; border-radius: 12px; overflow: hidden; }
+.helfer-filter {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  padding: 14px; background: #f8f9fa; border-bottom: 1px solid #e9ecef;
+}
 .helfer-filter-feld { flex: 1; min-width: 170px; display: flex; flex-direction: column; }
 .helfer-filter-fuss {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 16px; font-size: 13px; color: #6c757d;
+  padding: 10px 14px; background: #f8f9fa; border-bottom: 1px solid #e9ecef;
+  font-size: 13px; color: #6c757d;
 }
 .helfer-filter-reset {
   border: 1px solid #dee2e6; border-radius: 8px; background: #f8f9fa;

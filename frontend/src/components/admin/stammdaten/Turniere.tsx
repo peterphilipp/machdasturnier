@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTournaments, getClubs, getYearGroups, apiPost, apiPatch, apiDelete } from '../../../api';
 import { btnStyleSecondary, Tournament, Club, YearGroup, useSortableData, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 
 export default function Turniere({ adminPrimary, adminSecondary }: { adminPrimary: string, adminSecondary: string }) {
   const queryClient = useQueryClient();
@@ -16,6 +17,7 @@ export default function Turniere({ adminPrimary, adminSecondary }: { adminPrimar
   const [statusDialog, setStatusDialog] = useState({ open: false, tournament: null as Tournament | null, editName: '', editClubId: '', editStart: '', editEnd: '', editStatus: '', yearGroupIds: [] as number[], logoFile: null as File | null, editHasSponsor: false, editSponsorName: '', editSponsorUrl: '', editShiftDates: true });
 
   const [newTourn, setNewTourn] = useState({ name: '', start: '', end: '', clubId: '', isActive: true });
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const [isEndTouched, setIsEndTouched] = useState(false);
 
   // Keine Datumswerte in der Vergangenheit anbieten (Von/Bis).
@@ -86,6 +88,7 @@ export default function Turniere({ adminPrimary, adminSecondary }: { adminPrimar
     queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     setNewTourn({ name: '', start: '', end: '', clubId: '', isActive: true });
     setIsEndTouched(false);
+    setAnlegenOffen(false);
   };
 
   const deleteTournament = async (t: Tournament) => {
@@ -102,37 +105,51 @@ export default function Turniere({ adminPrimary, adminSecondary }: { adminPrimar
 
   return (
     <div className="turniere-card">
-      <h3 className="turniere-card-title">🏆 Turnier-Verwaltung</h3>
+      <StammdatenKopf
+        titel="🏆 Turnier-Verwaltung"
+        untertitel="Alle Turniere mit Zeitraum, Verein und Status."
+        neuText="Neues Turnier"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
       
-      {/* Neue Turnier Form */}
-      <div className="turniere-form-row">
-        <div className="turniere-form-group-flex2">
-          <label className="turniere-form-label">📝 Name</label>
-          <input value={newTourn.name} onChange={e => setNewTourn(prev => ({...prev, name: e.target.value}))} placeholder="z.B. Sommerturnier" className="turniere-form-input" />
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="🏆 Neues Turnier anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={createTournament}
+          anlegenText="Turnier anlegen"
+          breite={620}
+          farbe={adminPrimary}
+        >
+        <div className="turniere-form-row">
+          <div className="turniere-form-group-flex2">
+            <label className="turniere-form-label">📝 Name</label>
+            <input value={newTourn.name} onChange={e => setNewTourn(prev => ({...prev, name: e.target.value}))} placeholder="z.B. Sommerturnier" className="turniere-form-input" />
+          </div>
+          <div className="turniere-form-group-w150">
+            <label className="turniere-form-label">📅 Von</label>
+            <input type="date" value={newTourn.start} min={todayStr} max={newTourn.end || undefined} onChange={handleNewStartChange} className="turniere-form-input" />
+          </div>
+          <div className="turniere-form-group-w150">
+            <label className="turniere-form-label">📅 Bis</label>
+            <input type="date" value={newTourn.end} min={newTourn.start || todayStr} onChange={handleNewEndChange} className="turniere-form-input" />
+          </div>
+          <div className="turniere-form-group-flex1">
+            <label className="turniere-form-label">🏅 Verein</label>
+            <select value={newTourn.clubId} onChange={e => setNewTourn(prev => ({...prev, clubId: e.target.value}))} className="turniere-form-select">
+              <option value="">-- Kein Verein --</option>
+              {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="turniere-form-group-w70">
+            <label className="turniere-form-label">📊 Aktiv</label>
+            <input type="checkbox" id="newTournActive" checked={newTourn.isActive} onChange={e => setNewTourn(prev => ({...prev, isActive: e.target.checked}))} className="turniere-form-checkbox" />
+          </div>
         </div>
-        <div className="turniere-form-group-w150">
-          <label className="turniere-form-label">📅 Von</label>
-          <input type="date" value={newTourn.start} min={todayStr} max={newTourn.end || undefined} onChange={handleNewStartChange} className="turniere-form-input" />
-        </div>
-        <div className="turniere-form-group-w150">
-          <label className="turniere-form-label">📅 Bis</label>
-          <input type="date" value={newTourn.end} min={newTourn.start || todayStr} onChange={handleNewEndChange} className="turniere-form-input" />
-        </div>
-        <div className="turniere-form-group-flex1">
-          <label className="turniere-form-label">🏅 Verein</label>
-          <select value={newTourn.clubId} onChange={e => setNewTourn(prev => ({...prev, clubId: e.target.value}))} className="turniere-form-select">
-            <option value="">-- Kein Verein --</option>
-            {clubs.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="turniere-form-group-w70">
-          <label className="turniere-form-label">📊 Aktiv</label>
-          <input type="checkbox" id="newTournActive" checked={newTourn.isActive} onChange={e => setNewTourn(prev => ({...prev, isActive: e.target.checked}))} className="turniere-form-checkbox" />
-        </div>
-        <button onClick={createTournament} className="turniere-add-btn" style={{ background: adminPrimary }}>
-          <span className="turniere-add-btn-icon" aria-hidden="true">+</span><span>Hinzufügen</span>
-        </button>
-      </div>
+
+        </AnlegenDialog>
+      )}
 
       <div className="admin-table-scroll">
       <table className="turniere-table admin-cards-mobile">

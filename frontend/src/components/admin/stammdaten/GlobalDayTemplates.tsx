@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StammdatenKopf, AnlegenDialog } from '../Stammdatenseite';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getDayTemplates, createDayTemplate, updateDayTemplate, deleteDayTemplate,
@@ -21,6 +22,7 @@ export default function GlobalDayTemplates({ adminPrimary = '#6c757d' }: { admin
   const { data: workAreas = [] } = useQuery<WorkArea[]>({ queryKey: ['work-areas'], queryFn: getWorkAreas });
 
   const [newName, setNewName] = useState('');
+  const [anlegenOffen, setAnlegenOffen] = useState(false);
   const [showWorkAreas, setShowWorkAreas] = useState<Record<number, boolean>>({});
   const [editingTemplateIds, setEditingTemplateIds] = useState<Set<number>>(new Set());
   const [showAddDropdown, setShowAddDropdown] = useState<Record<number, boolean>>({});
@@ -107,6 +109,7 @@ export default function GlobalDayTemplates({ adminPrimary = '#6c757d' }: { admin
     if (!newName.trim()) return;
     await createDayTemplate({ name: newName.trim() });
     setNewName('');
+    setAnlegenOffen(false);
     refresh();
   };
 
@@ -253,20 +256,33 @@ export default function GlobalDayTemplates({ adminPrimary = '#6c757d' }: { admin
 
   return (
     <div className="day-templates-container">
-      <h3 className="day-templates-title">📅 Tag-Vorlagen</h3>
-      <p className="day-templates-subtitle">
-        Vorlagen für Tag-Typen (z. B. Aufbautag, Turniertag). Jede Vorlage definiert Arbeitsbereiche mit ihren Zeiten. Ziehe Balken im Chart zum Ändern der Zeiten.
-      </p>
+      <StammdatenKopf
+        titel="📅 Tag-Vorlagen"
+        untertitel="Vorlagen für Tag-Typen (z. B. Aufbautag, Turniertag). Jede Vorlage definiert Arbeitsbereiche mit ihren Zeiten."
+        neuText="Neue Vorlage"
+        onNeu={() => setAnlegenOffen(true)}
+        farbe={adminPrimary}
+      />
 
-      {/* Neue Vorlage */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0' }}>
-        <label style={{ fontSize: 12, color: '#666', fontWeight: 'bold' }}>📝 Name</label>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="z. B. Turniertag" value={newName}
-            onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTemplate()} />
-          <button style={{ ...btnStyle, background: adminPrimary, color: '#fff', minHeight: 44 }} onClick={addTemplate}><span style={{ fontSize: 18, fontWeight: 'bold', lineHeight: 1 }}>+</span> Hinzufügen</button>
+      {anlegenOffen && (
+        <AnlegenDialog
+          titel="📅 Neue Tag-Vorlage anlegen"
+          onAbbrechen={() => setAnlegenOffen(false)}
+          onAnlegen={addTemplate}
+          anlegenText="Vorlage anlegen"
+          breite={440}
+          farbe={adminPrimary}
+        >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '16px 0' }}>
+          <label style={{ fontSize: 12, color: '#666', fontWeight: 'bold' }}>📝 Name</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input style={{ ...inputStyle, flex: 1, minWidth: 200 }} placeholder="z. B. Turniertag" value={newName}
+              onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addTemplate()} />
+          </div>
         </div>
-      </div>
+
+        </AnlegenDialog>
+      )}
 
       {/* Filter */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: 12, background: '#f8f9fa', borderRadius: 8 }}>
