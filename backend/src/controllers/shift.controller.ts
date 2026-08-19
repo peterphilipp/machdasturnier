@@ -136,7 +136,9 @@ export const deleteShift = async (req: AuthRequest, res: Response) => {
   await notifyUsers(
     shift.volunteerShifts.map(vs => vs.userId).filter((id): id is number => id != null),
     'Schicht entfallen',
-    `Die Schicht ${areaName}${dateStr ? ` am ${dateStr}` : ''} wurde entfernt. Du bist dort nicht mehr eingeplant.`,
+    ({ vertretend, name }) => vertretend
+      ? `Die Schicht ${areaName}${dateStr ? ` am ${dateStr}` : ''} wurde entfernt. ${name} ist dort nicht mehr eingeplant.`
+      : `Die Schicht ${areaName}${dateStr ? ` am ${dateStr}` : ''} wurde entfernt. Du bist dort nicht mehr eingeplant.`,
     '/'
   );
 
@@ -257,7 +259,9 @@ async function benachrichtigeBeiZeitaenderung(
   await notifyUsers(
     betroffene,
     'Schicht verschoben',
-    `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neu} (vorher ${alt}). Bitte prüfe, ob das für dich passt.`,
+    ({ vertretend, name }) => vertretend
+      ? `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neu} (vorher ${alt}). Bitte prüfe, ob das für ${name} passt.`
+      : `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neu} (vorher ${alt}). Bitte prüfe, ob das für dich passt.`,
     '/'
   );
 }

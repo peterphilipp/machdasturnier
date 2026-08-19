@@ -47,7 +47,9 @@ export const createVolunteerShift = async (req: AuthRequest, res: Response) => {
     await notifyUser(
       s.userId,
       'Schicht zugeteilt',
-      `Du wurdest als ${s.role} (${s.slot}) eingeplant.`,
+      ({ vertretend, name }) => vertretend
+        ? `${name} wurde als ${s.role} (${s.slot}) eingeplant.`
+        : `Du wurdest als ${s.role} (${s.slot}) eingeplant.`,
       '/'
     );
   }
@@ -93,7 +95,9 @@ export const updateVolunteerShift = async (req: Request, res: Response) => {
       await notifyUser(
         updated.userId,
         'Schicht geändert',
-        `Deine Schicht wurde geändert: jetzt ${updated.role} (${updated.slot}).`,
+        ({ vertretend, name }) => vertretend
+          ? `Die Schicht von ${name} wurde geändert: jetzt ${updated.role} (${updated.slot}).`
+          : `Deine Schicht wurde geändert: jetzt ${updated.role} (${updated.slot}).`,
         '/'
       );
     }
@@ -102,7 +106,9 @@ export const updateVolunteerShift = async (req: Request, res: Response) => {
       await notifyUser(
         vorher.userId,
         'Schicht entfallen',
-        `Du bist für ${vorher.role} (${vorher.slot}) nicht mehr eingeplant.`,
+        ({ vertretend, name }) => vertretend
+          ? `${name} ist für ${vorher.role} (${vorher.slot}) nicht mehr eingeplant.`
+          : `Du bist für ${vorher.role} (${vorher.slot}) nicht mehr eingeplant.`,
         '/'
       );
     }
@@ -120,7 +126,9 @@ export const deleteVolunteerShift = async (req: AuthRequest, res: Response) => {
     await notifyUser(
       existing.userId,
       'Schicht entfallen',
-      `Du wurdest aus der Schicht ${existing.role} (${existing.slot}) ausgeplant.`,
+      ({ vertretend, name }) => vertretend
+        ? `${name} wurde aus der Schicht ${existing.role} (${existing.slot}) ausgeplant.`
+        : `Du wurdest aus der Schicht ${existing.role} (${existing.slot}) ausgeplant.`,
       '/'
     );
   }

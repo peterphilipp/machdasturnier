@@ -15,31 +15,43 @@ import { sendPushToUser } from './push.js';
  * Fehler beim Benachrichtigen darf nie die eigentliche Aenderung am
  * Dienstplan scheitern lassen.
  */
+/** Wer die Nachricht liest und wie sie ihn betrifft - direkt oder stellvertretend. */
+export interface Empfaengerkontext {
+  /** true, wenn die Nachricht nicht dem Betroffenen selbst zugestellt wird,
+   *  sondern dessen Kontaktperson (Helfer ohne App-Zugang). */
+  vertretend: boolean;
+  /** Name des tatsaechlich betroffenen Helfers - bei vertretend=false identisch
+   *  mit dem Empfaenger, bei vertretend=true die Person ohne App-Zugang. */
+  name: string;
+}
+
 export async function notifyUser(
   userId: number,
   title: string,
-  body: string,
+  // Funktion statt fertigem Text: "Du wurdest eingeplant" ist falsch, wenn die
+  // Nachricht tatsaechlich bei der Kontaktperson landet - der Aufrufer muss
+  // beide Faelle sprachlich auseinanderhalten, nicht nur einen Namen davorsetzen.
+  formuliere: (kontext: Empfaengerkontext) => string,
   url: string = '/'
 ): Promise<void> {
   // Helfer ohne App-Zugang koennen die Nachricht nicht empfangen: kein Konto
   // zum Anmelden, keine E-Mail, kein Push. Sie an ihr eigenes Konto zu
   // schicken hiesse, sie ins Leere zu schicken - eine verschobene Schicht
   // erreichte niemanden. Deshalb geht sie an die hinterlegte Kontaktperson,
-  // in der Regel ein Elternteil, mit dem Namen im Text.
+  // in der Regel ein Elternteil.
   const empfaenger = await ermittleEmpfaenger(userId);
   if (empfaenger === null) return;
-  if (empfaenger.userId !== userId) {
-    userId = empfaenger.userId;
-    body = `${empfaenger.fuerName}: ${body}`;
-  }
+  const vertretend = empfaenger.userId !== userId;
+  const zielUserId = empfaenger.userId;
+  const body = formuliere({ vertretend, name: empfaenger.fuerName });
 
   try {
-    await prisma.userNotification.create({ data: { userId, title, body, url } });
+    await prisma.userNotification.create({ data: { userId: zielUserId, title, body, url } });
   } catch (err) {
     console.error('[Notify] In-App-Nachricht konnte nicht gespeichert werden:', (err as Error).message);
   }
   try {
-    await sendPushToUser(userId, title, body, url);
+    await sendPushToUser(zielUserId, title, body, url);
   } catch {
     // Push ist nur der Zusatzkanal - die gespeicherte Nachricht traegt.
   }
@@ -49,11 +61,11 @@ export async function notifyUser(
 export async function notifyUsers(
   userIds: number[],
   title: string,
-  body: string,
+  formuliere: (kontext: Empfaengerkontext) => string,
   url: string = '/'
 ): Promise<void> {
   const eindeutig = Array.from(new Set(userIds.filter((id): id is number => id != null)));
-  await Promise.all(eindeutig.map(id => notifyUser(id, title, body, url)));
+  await Promise.all(eindeutig.map(id => notifyUser(id, title, formuliere, url)));
 }
 
 /**
