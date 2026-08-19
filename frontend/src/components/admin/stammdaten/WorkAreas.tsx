@@ -12,7 +12,10 @@ const emojiList = ['🏪', '🍳', '🔥', '🎪', '🎯', '⚽', '🍰', '☕',
 export default function WorkAreas({ adminPrimary }: { adminPrimary: string }) {
   const queryClient = useQueryClient();
   const { data: workAreas = [], isLoading: isLoadingWA } = useQuery<WorkArea[]>({ queryKey: ['work-areas'], queryFn: getWorkAreas });
-  const { data: categories = [], isLoading: isLoadingCat } = useQuery<WorkAreaCategory[]>({ queryKey: ['workAreaCategories'], queryFn: getWorkAreaCategories });
+  // Selber Schlüssel wie in WorkAreaCategories.tsx - sonst invalidiert das
+  // Anlegen einer Kategorie dort nicht die Liste, aus der hier ausgewählt wird,
+  // und eine neue Kategorie taucht im Arbeitsbereich-Editor erst nach Reload auf.
+  const { data: categories = [], isLoading: isLoadingCat } = useQuery<WorkAreaCategory[]>({ queryKey: ['work-area-categories'], queryFn: getWorkAreaCategories });
   
   const { items: sortedWorkAreas, requestSort, getSortIndicator } = useSortableData(workAreas, { key: 'order', direction: 'asc' });
 
