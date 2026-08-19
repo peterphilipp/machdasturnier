@@ -9,6 +9,9 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
   const isMobile = useIsMobile();
   const [mode, setMode] = useState<'all' | 'shifts' | 'users'>('all');
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
+  // Freitextsuche über die Helferliste. Bei über fünfzig Namen ist Scrollen
+  // keine Auswahl mehr, sondern Suchen von Hand.
+  const [helferSuche, setHelferSuche] = useState('');
   const [selectedShiftIds, setSelectedShiftIds] = useState<number[]>([]);
   const [title, setTitle] = useState('Wichtige Info zum Turnier');
   const [body, setBody] = useState('');
@@ -19,6 +22,12 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
     queryKey: ['volunteers', selectedTournament],
     queryFn: () => getVolunteers(selectedTournament),
     enabled: !!selectedTournament && (mode === 'users' || mode === 'all')
+  });
+
+  const gefilterteVolunteers = volunteers.filter(v => {
+    const q = helferSuche.trim().toLowerCase();
+    if (!q) return true;
+    return (v.name || '').toLowerCase().includes(q) || (v.email || '').toLowerCase().includes(q);
   });
 
   const { data: shifts = [], isLoading: loadingShifts } = useQuery<Shift[]>({
@@ -311,10 +320,12 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
               </div>
               <div className="push-broadcast-actions">
                 <button
-                  onClick={() => setSelectedUserIds(volunteers.map(v => v.id))}
+                  onClick={() => setSelectedUserIds(prev => Array.from(
+                    new Set([...(helferSuche ? prev : []), ...gefilterteVolunteers.map(v => v.id)])
+                  ))}
                   className="push-broadcast-action-btn"
                 >
-                  Alle auswählen
+                  {helferSuche ? 'Alle Treffer auswählen' : 'Alle auswählen'}
                 </button>
                 <button
                   onClick={() => setSelectedUserIds([])}
@@ -325,13 +336,23 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
               </div>
             </div>
 
+            <input
+              value={helferSuche}
+              onChange={e => setHelferSuche(e.target.value)}
+              placeholder="🔍 Name oder E-Mail suchen …"
+              className="push-broadcast-input"
+              style={{ ...inputStyle, marginBottom: 10 }}
+            />
+
             {loadingVolunteers ? (
               <div className="push-broadcast-loading">⏳ Lade Helfer...</div>
             ) : volunteers.length === 0 ? (
               <div className="push-broadcast-empty-state">Keine Helfer gefunden.</div>
+            ) : gefilterteVolunteers.length === 0 ? (
+              <div className="push-broadcast-empty-state">Niemand passt zu „{helferSuche}".</div>
             ) : (
               <div className="push-broadcast-list">
-                {volunteers.map(v => {
+                {gefilterteVolunteers.map(v => {
                   const isChecked = selectedUserIds.includes(v.id);
                   return (
                     <label

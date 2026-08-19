@@ -13,6 +13,7 @@ import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
 import StationPrintModal from './StationPrintModal';
 import { Ladefehler } from '../../Verbindung';
+import PersonenAuswahl from '../PersonenAuswahl';
 
 function useWindowWidth() {
   const [width, setWidth] = useState(window.innerWidth);
@@ -1002,41 +1003,44 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
               <div className="admin-core-style-227">
                 <h5 className="admin-core-style-228">➕ Helfer in Schicht einplanen</h5>
                 <div style={{ display: 'flex', gap: 8, flexDirection: isMobile ? 'column' : 'row', flexWrap: 'wrap' }}>
-                  <select
-                    value={selectedVolunteerToAssign}
-                    onChange={e => setSelectedVolunteerToAssign(e.target.value ? Number(e.target.value) : '')}
-                    style={{ flex: 1, minWidth: 200, padding: isMobile ? '12px 14px' : '8px 12px', border: '1px solid #ced4da', borderRadius: 8, fontSize: 14, minHeight: 44 }}
-                  >
-                    <option value="">-- Helfer auswählen --</option>
-                    {(() => {
-                      // Wer schon in diesem Turnier aktiv ist, steht oben - das ist der
-                      // Regelfall. Darunter der Rest des Vereins, damit auch ein gerade
-                      // erst angelegter Helfer eingeplant werden kann.
-                      const imTurnierIds = new Set(allVolunteers.map(v => v.id));
-                      const zusammen = [...allVolunteers];
-                      for (const v of alleNutzer) if (!imTurnierIds.has(v.id)) zusammen.push(v);
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    {/* Suchbare Auswahl statt Scroll-Liste: Bei über fünfzig
+                        Helfern war das native Auswahlfeld am Handy nicht mehr
+                        bedienbar. Wer im Turnier schon aktiv ist, steht oben -
+                        das ist der Regelfall; darunter der Rest des Vereins,
+                        damit auch ein gerade erst angelegter Helfer eingeplant
+                        werden kann. */}
+                    <PersonenAuswahl
+                      wert={selectedVolunteerToAssign}
+                      onWaehlen={setSelectedVolunteerToAssign}
+                      leerText="-- Helfer auswählen --"
+                      platzhalter="Name oder E-Mail eingeben …"
+                      personen={(() => {
+                        const imTurnierIds = new Set(allVolunteers.map(v => v.id));
+                        const zusammen = [...allVolunteers];
+                        for (const v of alleNutzer) if (!imTurnierIds.has(v.id)) zusammen.push(v);
 
-                      const waehlbar = zusammen.filter(v =>
-                        !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id));
-                      const imTurnier = waehlbar.filter(v => imTurnierIds.has(v.id));
-                      const weitere = waehlbar.filter(v => !imTurnierIds.has(v.id));
-                      const eintrag = (v: Record<string, any>) => (
-                        <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
-                      );
+                        const waehlbar = zusammen.filter(v =>
+                          !volunteerShifts.some(vs => vs.shiftId === selectedShift.id && vs.userId === v.id));
+                        const mehrereGruppen = waehlbar.some(v => !imTurnierIds.has(v.id))
+                          && waehlbar.some(v => imTurnierIds.has(v.id));
 
-                      // Ohne weitere Helfer keine Gruppierung - sonst stuende eine
-                      // einzelne Ueberschrift ueber der gesamten Liste.
-                      if (weitere.length === 0) return waehlbar.map(eintrag);
-                      return (
-                        <>
-                          {imTurnier.length > 0 && (
-                            <optgroup label="In diesem Turnier aktiv">{imTurnier.map(eintrag)}</optgroup>
-                          )}
-                          <optgroup label="Weitere Helfer aus den Stammdaten">{weitere.map(eintrag)}</optgroup>
-                        </>
-                      );
-                    })()}
-                  </select>
+                        return waehlbar
+                          .slice()
+                          .sort((a, b) => Number(imTurnierIds.has(b.id)) - Number(imTurnierIds.has(a.id)))
+                          .map(v => ({
+                            id: v.id,
+                            name: v.name,
+                            email: v.email,
+                            // Ohne zweite Gruppe keine Ueberschrift - sonst stuende
+                            // eine einzelne ueber der gesamten Liste.
+                            gruppe: mehrereGruppen
+                              ? (imTurnierIds.has(v.id) ? 'In diesem Turnier aktiv' : 'Weitere Helfer aus den Stammdaten')
+                              : undefined
+                          }));
+                      })()}
+                    />
+                  </div>
                   <button
                     onClick={async () => {
                       if (!selectedVolunteerToAssign || !selectedShift) return;

@@ -1092,3 +1092,22 @@
   gap: 12px;
 }
 
+
+/* ---- Filter je Spalte in der Benutzerliste ----
+   Wandert auf schmalen Geraeten in eine Spalte: Sechs Felder nebeneinander
+   waeren dort einzeln nicht mehr treffsicher zu bedienen. */
+.helfer-filter { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.helfer-filter-feld { flex: 1; min-width: 170px; display: flex; flex-direction: column; }
+.helfer-filter-fuss {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 16px; font-size: 13px; color: #6c757d;
+}
+.helfer-filter-reset {
+  border: 1px solid #dee2e6; border-radius: 8px; background: #f8f9fa;
+  color: #495057; font-size: 13px; font-weight: 600; padding: 7px 12px;
+  min-height: 38px; cursor: pointer;
+}
+.helfer-filter-reset:hover { background: #e9ecef; }
+@media (max-width: 767px) {
+  .helfer-filter-feld { flex: 1 1 100%; min-width: 0; }
+}

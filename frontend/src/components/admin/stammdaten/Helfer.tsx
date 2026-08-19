@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getVolunteers, getYearGroups, apiPost, apiPatch, apiDelete } from '../../../api';
 import { btnStyleSecondary, Volunteer, YearGroup, useSortableData, confirmWithImpact } from '../shared';
 import EditModal from '../EditModal';
+import PersonenAuswahl from '../PersonenAuswahl';
 import { formatPhoneNumber } from '../../../utils/phone';
 
 const ROLES = [
@@ -60,18 +61,15 @@ function OhneZugangFeld({ form, setForm, volunteers, editingVol }: {
       {form.ohneZugang && (
         <div style={{ marginTop: 10, paddingLeft: 26 }}>
           <label className="helfer-label">📨 Benachrichtigungen gehen an</label>
-          <select
-            value={form.kontaktpersonId}
-            onChange={e => setForm((f: any) => ({ ...f, kontaktpersonId: e.target.value }))}
-            className="helfer-input"
-          >
-            <option value="">-- niemand (nicht empfohlen) --</option>
-            {volunteers
+          <PersonenAuswahl
+            wert={form.kontaktpersonId ? Number(form.kontaktpersonId) : ''}
+            onWaehlen={id => setForm((f: any) => ({ ...f, kontaktpersonId: id === '' ? '' : String(id) }))}
+            leerText="-- niemand (nicht empfohlen) --"
+            platzhalter="Elternteil suchen …"
+            personen={volunteers
               .filter(v => !v.ohneZugang && v.id !== editingVol)
-              .map(v => (
-                <option key={v.id} value={v.id}>{v.name}{v.email ? ` (${v.email})` : ''}</option>
-              ))}
-          </select>
+              .map(v => ({ id: v.id, name: v.name, email: v.email }))}
+          />
           <div style={{ fontSize: 12, color: '#6c757d', marginTop: 4, lineHeight: 1.5 }}>
             In der Regel ein Elternteil. Wird die Schicht verschoben, bekommt diese Person die
             Nachricht – mit dem Namen im Text.
@@ -84,7 +82,19 @@ function OhneZugangFeld({ form, setForm, volunteers, editingVol }: {
 
 export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: string, tournamentId: number | null }) {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
+  /**
+   * Filter je Spalte. Bei inzwischen über fünfzig Benutzern reicht eine
+   * einzelne Suche über Name und E-Mail nicht mehr - gesucht wird gezielt,
+   * etwa "alle Organisatoren ohne Telefonnummer".
+   *
+   * Freitext dort, wo die Daten frei sind; feste Auswahl dort, wo sie es nicht
+   * sind. Ein Freitextfeld für die Rolle wäre nur eine Einladung zum Vertippen.
+   */
+  const LEERER_FILTER = { name: '', email: '', phone: '', rolle: '', zugang: '', aktivitaet: '' };
+  const [filter, setFilter] = useState(LEERER_FILTER);
+  const setzeFilter = (feld: keyof typeof LEERER_FILTER, wert: string) =>
+    setFilter(f => ({ ...f, [feld]: wert }));
+  const filterAktiv = Object.values(filter).some(v => v !== '');
   // Fetch ALL users unconditionally for the user management view
   const { data: volunteers = [] } = useQuery<Volunteer[]>({ queryKey: ['volunteers'], queryFn: () => getVolunteers() });
   const { data: yearGroups = [] } = useQuery<YearGroup[]>({ queryKey: ['yearGroups'], queryFn: getYearGroups });
@@ -103,9 +113,35 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
     return yearGroups.find(yg => y >= yg.birthYearStart && y <= yg.birthYearEnd) || null;
   };
 
-  const filtered = volunteers.filter(v => 
-    !search || v.name.toLowerCase().includes(search.toLowerCase()) || (v.email || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const enthaelt = (wert: string | null | undefined, suche: string) =>
+    !suche || (wert || '').toLowerCase().includes(suche.toLowerCase().trim());
+
+  const filtered = volunteers.filter(v => {
+    if (!enthaelt(v.name, filter.name)) return false;
+    if (!enthaelt(v.email, filter.email)) return false;
+    if (!enthaelt(v.phone, filter.phone)) return false;
+
+    if (filter.rolle) {
+      const rollen = (v.roles && v.roles.length > 0) ? v.roles : [v.role || 'HELPER'];
+      if (!rollen.includes(filter.rolle as any)) return false;
+    }
+
+    if (filter.zugang === 'ohne' && !v.ohneZugang) return false;
+    if (filter.zugang === 'mit' && v.ohneZugang) return false;
+    // Ohne Kontaktperson erreicht diesen Helfer keine Meldung - dafuer gibt es
+    // einen eigenen Filter, damit die Luecken auffindbar bleiben.
+    if (filter.zugang === 'ohneKontakt' && !(v.ohneZugang && !v.kontaktpersonId)) return false;
+
+    if (filter.aktivitaet === 'nie' && v.lastActivityAt) return false;
+    if (filter.aktivitaet === 'aktiv' && !v.lastActivityAt) return false;
+    if (filter.aktivitaet === 'alt' && v.lastActivityAt) {
+      const tage = (Date.now() - new Date(v.lastActivityAt).getTime()) / 86400000;
+      if (tage < 90) return false;
+    }
+    if (filter.aktivitaet === 'alt' && !v.lastActivityAt) return false;
+
+    return true;
+  });
   
   const { items: sortedVolunteers, requestSort, getSortIndicator } = useSortableData(filtered, { key: 'name', direction: 'asc' });
 
@@ -179,14 +215,63 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
       <h2 className="helfer-title">👤 Benutzer & Personal</h2>
       <p className="helfer-subtitle">Alle registrierten Benutzer und zugewiesene Helfer</p>
       
-      {/* Suchfeld */}
-      <div className="helfer-search-container">
-        <input 
-          value={search} 
-          onChange={e => setSearch(e.target.value)} 
-          placeholder="🔍 Suche nach Name oder E-Mail..." 
-          className="helfer-search-input" 
-        />
+      {/* Filter je Spalte. Bewusst als eigener Block über der Tabelle und nicht
+          als Zeile im Tabellenkopf: Auf schmalen Geräten wird die Tabelle zu
+          Karten, eine Kopfzeile gäbe es dort gar nicht mehr. */}
+      <div className="helfer-filter">
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">📝 Name</label>
+          <input value={filter.name} onChange={e => setzeFilter('name', e.target.value)}
+                 placeholder="enthält …" className="helfer-input" />
+        </div>
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">📧 E-Mail</label>
+          <input value={filter.email} onChange={e => setzeFilter('email', e.target.value)}
+                 placeholder="enthält …" className="helfer-input" />
+        </div>
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">📞 Telefon</label>
+          <input value={filter.phone} onChange={e => setzeFilter('phone', e.target.value)}
+                 placeholder="enthält …" className="helfer-input" />
+        </div>
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">🎭 Rolle</label>
+          <select value={filter.rolle} onChange={e => setzeFilter('rolle', e.target.value)} className="helfer-input">
+            <option value="">alle</option>
+            {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+        </div>
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">🔑 Zugang</label>
+          <select value={filter.zugang} onChange={e => setzeFilter('zugang', e.target.value)} className="helfer-input">
+            <option value="">alle</option>
+            <option value="mit">mit App-Zugang</option>
+            <option value="ohne">ohne App-Zugang</option>
+            <option value="ohneKontakt">⚠️ ohne Zugang und ohne Kontaktperson</option>
+          </select>
+        </div>
+        <div className="helfer-filter-feld">
+          <label className="helfer-label">🕓 Aktivität</label>
+          <select value={filter.aktivitaet} onChange={e => setzeFilter('aktivitaet', e.target.value)} className="helfer-input">
+            <option value="">alle</option>
+            <option value="aktiv">schon einmal angemeldet</option>
+            <option value="nie">noch nie angemeldet</option>
+            <option value="alt">seit über 90 Tagen nicht</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="helfer-filter-fuss">
+        <span>
+          {filtered.length === volunteers.length
+            ? `${volunteers.length} Benutzer`
+            : `${filtered.length} von ${volunteers.length} Benutzern`}
+        </span>
+        {filterAktiv && (
+          <button onClick={() => setFilter(LEERER_FILTER)} className="helfer-filter-reset">
+            Filter zurücksetzen
+          </button>
+        )}
       </div>
 
       {/* Neue Helfer Form */}
@@ -366,7 +451,11 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
           })}
           {volunteers.length === 0 ? (
             <tr><td colSpan={6} className="helfer-empty-td">Keine Benutzer vorhanden.</td></tr>
-          ) : (filtered.length === 0 ? <tr><td colSpan={6} className="helfer-empty-td">Keine Treffer für "{search}"</td></tr> : null)}
+          ) : (filtered.length === 0 ? (
+            <tr><td colSpan={6} className="helfer-empty-td">
+              Keine Benutzer passen zu den gesetzten Filtern.
+            </td></tr>
+          ) : null)}
         </tbody>
       </table>
       </div>
