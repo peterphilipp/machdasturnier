@@ -184,7 +184,7 @@ export const getAvailable = async (req: Request, res: Response) => {
   }
 
   if (!targetTournamentId) {
-    return res.json({ shifts: [], volunteerShifts: [], volunteer: null });
+    return res.json({ shifts: [], volunteerShifts: [], betreuteVolunteerShifts: [], volunteer: null });
   }
 
   const shifts = await prisma.shift.findMany({
@@ -202,6 +202,20 @@ export const getAvailable = async (req: Request, res: Response) => {
     where: { tournamentId: targetTournamentId, userId },
     include: {
       shift: { include: { day: true, daySlot: true, workArea: true } }
+    }
+  });
+
+  // Schichten der Helfer ohne App-Zugang, fuer die dieser Nutzer als
+  // Kontaktperson hinterlegt ist. Ohne eigenes Konto erfaehrt so jemand von
+  // seiner Einteilung nur einmalig per Push an die Kontaktperson - schaut die
+  // spaeter nochmal nach, fand sie bisher nichts mehr. Bewusst getrennt von
+  // den eigenen Zusagen (volunteerShifts oben), damit die Oberflaeche "meine"
+  // und "die von X" nicht vermischt.
+  const betreuteVolunteerShifts = await prisma.volunteerShift.findMany({
+    where: { tournamentId: targetTournamentId, user: { kontaktpersonId: userId } },
+    include: {
+      shift: { include: { day: true, daySlot: true, workArea: true } },
+      user: { select: { id: true, name: true } }
     }
   });
 
@@ -269,7 +283,7 @@ export const getAvailable = async (req: Request, res: Response) => {
     roles: userRoles.length > 0 ? userRoles.map(r => r.role) : [user.role]
   };
 
-  res.json({ shifts, volunteerShifts, shiftAssignmentCounts, childPlaySlots, notifications, volunteer, tournament, availableTournaments });
+  res.json({ shifts, volunteerShifts, betreuteVolunteerShifts, shiftAssignmentCounts, childPlaySlots, notifications, volunteer, tournament, availableTournaments });
 };
 
 export const assignShift = async (req: Request, res: Response) => {

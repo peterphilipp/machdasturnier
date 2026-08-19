@@ -11,7 +11,7 @@ import { Ladefehler } from '../Verbindung';
 import '../../styles/components/dashboard.css';
 
 interface Shift { id: number; date: string; slot: string; startMin?: number | null; endMin?: number | null; zeitslot: { name: string; startTime: string; endTime: string; color: string; order?: number } | null; arbeitsbereich: { name: string; icon: string; color: string; order?: number } | null; arbeitsbereichId: number | null; maxVolunteers: number; }
-interface VolunteerShift { id: number; userId: number; date: string; slot: string; role: string; areaId: string | null; shiftId: number | null; shift: Shift | null; ratingWorkload?: number | null; ratingOrganization?: number | null; ratingFun?: number | null; ratingComment?: string | null; }
+interface VolunteerShift { id: number; userId: number; date: string; slot: string; role: string; areaId: string | null; shiftId: number | null; shift: Shift | null; ratingWorkload?: number | null; ratingOrganization?: number | null; ratingFun?: number | null; ratingComment?: string | null; user?: { id: number; name: string } | null; }
 interface FoodCategory { id: number; name: string; icon: string; items: { id: number; name: string; price: string | null; unit: string }[]; }
 interface FoodDonation { id: number; foodItemId: number; quantity: number; note: string | null; createdAt: string; foodDonationSlotId: number | null; foodItem: { id: number; name: string; unit: string; category: { id: number; name: string; icon: string } } | null; }
 interface FoodDonationSlot { id: number; tournamentId: number; yearGroupId: number | null; yearGroup?: { id: number; name: string; birthYearStart: number; birthYearEnd: number; timeSlots?: { date: string }[] } | null; foodItemId: number | null; targetQuantity: number; collected: number; foodItem: { id: number; name: string; unit: string; icon: string } | null; }
@@ -36,6 +36,10 @@ export default function DashboardView() {
 
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [volunteerShifts, setVolunteerShifts] = useState<VolunteerShift[]>([]);
+  // Schichten von Helfern ohne App-Zugang, fuer die dieser Nutzer als
+  // Kontaktperson eingetragen ist - z.B. das eigene Kind. Getrennt von den
+  // eigenen Zusagen, damit beides nicht durcheinandergeht.
+  const [betreuteVolunteerShifts, setBetreuteVolunteerShifts] = useState<VolunteerShift[]>([]);
   const [tournament, setTournament] = useState<any>(null);
   const [filterDate, setFilterDate] = useState('');
   const [filterTimesOfDay, setFilterTimesOfDay] = useState<Set<'morgen' | 'mittag' | 'nachmittag' | 'abend'>>(new Set());
@@ -98,6 +102,12 @@ export default function DashboardView() {
     setNotifications(d.notifications || []);
     
     setVolunteerShifts(d.volunteerShifts ? d.volunteerShifts.map((vs: Record<string, any>) => ({
+      ...vs,
+      date: vs.shift?.day?.date || vs.shift?.date || vs.date,
+      shift: vs.shift ? mapShift(vs.shift) : null
+    })) : []);
+
+    setBetreuteVolunteerShifts(d.betreuteVolunteerShifts ? d.betreuteVolunteerShifts.map((vs: Record<string, any>) => ({
       ...vs,
       date: vs.shift?.day?.date || vs.shift?.date || vs.date,
       shift: vs.shift ? mapShift(vs.shift) : null
@@ -498,6 +508,22 @@ export default function DashboardView() {
     return timeA - timeB;
   });
 
+  const zeitpunkt = (vs: VolunteerShift) => new Date(vs.date).getTime() + ((vs.shift?.startMin || 0) * 60000);
+
+  // Nach betreuter Person gruppiert, damit "meine" und "die von X" nie in
+  // einer Liste vermischt werden - genau das hatte zur irrefuehrenden
+  // Push-Meldung gefuehrt, die den Anstoss fuer diesen Abschnitt gab.
+  const betreuteGruppen = (() => {
+    const gruppen = new Map<number, { name: string; shifts: VolunteerShift[] }>();
+    for (const vs of betreuteVolunteerShifts) {
+      const personId = vs.user?.id ?? -1;
+      if (!gruppen.has(personId)) gruppen.set(personId, { name: vs.user?.name || 'Unbekannt', shifts: [] });
+      gruppen.get(personId)!.shifts.push(vs);
+    }
+    for (const gruppe of gruppen.values()) gruppe.shifts.sort((a, b) => zeitpunkt(a) - zeitpunkt(b));
+    return Array.from(gruppen.values()).sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
   return (
     <div>
       {/* PTR Indicator */}
@@ -630,6 +656,56 @@ export default function DashboardView() {
                 </div>
               </div>
             )}
+
+            {/* Schichten betreuter Helfer ohne App-Zugang - z.B. das eigene
+                Kind. Gestrichelter statt durchgezogener Rahmen, damit auf den
+                ersten Blick klar ist: das sind nicht die eigenen Jobs. */}
+            {betreuteGruppen.map(gruppe => (
+              <div key={gruppe.name} className="dashboard-my-shifts-container" style={{ background: '#fff', border: `2px dashed ${clubPrimary}`, borderRadius: 16, marginTop: 16 }}>
+                <h3 className="dashboard-my-shifts-title" style={{ color: clubPrimary, borderBottom: '1px solid #e9ecef', paddingBottom: 8, marginBottom: 12 }}>
+                  <span>🧑‍🤝‍🧑</span> Schichten von {gruppe.name} ({gruppe.shifts.length})
+                </h3>
+                <div className="dashboard-shifts-list">
+                  {gruppe.shifts.map((vs, idx) => {
+                    const isPast = isPastShift(vs.date, vs.shift?.endMin);
+                    const d = new Date(vs.date);
+                    const prevVs = idx > 0 ? gruppe.shifts[idx - 1] : null;
+                    const showDayHeader = !prevVs || new Date(prevVs.date).toDateString() !== d.toDateString();
+                    const assignedCount = vs.shift?.id != null ? (shiftCounts[vs.shift.id] ?? 0) : 0;
+
+                    return (
+                      <div key={vs.id || idx}>
+                        {showDayHeader && (
+                          <div className="dashboard-shift-day-header" style={{ color: clubPrimary, marginTop: idx > 0 ? 8 : 0 }}>
+                            {d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                          </div>
+                        )}
+                        <div className={`dashboard-shift-card ${isPast ? "dashboard-shift-card-past" : ""}`} style={{ borderLeft: `4px solid ${clubAccent}` }}>
+                          <div className="dashboard-shift-card-inner">
+                            <div className="dashboard-shift-title">
+                              {vs.shift?.arbeitsbereich?.icon} <span>{vs.shift?.arbeitsbereich?.name || vs.role}</span>
+                            </div>
+                            <div className="dashboard-shift-time">
+                              <span>{vs.shift?.startMin != null ? `${minToTime(vs.shift.startMin)}-${minToTime(vs.shift.endMin || vs.shift.startMin + 60)}` : vs.shift?.zeitslot?.name || vs.slot}</span>
+                            </div>
+                          </div>
+                          <div className="dashboard-shift-actions">
+                            {vs.shift && (
+                              <div className="dashboard-shift-remaining" style={{ color: clubAccent }}>
+                                {assignedCount}/{vs.shift.maxVolunteers}
+                              </div>
+                            )}
+                          </div>
+                          {vs.shift && (
+                            <FillBar assigned={assignedCount} max={vs.shift.maxVolunteers || 0} />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
 
             {/* Filter */}
             <div id="tour-filter" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24, marginTop: 12 }}>
