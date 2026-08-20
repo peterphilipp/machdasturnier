@@ -40,7 +40,7 @@ Das Schema umfasst **37 Modelle**.
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 15 |
 | [User](#user) | `users` | 30 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
-| [UserNotification](#usernotification) | `user_notifications` | 8 |
+| [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
 | [VolunteerShift](#volunteershift) | `volunteer_shifts` | 17 |
 | [WebAuthnCredential](#webauthncredential) | `webauthn_credentials` | 11 |
@@ -650,6 +650,7 @@ Tabelle: `user_notifications`
 | `title` | `String` |  |
 | `body` | `String` |  |
 | `url` | `String?` |  |
+| `stellvertretendFuer` | `String?` |  |
 | `createdAt` | `DateTime` | Standard: `now()` |
 | `readAt` | `DateTime?` |  |
 | `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |

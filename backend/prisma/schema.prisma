@@ -242,6 +242,12 @@ model UserNotification {
   title     String
   body      String
   url       String?
+  // Gesetzt, wenn die Meldung nicht dem Empfaenger selbst gilt, sondern einem
+  // Helfer ohne App-Zugang, fuer den er als Kontaktperson eingetragen ist.
+  // Eigenes Feld statt nur eine Textvariante im Satz - eine App-Anzeige kann
+  // das dadurch als eindeutiges Badge zeigen, statt dass es im Fliesstext
+  // untergeht.
+  stellvertretendFuer String?   @map("stellvertretend_fuer")
   createdAt DateTime  @default(now()) @map("created_at")
   readAt    DateTime? @map("read_at")
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

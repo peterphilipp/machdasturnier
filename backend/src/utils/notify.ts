@@ -44,14 +44,20 @@ export async function notifyUser(
   const vertretend = empfaenger.userId !== userId;
   const zielUserId = empfaenger.userId;
   const body = formuliere({ vertretend, name: empfaenger.fuerName });
+  const stellvertretendFuer = vertretend ? empfaenger.fuerName : null;
 
   try {
-    await prisma.userNotification.create({ data: { userId: zielUserId, title, body, url } });
+    await prisma.userNotification.create({ data: { userId: zielUserId, title, body, url, stellvertretendFuer } });
   } catch (err) {
     console.error('[Notify] In-App-Nachricht konnte nicht gespeichert werden:', (err as Error).message);
   }
   try {
-    await sendPushToUser(zielUserId, title, body, url);
+    // Eine Betriebssystem-Benachrichtigung kann kein Badge einblenden, nur
+    // Text - deshalb bekommt hier (und nur hier) der Titel den Namen
+    // vorangestellt. Der gespeicherte Titel bleibt sauber, weil die App das
+    // "fuer wen" separat und deutlicher als Badge zeigt (stellvertretendFuer).
+    const pushTitle = stellvertretendFuer ? `Für ${stellvertretendFuer}: ${title}` : title;
+    await sendPushToUser(zielUserId, pushTitle, body, url);
   } catch {
     // Push ist nur der Zusatzkanal - die gespeicherte Nachricht traegt.
   }

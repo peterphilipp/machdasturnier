@@ -78,7 +78,7 @@ export default function DashboardView() {
   const [schichtFehler, setSchichtFehler] = useState<unknown>(null);
   // Meldungen zu Planaenderungen. Sie stehen ganz oben, weil Push nur eine
   // Minderheit erreicht - sonst wuerde eine Verschiebung schlicht uebersehen.
-  const [notifications, setNotifications] = useState<{ id: number; title: string; body: string; createdAt: string }[]>([]);
+  const [notifications, setNotifications] = useState<{ id: number; title: string; body: string; createdAt: string; stellvertretendFuer?: string | null }[]>([]);
   // PWA-Update: lag bisher im Burger-Menue und wurde dort kaum gesehen.
   const [updateVerfuegbar, setUpdateVerfuegbar] = useState(false);
 
@@ -565,6 +565,19 @@ export default function DashboardView() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notifications.map(n => (
               <div key={n.id} style={{ background: '#fff', borderRadius: 8, padding: '8px 10px' }}>
+                {/* Eigenes Badge statt nur im Satz mitzuschwingen: eine
+                    Meldung, die eigentlich einer betreuten Person gilt, muss
+                    auch beim Überfliegen sofort als "nicht für mich selbst"
+                    erkennbar sein - nicht erst beim genauen Lesen des Texts. */}
+                {n.stellvertretendFuer && (
+                  <div style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: '#e7f1ff', color: '#0d47a1', fontSize: 11, fontWeight: 700,
+                    borderRadius: 20, padding: '3px 9px', marginBottom: 5
+                  }}>
+                    👤 Für {n.stellvertretendFuer}
+                  </div>
+                )}
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#212529' }}>{n.title}</div>
                 <div style={{ fontSize: 13, color: '#495057', lineHeight: 1.5 }}>{n.body}</div>
                 <div style={{ fontSize: 11, color: '#adb5bd', marginTop: 2 }}>
