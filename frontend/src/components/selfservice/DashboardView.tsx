@@ -524,6 +524,31 @@ export default function DashboardView() {
     return Array.from(gruppen.values()).sort((a, b) => a.name.localeCompare(b.name));
   })();
 
+  // Überschrift über den Meldungen: "an deinem Dienstplan" stimmt nur, wenn es
+  // wirklich der eigene ist. Ein Badge an jeder einzelnen Meldung wirkte dafür
+  // zu unruhig und passte nicht zum Rest des Kastens - die Überschrift selbst
+  // trägt die Information jetzt stattdessen.
+  const meldungsUeberschrift = (() => {
+    const fremdeNamen = Array.from(new Set(
+      notifications.filter(n => n.stellvertretendFuer).map(n => n.stellvertretendFuer as string)
+    ));
+    const nurEigene = fremdeNamen.length === 0;
+    const nurEinePersonBetreut = !nurEigene && fremdeNamen.length === 1
+      && notifications.every(n => n.stellvertretendFuer === fremdeNamen[0]);
+
+    if (nurEigene) {
+      return notifications.length === 1 ? 'Änderung an deinem Dienstplan' : `${notifications.length} Änderungen an deinem Dienstplan`;
+    }
+    if (nurEinePersonBetreut) {
+      return notifications.length === 1
+        ? `Änderung am Dienstplan von ${fremdeNamen[0]}`
+        : `${notifications.length} Änderungen am Dienstplan von ${fremdeNamen[0]}`;
+    }
+    // Eigene und fremde gemischt, oder mehrere verschiedene betreute Personen -
+    // wer wofür betroffen ist, steht bereits im Text jeder einzelnen Meldung.
+    return `${notifications.length} Planänderungen`;
+  })();
+
   return (
     <div>
       {/* PTR Indicator */}
@@ -559,25 +584,12 @@ export default function DashboardView() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: 20 }} aria-hidden="true">📣</span>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#664d03', flex: 1 }}>
-              {notifications.length === 1 ? 'Änderung an deinem Dienstplan' : `${notifications.length} Änderungen an deinem Dienstplan`}
+              {meldungsUeberschrift}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notifications.map(n => (
               <div key={n.id} style={{ background: '#fff', borderRadius: 8, padding: '8px 10px' }}>
-                {/* Eigenes Badge statt nur im Satz mitzuschwingen: eine
-                    Meldung, die eigentlich einer betreuten Person gilt, muss
-                    auch beim Überfliegen sofort als "nicht für mich selbst"
-                    erkennbar sein - nicht erst beim genauen Lesen des Texts. */}
-                {n.stellvertretendFuer && (
-                  <div style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    background: '#e7f1ff', color: '#0d47a1', fontSize: 11, fontWeight: 700,
-                    borderRadius: 20, padding: '3px 9px', marginBottom: 5
-                  }}>
-                    👤 Für {n.stellvertretendFuer}
-                  </div>
-                )}
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#212529' }}>{n.title}</div>
                 <div style={{ fontSize: 13, color: '#495057', lineHeight: 1.5 }}>{n.body}</div>
                 <div style={{ fontSize: 11, color: '#adb5bd', marginTop: 2 }}>
