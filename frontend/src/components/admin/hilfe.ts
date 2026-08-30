@@ -73,6 +73,22 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
     ]
   },
 
+  statistik: {
+    zweck: 'Was beim Turnier tatsächlich passiert ist – in Zahlen.',
+    ablauf: [
+      'Eckdaten oben: Helfer, Schichten, Stunden, Besetzungsgrad.',
+      'Darunter, wo Plätze offen blieben – nach Tag, Bereich und Tageszeit.',
+      'Wer wie viel übernommen hat, wahlweise nach Stunden oder nach Anzahl.',
+      'Zuletzt die Beteiligung je Jahrgang.'
+    ],
+    hinweise: [
+      'Die Spalte „je Kind" bei den Jahrgängen ist die vergleichbare Zahl. Absolute Stunden belohnen nur Größe: Ein Jahrgang mit zwanzig Kindern stellt selbstverständlich mehr Helfer als einer mit sechs.',
+      'Wer Kinder in mehreren Jahrgängen hat, zählt in jedem davon mit. Die Summe der Helferzahlen ist deshalb höher als die Gesamtzahl – die Seite weist darauf hin, wenn es vorkommt.',
+      'Die Rangliste zeigt bewusst nur die Fleißigsten und keine Schlusslichter.',
+      'Die Zahlen stehen sofort zur Verfügung, nicht erst nach dem Turnier – während der Planung zeigen sie vor allem, wo noch Plätze offen sind.'
+    ]
+  },
+
   bewertungen: {
     zweck: 'Was die Helfer nach ihren Schichten zurückgemeldet haben.',
     ablauf: [

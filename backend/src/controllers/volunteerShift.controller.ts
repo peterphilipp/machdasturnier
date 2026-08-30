@@ -5,6 +5,7 @@ import { notifyUser } from '../utils/notify.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { protokolliere, datumKurz } from '../utils/protokoll.js';
 import { aggregateFeedbackByWorkArea } from '../utils/ratingUtils.js';
+import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
 
 export const volunteerShiftSchema = z.object({
   userId: z.union([z.number(), z.string()]).transform(Number),
@@ -188,3 +189,46 @@ export const getFeedback = async (req: Request, res: Response) => {
   });
 };
 
+
+/**
+ * Auswertung eines Turniers: Beteiligung, Lastverteilung, Jahrgänge, Lücken.
+ *
+ * Gerechnet wird in berechneTurnierStatistik() - hier wird nur geladen. Wie
+ * beim Feedback ist tournamentId Pflicht: die Zahlen eines Turniers ergeben
+ * nur für dieses Turnier einen Sinn, und die Namen darin gehen niemanden
+ * etwas an, der ein anderes organisiert.
+ */
+export const getStatistik = async (req: Request, res: Response) => {
+  const tournamentId = parseInt(req.query.tournamentId as string, 10);
+  if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+    return res.status(400).json({ error: 'tournamentId ist erforderlich.' });
+  }
+
+  const [shifts, einplanungen, tournament] = await Promise.all([
+    prisma.shift.findMany({
+      where: { tournamentId },
+      include: { daySlot: true, day: true, workArea: true }
+    }),
+    prisma.volunteerShift.findMany({
+      where: { tournamentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            children: { select: { childYear: true } },
+            trainedYearGroups: { select: { id: true } }
+          }
+        }
+      }
+    }),
+    prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      include: { yearGroups: true }
+    })
+  ]);
+
+  if (!tournament) return res.status(404).json({ error: 'Turnier nicht gefunden' });
+
+  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups));
+};

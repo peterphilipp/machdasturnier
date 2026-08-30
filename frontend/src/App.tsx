@@ -33,6 +33,7 @@ import ShoppingList from './components/admin/organisation/ShoppingList';
 import PushBroadcast from './components/admin/organisation/PushBroadcast';
 import Verlauf from './components/admin/organisation/Verlauf';
 import Bewertungen from './components/admin/organisation/Bewertungen';
+import Statistik from './components/admin/organisation/Statistik';
 
 // --- Admin Pages: Stammdaten ---
 import Turniere from './components/admin/stammdaten/Turniere';
@@ -106,6 +107,7 @@ export default function App() {
               <Route path="shopping-list" element={<ShoppingListWrapper />} />
               <Route path="push-broadcast" element={<PushBroadcastWrapper />} />
               <Route path="bewertungen" element={<BewertungenWrapper />} />
+              <Route path="statistik" element={<StatistikWrapper />} />
               <Route path="verlauf" element={<VerlaufWrapper />} />
             </Route>
 
@@ -166,6 +168,10 @@ function VerlaufWrapper() {
 function BewertungenWrapper() {
   const ctx = useOutletContext<any>();
   return <Bewertungen selectedTournament={ctx.selectedTournamentId} />;
+}
+function StatistikWrapper() {
+  const ctx = useOutletContext<any>();
+  return <Statistik selectedTournament={ctx.selectedTournamentId} />;
 }
 function UebersichtWrapper() {
   const ctx = useOutletContext<any>();

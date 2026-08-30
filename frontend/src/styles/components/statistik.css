@@ -1,0 +1,274 @@
+/* Auswertung eines Turniers.
+   Bewusst ohne Diagramm-Bibliothek: Bei einer Handvoll Bereichen und
+   Jahrgaengen traegt ein Balken aus zwei Divs genauso viel wie ein Chart -
+   und laesst sich vorlesen, kopieren und ausdrucken. */
+
+.stat-seite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-8);
+  padding: var(--spacing-5) 0;
+}
+
+.stat-untertitel {
+  margin: var(--spacing-6) 0 var(--spacing-2);
+  font-size: var(--font-size-md);
+  color: var(--text-main);
+}
+
+.stat-hinweis {
+  margin: 0 0 var(--spacing-3);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 80ch;
+}
+
+/* ---- Kacheln ---------------------------------------------------------- */
+.stat-kacheln {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--spacing-3);
+}
+.stat-kachel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+  text-align: center;
+}
+.stat-kachel--warnung { border-color: #f5c2c7; background: #fffcfc; }
+.stat-kachel--gut     { border-color: #badbcc; background: #fcfffd; }
+
+.stat-kachel-wert {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--club-primary);
+  line-height: 1.1;
+}
+.stat-kachel-einheit {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+.stat-kachel-label {
+  margin-top: var(--spacing-1);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Tabellen --------------------------------------------------------- */
+/* Die Tabelle scrollt in ihrer eigenen Hülle, damit nie die ganze Seite
+   seitlich wegrutscht - auf dem Handy sonst der schnellste Weg, eine Ansicht
+   unbenutzbar zu machen. */
+.stat-tabelle-huelle {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.stat-tabelle {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.stat-tabelle th {
+  text-align: left;
+  padding: var(--spacing-2);
+  border-bottom: 2px solid var(--border-color);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.stat-tabelle td {
+  padding: var(--spacing-2);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+.stat-zahl {
+  text-align: right;
+  white-space: nowrap;
+  /* Ziffern untereinander gleich breit - sonst zappeln die Spalten. */
+  font-variant-numeric: tabular-nums;
+}
+.stat-zahl--warnung {
+  color: #b02a37;
+  font-weight: var(--font-weight-bold);
+}
+.stat-spalte-balken {
+  width: 40%;
+  min-width: 120px;
+}
+.stat-leer { color: var(--text-muted); }
+
+/* ---- Balken ----------------------------------------------------------- */
+.stat-balken {
+  display: inline-block;
+  vertical-align: middle;
+  width: calc(100% - 64px);
+  min-width: 40px;
+  height: 8px;
+  background: var(--bg-surface-hover, #eef0f2);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.stat-balken-fuellung {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--club-primary);
+  transition: width 240ms ease-out;
+}
+.stat-balken-fuellung--warnung { background: #dc3545; }
+.stat-balken-wert {
+  display: inline-block;
+  width: 58px;
+  text-align: right;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-balken-fuellung { transition: none; }
+}
+
+/* ---- Lastverteilung --------------------------------------------------- */
+.stat-verteilung {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-4);
+}
+.stat-verteilung-titel {
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
+  margin-bottom: var(--spacing-3);
+}
+.stat-verteilung-reihe {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-3);
+  text-align: center;
+}
+.stat-verteilung-zahl {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  line-height: 1.1;
+}
+/* Von "hat einmal geholfen" zu "trägt mit": dieselbe Skala wie die Balken. */
+.stat-verteilung-zahl--eine  { color: #6c757d; }
+.stat-verteilung-zahl--zwei  { color: var(--club-primary); }
+.stat-verteilung-zahl--drei  { color: #198754; }
+.stat-verteilung-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* ---- Rangliste -------------------------------------------------------- */
+.stat-top-kopf {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+.stat-umschalter { display: flex; gap: 2px; }
+.stat-umschalter-btn {
+  padding: 6px var(--spacing-3);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.stat-umschalter-btn:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+.stat-umschalter-btn:last-child  { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.stat-umschalter-btn--aktiv {
+  background: var(--club-primary);
+  border-color: var(--club-primary);
+  color: var(--text-inverse);
+  font-weight: var(--font-weight-bold);
+}
+
+.stat-rangliste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+.stat-rang {
+  display: grid;
+  grid-template-columns: 28px minmax(90px, 1fr) minmax(60px, 2fr) auto;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-2);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-sm);
+}
+.stat-rang-platz {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.stat-rang-name { font-weight: var(--font-weight-semibold); }
+.stat-rang-balken .stat-balken { width: 100%; }
+.stat-rang-wert {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.stat-rang-neben {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+/* Auf dem Handy hat der Balken keinen Platz mehr - die Zahl trägt allein. */
+@media (max-width: 560px) {
+  .stat-rang { grid-template-columns: 24px 1fr auto; }
+  .stat-rang-balken { display: none; }
+  .stat-spalte-balken { width: auto; min-width: 0; }
+  .stat-balken { display: none; }
+  .stat-balken-wert { width: auto; }
+}
+
+/* ---- Lücken ----------------------------------------------------------- */
+.stat-luecken {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+.stat-luecke {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-2) var(--spacing-3);
+  background: #fffcfc;
+  border: 1px solid #f5c2c7;
+  border-radius: var(--radius-md);
+}
+.stat-luecke-offen {
+  flex-shrink: 0;
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: #f8d7da;
+  color: #721c24;
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+.stat-luecke-text {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--font-size-sm);
+}
+.stat-luecke-zeit {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
