@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.js';
-import { protokolliere } from '../utils/protokoll.js';
+import { protokolliere, datumKurz } from '../utils/protokoll.js';
 import prisma from '../config/prisma.js';
 import { z } from 'zod';
+import { minToTime, slotText, effektiveZeit, benachrichtigeBeiZeitaenderung } from '../utils/schichtzeit.js';
 
 // ==================== Zod-Schemas ====================
 export const tournamentWorkAreaUpdateSchema = z.object({
@@ -448,9 +449,97 @@ export const addDaySlot = async (req: Request, res: Response) => {
   return res.status(201).json(slot);
 };
 
-export const updateDaySlot = async (req: Request, res: Response) => {
-  const slot = await prisma.daySlot.update({ where: { id: parseInt(req.params.id as string) }, data: req.body });
-  return res.json(slot);
+/**
+ * Verschiebt ein Zeitfenster - und alles, was daran haengt.
+ *
+ * Schichten ohne eigene Uhrzeit erben ihre Zeit von diesem Fenster. Wandert es,
+ * wandern sie mit, und zwar gleich reihenweise ueber alle Arbeitsbereiche des
+ * Tages. Genau hier ist frueher stillschweigend auseinandergelaufen, was die
+ * Helfer sehen und wann sie tatsaechlich gebraucht werden: die bei ihnen
+ * gespeicherte Zeit blieb stehen, und gesagt hat es ihnen auch niemand.
+ *
+ * Eine Fensterverschiebung ist inhaltlich dasselbe Ereignis wie eine
+ * Schichtverschiebung und verhaelt sich deshalb auch so.
+ */
+export const updateDaySlot = async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string);
+
+  const vorher = await prisma.daySlot.findUnique({
+    where: { id },
+    include: {
+      day: true,
+      shifts: {
+        include: {
+          workArea: true,
+          day: true,
+          volunteerShifts: { select: { userId: true } }
+        }
+      }
+    }
+  });
+  if (!vorher) return res.status(404).json({ error: 'Zeitfenster nicht gefunden' });
+
+  // Gegen den Endzustand pruefen, nicht nur gegen den Request: wer allein
+  // endMin schickt, koennte es sonst vor den unveraenderten Start legen.
+  const startMin = req.body.startMin ?? vorher.startMin;
+  const endMin = req.body.endMin ?? vorher.endMin;
+  if (endMin <= startMin) {
+    return res.status(400).json({ error: 'endMin muss größer als startMin sein' });
+  }
+
+  const zeitAenderung = startMin !== vorher.startMin || endMin !== vorher.endMin;
+
+  // Welche Schichten erben ihre Zeit von diesem Fenster und aendern sich damit
+  // wirklich? Schichten mit eigener Uhrzeit bleiben, wo sie sind.
+  const betroffene = !zeitAenderung ? [] : vorher.shifts.filter(s => {
+    const alt = effektiveZeit(s, vorher);
+    const neu = effektiveZeit(s, { startMin, endMin });
+    return alt.start !== neu.start || alt.ende !== neu.ende;
+  });
+
+  // Fenster und abhaengige Helferzeiten zusammen - ein Teilzustand waere
+  // schlimmer als der alte, weil dann niemand mehr weiss, was gilt.
+  const nachher = await prisma.$transaction(async (tx) => {
+    const aktualisiert = await tx.daySlot.update({ where: { id }, data: req.body });
+
+    for (const s of betroffene) {
+      if (s.volunteerShifts.length === 0) continue;
+      const neu = effektiveZeit(s, { startMin, endMin });
+      if (neu.start == null || neu.ende == null) continue;
+      await tx.volunteerShift.updateMany({
+        where: { shiftId: s.id },
+        data: { slot: slotText(neu.start, neu.ende) }
+      });
+    }
+
+    return aktualisiert;
+  });
+
+  if (!zeitAenderung) return res.json(nachher);
+
+  // Erst nach der Transaktion melden: schlaegt sie fehl, wurde nichts geaendert
+  // und es darf auch nichts gemeldet werden.
+  for (const s of betroffene) {
+    await benachrichtigeBeiZeitaenderung(
+      { ...s, daySlot: vorher },
+      { startMin: s.startMin, endMin: s.endMin, daySlot: { startMin, endMin } }
+    );
+  }
+
+  const umgetragen = betroffene.reduce((summe, s) => summe + s.volunteerShifts.length, 0);
+  await protokolliere({
+    tournamentId: vorher.day.tournamentId,
+    userId: req.userId,
+    art: 'schicht',
+    beschreibung: `hat das Zeitfenster am ${datumKurz(vorher.day.date)} von `
+      + `${minToTime(vorher.startMin)}-${minToTime(vorher.endMin)} auf `
+      + `${minToTime(startMin)}-${minToTime(endMin)} verschoben`
+      + (umgetragen > 0 ? ` (${umgetragen} eingeplante Helfer wurden umgetragen)` : ''),
+    objektTyp: 'daySlot',
+    objektId: id
+  });
+
+  return res.json(nachher);
 };
 
 export const deleteDaySlot = async (req: Request, res: Response) => {
