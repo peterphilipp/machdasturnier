@@ -8,7 +8,6 @@ import {
 } from '../../../api';
 import { modal } from '../Modal';
 import { btnStyle, inputStyle, tdStyle, thStyle, BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from '../shared';
-import ShiftFeedbackModal from './ShiftFeedbackModal';
 import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
 import StationPrintModal from './StationPrintModal';
@@ -86,7 +85,6 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
       setAssigning(false);
     }
   };
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedYearGroupStats, setSelectedYearGroupStats] = useState<{ day: string, name: string, members: { name: string, shifts: { role: string, slot: string }[] }[] } | null>(null);
 
@@ -1163,13 +1161,6 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
              </div>
           </div>
         </div>
-      )}
-
-      {showFeedbackModal && selectedTournament && (
-        <ShiftFeedbackModal
-          tournament={{ id: selectedTournament, name: 'Turnier ' + selectedTournament } as unknown as Tournament}
-          onClose={() => setShowFeedbackModal(false)}
-        />
       )}
 
       {showPrintModal && (

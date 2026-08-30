@@ -12,7 +12,6 @@ import {
   getShifts
 } from '../../../api';
 import { modal } from '../Modal';
-import ShiftFeedbackModal from './ShiftFeedbackModal';
 
 type DayWorkAreasData = { active: Record<string, any>[]; all: Record<string, any>[] } | null;
 interface DayWorkAreasCache {
@@ -51,7 +50,6 @@ export default function RosterSetupPanel({
   const [setupExpandedOverride, setSetupExpandedOverride] = useState<boolean | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [dayWorkAreasCache, setDayWorkAreasCache] = useState<DayWorkAreasCache>({});
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Queries
   const { data: tournament } = useQuery<Tournament>({
@@ -704,7 +702,6 @@ export default function RosterSetupPanel({
             <div className="admin-core-style-179">
               <h3 className="admin-core-style-180">🧩 Schichten generieren</h3>
               <span className="admin-core-style-181" />
-              <button style={{ ...btnStyle, background: '#ffc107', color: '#000', fontWeight: 'bold' }} onClick={() => setShowFeedbackModal(true)}>📊 Helfer-Feedback & Learnings</button>
               {jobSlots.length > 0 && (
                 <button style={{ ...btnStyle, background: '#f8d7da', color: '#842029' }} onClick={doClear}>Schichten löschen</button>
               )}
@@ -722,12 +719,6 @@ export default function RosterSetupPanel({
         </div>
       )}
 
-      {showFeedbackModal && (
-        <ShiftFeedbackModal
-          tournament={tournament || ({ id: tid, name: 'Turnier ' + tid } as unknown as Tournament)}
-          onClose={() => setShowFeedbackModal(false)}
-        />
-      )}
     </div>
   );
 }

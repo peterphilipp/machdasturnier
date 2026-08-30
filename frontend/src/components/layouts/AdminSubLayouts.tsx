@@ -191,6 +191,7 @@ export function OrganisationLayout() {
     { to: 'food-donation-slots', icon: '🍰', label: 'Verpflegung' },
     { to: 'shopping-list', icon: '🛒', label: 'Einkaufsliste' },
     { to: 'push-broadcast', icon: '🔔', label: 'Push-Nachrichten' },
+    { to: 'bewertungen', icon: '📊', label: 'Bewertungen' },
     { to: 'verlauf', icon: '🕓', label: 'Verlauf' }
   ];
 

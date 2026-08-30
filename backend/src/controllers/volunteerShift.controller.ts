@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { notifyUser } from '../utils/notify.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { protokolliere, datumKurz } from '../utils/protokoll.js';
+import { aggregateFeedbackByWorkArea } from '../utils/ratingUtils.js';
 
 export const volunteerShiftSchema = z.object({
   userId: z.union([z.number(), z.string()]).transform(Number),
@@ -147,12 +148,22 @@ export const deleteVolunteerShift = async (req: AuthRequest, res: Response) => {
   return res.status(204).send();
 };
 
+/**
+ * Das Helfer-Feedback eines Turniers - mit Namen, Mailadressen und teils sehr
+ * offenen Kommentaren.
+ *
+ * `tournamentId` ist Pflicht: ohne die Einschraenkung lieferte die Abfrage
+ * frueher das Feedback saemtlicher Turniere auf einmal aus. Wer ein Turnier
+ * organisiert, soll dessen Rueckmeldungen sehen - nicht das Archiv aller
+ * anderen gleich mit.
+ */
 export const getFeedback = async (req: Request, res: Response) => {
-  const { tournamentId } = req.query;
-  const where: Record<string, unknown> = {};
-  if (tournamentId) {
-    where.tournamentId = parseInt(tournamentId as string, 10);
+  const tournamentId = parseInt(req.query.tournamentId as string, 10);
+  if (!Number.isInteger(tournamentId) || tournamentId <= 0) {
+    return res.status(400).json({ error: 'tournamentId ist erforderlich.' });
   }
+
+  const where: Record<string, unknown> = { tournamentId };
   where.OR = [
     { ratingWorkload: { not: null } },
     { ratingOrganization: { not: null } },
@@ -169,6 +180,11 @@ export const getFeedback = async (req: Request, res: Response) => {
     }
   });
 
-  return res.json(feedbacks || []);
+  // Die Auswertung entsteht hier und nicht im Browser: dieselbe Rechnung lag
+  // frueher in beiden Schichten vor - und in beiden mit demselben Fehler.
+  return res.json({
+    feedbacks,
+    auswertung: aggregateFeedbackByWorkArea(feedbacks)
+  });
 };
 

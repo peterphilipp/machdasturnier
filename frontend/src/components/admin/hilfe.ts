@@ -73,6 +73,19 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
     ]
   },
 
+  bewertungen: {
+    zweck: 'Was die Helfer nach ihren Schichten zurückgemeldet haben.',
+    ablauf: [
+      'Oben die Durchschnitte je Arbeitsbereich: Stress, Organisation, Stimmung.',
+      'Darunter die Notizen im Klartext, bei Bedarf auf einen Bereich gefiltert.'
+    ],
+    hinweise: [
+      'Die Helfer können erst bewerten, wenn ihre Schicht vorbei ist – vor dem Turnier bleibt die Seite leer.',
+      'Ein Bereich mit hohem Stresswert wird hervorgehoben. Das ist der Hinweis fürs nächste Jahr: mehr Helfer oder kürzere Schichten.',
+      'Nicht jeder füllt alle drei Fragen aus. Jeder Durchschnitt zählt nur die Antworten, die es zu ihm gibt – die Zahl der Bewertungen kann deshalb höher sein als die Zahl der Antworten je Frage.'
+    ]
+  },
+
   verlauf: {
     zweck: 'Wer hat wann was am Dienstplan geändert.',
     ablauf: [
