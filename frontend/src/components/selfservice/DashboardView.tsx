@@ -12,6 +12,12 @@ import '../../styles/components/dashboard.css';
 
 interface Shift { id: number; date: string; slot: string; startMin?: number | null; endMin?: number | null; zeitslot: { name: string; startTime: string; endTime: string; color: string; order?: number } | null; arbeitsbereich: { name: string; icon: string; color: string; order?: number } | null; arbeitsbereichId: number | null; maxVolunteers: number; }
 interface VolunteerShift { id: number; userId: number; date: string; slot: string; role: string; areaId: string | null; shiftId: number | null; shift: Shift | null; ratingWorkload?: number | null; ratingOrganization?: number | null; ratingFun?: number | null; ratingComment?: string | null; user?: { id: number; name: string } | null; }
+interface ShiftOffer {
+  id: number; date: string; startMin: number; endMin: number;
+  note: string | null; status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
+  decisionNote: string | null;
+  shift?: { arbeitsbereich?: { name: string } | null } | null;
+}
 interface FoodCategory { id: number; name: string; icon: string; items: { id: number; name: string; price: string | null; unit: string }[]; }
 interface FoodDonation { id: number; foodItemId: number; quantity: number; note: string | null; createdAt: string; foodDonationSlotId: number | null; foodItem: { id: number; name: string; unit: string; category: { id: number; name: string; icon: string } } | null; }
 interface FoodDonationSlot { id: number; tournamentId: number; yearGroupId: number | null; yearGroup?: { id: number; name: string; birthYearStart: number; birthYearEnd: number; timeSlots?: { date: string }[] } | null; foodItemId: number | null; targetQuantity: number; collected: number; foodItem: { id: number; name: string; unit: string; icon: string } | null; }
@@ -99,6 +105,15 @@ export default function DashboardView() {
   const [rateOrganization, setRateOrganization] = useState<number | null>(null);
   const [rateFun, setRateFun] = useState<number | null>(null);
   const [rateComment, setRateComment] = useState<string>('');
+  // Zeitangebote: was der Nutzer angeboten hat, und das Formular dafuer.
+  const [meineAngebote, setMeineAngebote] = useState<ShiftOffer[]>([]);
+  const [angebotOffen, setAngebotOffen] = useState(false);
+  const [angebotBezug, setAngebotBezug] = useState<{ shiftId: number; bereich: string } | null>(null);
+  const [angebotDatum, setAngebotDatum] = useState('');
+  const [angebotVon, setAngebotVon] = useState('09:00');
+  const [angebotBis, setAngebotBis] = useState('12:00');
+  const [angebotNotiz, setAngebotNotiz] = useState('');
+
   // Nach dem Speichern zeigt dasselbe Fenster den Dank, statt es zu schliessen.
   const [dankeSichtbar, setDankeSichtbar] = useState(false);
 
@@ -427,6 +442,77 @@ export default function DashboardView() {
       await modal.alert({ title: 'Fehler', message: e.message || 'Schicht konnte nicht storniert werden.' });
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** "09:30" -> Minuten seit Mitternacht. */
+  const zeitZuMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const ladeMeineAngebote = useCallback(async () => {
+    try {
+      setMeineAngebote(await apiFetch('/api/shift-offers/mine') || []);
+    } catch {
+      // Angebote sind Beiwerk - ihr Fehlschlag darf das Dashboard nicht stoeren.
+    }
+  }, []);
+
+  useEffect(() => { if (isLoggedIn) ladeMeineAngebote(); }, [isLoggedIn, ladeMeineAngebote]);
+
+  /** Formular oeffnen - mit Bezug auf eine Schicht oder als freies Angebot. */
+  const oeffneAngebot = (bezug: { shiftId: number; bereich: string; datum: string; startMin: number; endMin: number } | null) => {
+    setAngebotBezug(bezug ? { shiftId: bezug.shiftId, bereich: bezug.bereich } : null);
+    // Ein Vorschlag als Startpunkt: die Schichtzeit selbst, sonst der erste
+    // Turniertag. Ein leeres Formular beantwortet niemand gern.
+    const tag = bezug?.datum ?? shifts[0]?.date ?? new Date().toISOString();
+    setAngebotDatum(new Date(tag).toISOString().slice(0, 10));
+    if (bezug) {
+      setAngebotVon(minToTime(bezug.startMin));
+      setAngebotBis(minToTime(bezug.endMin));
+    }
+    setAngebotNotiz('');
+    setAngebotOffen(true);
+  };
+
+  const sendeAngebot = async () => {
+    if (!selectedTournamentId || busy) return;
+    const von = zeitZuMin(angebotVon), bis = zeitZuMin(angebotBis);
+    if (bis <= von) {
+      return await modal.alert({ title: 'Hinweis', message: 'Die Endzeit muss nach der Startzeit liegen.' });
+    }
+    setBusy(true);
+    try {
+      await apiPost('/api/shift-offers', {
+        tournamentId: selectedTournamentId,
+        shiftId: angebotBezug?.shiftId ?? null,
+        date: new Date(angebotDatum + 'T00:00:00.000Z').toISOString(),
+        startMin: von, endMin: bis,
+        note: angebotNotiz.trim() || null
+      });
+      setAngebotOffen(false);
+      await ladeMeineAngebote();
+      await modal.alert({
+        title: 'Danke!',
+        message: 'Wir haben deine Zeit notiert und melden uns, sobald wir wissen, ob es passt.'
+      });
+    } catch (err: unknown) {
+      const e = err as Error;
+      await modal.alert({ title: 'Fehler', message: e.message || 'Das Angebot konnte nicht gesendet werden.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ziehAngebotZurueck = async (id: number) => {
+    if (!(await modal.confirm({ title: 'Angebot zurückziehen', message: 'Möchtest du dein Zeitangebot zurückziehen?' }))) return;
+    try {
+      await apiDelete(`/api/shift-offers/${id}`);
+      await ladeMeineAngebote();
+    } catch (err: unknown) {
+      const e = err as Error;
+      await modal.alert({ title: 'Fehler', message: e.message || 'Das Angebot konnte nicht zurückgezogen werden.' });
     }
   };
 
@@ -936,6 +1022,57 @@ export default function DashboardView() {
                 <div className="dashboard-empty-desc">Für die gewählten Filter gibt es aktuell keine offenen Schichten.</div>
               </div>
             )}
+
+            {/* Wer keine passende Schicht findet, soll nicht wortlos abspringen:
+                Eine Stunde, die nicht ins Raster passt, ist immer noch eine
+                Stunde mehr als gar keine. */}
+            {selectedTournamentId && (
+              <div className="angebot-hinweis">
+                <div className="angebot-hinweis-text">
+                  <strong>Keine Schicht dabei, die passt?</strong>
+                  <span>
+                    Sag uns einfach, wann du Zeit hättest – wir schauen, ob wir daraus
+                    etwas machen können.
+                  </span>
+                </div>
+                <button
+                  className="angebot-hinweis-btn"
+                  style={{ background: clubPrimary }}
+                  onClick={() => oeffneAngebot(null)}
+                >
+                  🙋 Zeit anbieten
+                </button>
+              </div>
+            )}
+
+            {meineAngebote.length > 0 && (
+              <div className="angebot-liste">
+                <h4 className="angebot-liste-titel">Deine Angebote</h4>
+                {meineAngebote.map(a => (
+                  <div key={a.id} className={`angebot-karte angebot-karte--${a.status.toLowerCase()}`}>
+                    <div className="angebot-karte-zeit">
+                      {new Date(a.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
+                      {' · '}{minToTime(a.startMin)}–{minToTime(a.endMin)}
+                      {a.shift?.arbeitsbereich?.name && <> · {a.shift.arbeitsbereich.name}</>}
+                    </div>
+                    {a.note && <div className="angebot-karte-notiz">„{a.note}"</div>}
+                    <div className="angebot-karte-fuss">
+                      <span className={`angebot-status angebot-status--${a.status.toLowerCase()}`}>
+                        {a.status === 'OFFEN' ? '⏳ Wird geprüft'
+                          : a.status === 'ANGENOMMEN' ? '👍 Angenommen'
+                          : 'Diesmal nicht'}
+                      </span>
+                      {a.status === 'OFFEN' && (
+                        <button className="angebot-zurueck" onClick={() => ziehAngebotZurueck(a.id)}>
+                          zurückziehen
+                        </button>
+                      )}
+                    </div>
+                    {a.decisionNote && <div className="angebot-karte-notiz">Rückmeldung: {a.decisionNote}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
 
@@ -1157,6 +1294,83 @@ export default function DashboardView() {
           </div>
         )}
       </div>
+
+      {angebotOffen && (
+        <div className="feedback-modal-overlay" onClick={() => setAngebotOffen(false)}>
+          <div
+            className="feedback-modal-content feedback-modal-content--schmal"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="feedback-modal-header">
+              <div>
+                <h3 className="feedback-modal-title">🙋 Zeit anbieten</h3>
+                <div className="feedback-modal-subtitle">
+                  {angebotBezug
+                    ? `${angebotBezug.bereich} – sag uns, wann du kannst`
+                    : 'Wann hättest du Zeit? Wir schauen, was dazu passt.'}
+                </div>
+              </div>
+              <button className="feedback-modal-close" onClick={() => setAngebotOffen(false)} aria-label="Schließen">✕</button>
+            </div>
+
+            <div className="feedback-modal-body">
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="angebot-datum">Tag</label>
+                <input
+                  id="angebot-datum" type="date" className="rating-kommentar"
+                  value={angebotDatum} onChange={e => setAngebotDatum(e.target.value)}
+                />
+              </div>
+
+              <div className="angebot-zeitraum">
+                <div className="rating-feld">
+                  <label className="rating-feld-label" htmlFor="angebot-von">Von</label>
+                  <input
+                    id="angebot-von" type="time" className="rating-kommentar"
+                    value={angebotVon} onChange={e => setAngebotVon(e.target.value)}
+                  />
+                </div>
+                <div className="rating-feld">
+                  <label className="rating-feld-label" htmlFor="angebot-bis">Bis</label>
+                  <input
+                    id="angebot-bis" type="time" className="rating-kommentar"
+                    value={angebotBis} onChange={e => setAngebotBis(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="angebot-notiz">
+                  Anmerkung (optional)
+                </label>
+                <textarea
+                  id="angebot-notiz" className="rating-kommentar" rows={3} maxLength={500}
+                  value={angebotNotiz} onChange={e => setAngebotNotiz(e.target.value)}
+                  placeholder={'z. B. „lieber Küche als Grill“ oder „kann notfalls auch länger“'}
+                />
+              </div>
+
+              <p className="angebot-erklaerung">
+                Das ist noch keine feste Zusage: Die Organisatoren schauen, ob sich daraus
+                eine Schicht machen lässt, und melden sich bei dir.
+              </p>
+            </div>
+
+            <div className="feedback-modal-footer rating-modal-footer">
+              <button
+                onClick={() => setAngebotOffen(false)}
+                className="feedback-modal-btn"
+                style={{ background: '#fff', color: '#333', border: '1px solid #ccc' }}
+              >
+                Abbrechen
+              </button>
+              <button onClick={sendeAngebot} disabled={busy} className="feedback-modal-btn">
+                {busy ? 'Sendet …' : 'Zeit anbieten'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {ratingModalVs && dankeSichtbar && (
         <div className="feedback-modal-overlay" onClick={() => setRatingModalVs(null)}>

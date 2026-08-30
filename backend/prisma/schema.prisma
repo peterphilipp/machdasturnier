@@ -47,6 +47,7 @@ model Tournament {
   club                   Club?                  @relation(fields: [clubId], references: [id])
   users                  User[]
   volunteerShifts        VolunteerShift[]
+  shiftOffers            ShiftOffer[]
   yearGroups             YearGroup[]            @relation("TournamentYearGroups")
 
   @@map("tournaments")
@@ -200,6 +201,7 @@ model User {
   tournament            Tournament?            @relation(fields: [tournamentId], references: [id])
   children              UserChild[]
   shifts                VolunteerShift[]
+  shiftOffers           ShiftOffer[]
   webAuthnCredentials   WebAuthnCredential[]
   trainedYearGroups     YearGroup[]            @relation("TrainerYearGroups")
   userRoles             UserRole[]
@@ -237,20 +239,20 @@ model UserRole {
 // jede solche Meldung zusaetzlich hier abgelegt und beim naechsten Oeffnen
 // der App oben angezeigt, bis der Nutzer sie bestaetigt.
 model UserNotification {
-  id        Int       @id @default(autoincrement())
-  userId    Int       @map("user_id")
-  title     String
-  body      String
-  url       String?
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @map("user_id")
+  title               String
+  body                String
+  url                 String?
   // Gesetzt, wenn die Meldung nicht dem Empfaenger selbst gilt, sondern einem
   // Helfer ohne App-Zugang, fuer den er als Kontaktperson eingetragen ist.
   // Eigenes Feld statt nur eine Textvariante im Satz - eine App-Anzeige kann
   // das dadurch als eindeutiges Badge zeigen, statt dass es im Fliesstext
   // untergeht.
   stellvertretendFuer String?   @map("stellvertretend_fuer")
-  createdAt DateTime  @default(now()) @map("created_at")
-  readAt    DateTime? @map("read_at")
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  readAt              DateTime? @map("read_at")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
   @@map("user_notifications")
@@ -471,6 +473,7 @@ model Shift {
   day                  TournamentDay      @relation(fields: [tournamentDayId], references: [id], onDelete: Cascade)
   tournament           Tournament         @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   volunteerShifts      VolunteerShift[]
+  shiftOffers          ShiftOffer[]
 
   @@index([tournamentId])
   @@index([tournamentDayId])
@@ -741,4 +744,42 @@ model Aenderung {
   @@index([tournamentId, createdAt])
   @@index([objektTyp, objektId])
   @@map("aenderungen")
+}
+
+/// Ein Helfer bietet Zeit an, die so im Dienstplan nicht steht.
+///
+/// Hintergrund: Wer eine Schicht nur teilweise kann, sagte bisher gar nicht
+/// zu - eine Zusage ist alles oder nichts. Bei offenen Plaetzen ist das ein
+/// vermeidbarer Verlust. Hier kann jemand sagen "Samstag 9-12 haette ich
+/// Zeit", wahlweise mit Bezug auf eine konkrete Schicht.
+///
+/// Bewusst KEINE Einplanung: Das Angebot ist eine Willensbekundung. Ob und
+/// wie daraus eine Schicht wird, entscheiden die Organisatoren - sonst
+/// entstuenden Eintraege, deren Zeit von der Schichtzeit abweicht, und genau
+/// das soll nicht wieder passieren.
+model ShiftOffer {
+  id           Int       @id @default(autoincrement())
+  tournamentId Int       @map("tournament_id")
+  userId       Int       @map("user_id")
+  /// Optionaler Bezug: "diese Schicht, aber nur von-bis". Ohne shiftId ist es
+  /// ein freies Zeitangebot ("setzt mich ein, wo ihr mich braucht").
+  shiftId      Int?      @map("shift_id")
+  date         DateTime
+  startMin     Int       @map("start_min")
+  endMin       Int       @map("end_min")
+  note         String?
+  /// OFFEN | ANGENOMMEN | ABGELEHNT
+  status       String    @default("OFFEN")
+  decidedById  Int?      @map("decided_by_id")
+  decidedAt    DateTime? @map("decided_at")
+  decisionNote String?   @map("decision_note")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift      Shift?     @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId, status])
+  @@index([userId])
+  @@map("shift_offers")
 }

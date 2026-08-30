@@ -4,7 +4,7 @@
 > Quelle ist [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 > Neu erzeugen mit `npm run docs:datamodel` im Ordner `backend`.
 
-Das Schema umfasst **37 Modelle**.
+Das Schema umfasst **38 Modelle**.
 
 ## Überblick
 
@@ -25,20 +25,21 @@ Das Schema umfasst **37 Modelle**.
 | [MaterialItem](#materialitem) | `material_items` | 8 |
 | [PasswordResetToken](#passwordresettoken) | `password_reset_tokens` | 7 |
 | [PushSubscription](#pushsubscription) | `push_subscriptions` | 8 |
-| [Shift](#shift) | `shifts` | 15 |
+| [Shift](#shift) | `shifts` | 16 |
+| [ShiftOffer](#shiftoffer) | `shift_offers` | 16 |
 | [ShoppingCatalogItem](#shoppingcatalogitem) | `shopping_catalog_items` | 9 |
 | [ShoppingListItem](#shoppinglistitem) | `shopping_list_items` | 9 |
 | [StandingsEntry](#standingsentry) | `standings_entries` | 13 |
 | [Team](#team) | `teams` | 16 |
 | [TemplateWorkArea](#templateworkarea) | `template_work_areas` | 8 |
 | [TimeSlot](#timeslot) | `time_slots` | 11 |
-| [Tournament](#tournament) | `tournaments` | 40 |
+| [Tournament](#tournament) | `tournaments` | 41 |
 | [TournamentClub](#tournamentclub) | `tournament_clubs` | 5 |
 | [TournamentDay](#tournamentday) | `tournament_days` | 10 |
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 15 |
-| [User](#user) | `users` | 30 |
+| [User](#user) | `users` | 31 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
@@ -338,6 +339,32 @@ Tabelle: `shifts`
 | `day` | `TournamentDay` | Beziehung über `tournamentDayId`, beim Löschen: Cascade |
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `volunteerShifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
+| `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
+
+## ShiftOffer
+
+/ Ein Helfer bietet Zeit an, die so im Dienstplan nicht steht. / / Hintergrund: Wer eine Schicht nur teilweise kann, sagte bisher gar nicht / zu - eine Zusage ist alles oder nichts. Bei offenen Plaetzen ist das ein / vermeidbarer Verlust. Hier kann jemand sagen "Samstag 9-12 haette ich / Zeit", wahlweise mit Bezug auf eine konkrete Schicht. / / Bewusst KEINE Einplanung: Das Angebot ist eine Willensbekundung. Ob und / wie daraus eine Schicht wird, entscheiden die Organisatoren - sonst / entstuenden Eintraege, deren Zeit von der Schichtzeit abweicht, und genau / das soll nicht wieder passieren.
+
+Tabelle: `shift_offers`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `tournamentId` | `Int` |  |
+| `userId` | `Int` |  |
+| `shiftId` | `Int?` |  |
+| `date` | `DateTime` |  |
+| `startMin` | `Int` |  |
+| `endMin` | `Int` |  |
+| `note` | `String?` |  |
+| `status` | `String` | Standard: `"OFFEN"` |
+| `decidedById` | `Int?` |  |
+| `decidedAt` | `DateTime?` |  |
+| `decisionNote` | `String?` |  |
+| `createdAt` | `DateTime` | Standard: `now()` |
+| `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
+| `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |
+| `shift` | `Shift?` | Beziehung über `shiftId`, beim Löschen: SetNull |
 
 ## ShoppingCatalogItem
 
@@ -498,6 +525,7 @@ Tabelle: `tournaments`
 | `club` | `Club?` | Beziehung über `clubId` |
 | `users` | `User[]` | Gegenstück einer Beziehung (Liste) |
 | `volunteerShifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
+| `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `yearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 
 ## TournamentClub
@@ -621,6 +649,7 @@ Tabelle: `users`
 | `tournament` | `Tournament?` | Beziehung über `tournamentId` |
 | `children` | `UserChild[]` | Gegenstück einer Beziehung (Liste) |
 | `shifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
+| `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `webAuthnCredentials` | `WebAuthnCredential[]` | Gegenstück einer Beziehung (Liste) |
 | `trainedYearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 | `userRoles` | `UserRole[]` | Gegenstück einer Beziehung (Liste) |

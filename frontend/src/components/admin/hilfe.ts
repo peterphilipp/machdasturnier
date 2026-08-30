@@ -89,6 +89,20 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
     ]
   },
 
+  zeitangebote: {
+    zweck: 'Helfer, für die keine Schicht passt, bieten hier ihre Zeit an.',
+    ablauf: [
+      'Oben stehen die offenen Angebote mit Tag, Zeitraum und Anmerkung.',
+      'Optional eine Rückmeldung schreiben, dann annehmen oder ablehnen.',
+      'Der Helfer bekommt die Entscheidung als Nachricht.'
+    ],
+    hinweise: [
+      'Annehmen plant NIEMANDEN ein. Es ist eine Zusage – die Schicht trägst du danach im Dienstplan ein, bei Bedarf mit passend zugeschnittener Zeit.',
+      'Der Grund für diese Trennung: Würde der Helfer automatisch in eine Schicht mit anderer Zeit gesetzt, sähe er eine Zeit, die es so nicht gibt.',
+      'Auch eine Absage ist besser als keine Antwort – wer nichts hört, bietet beim nächsten Turnier nichts mehr an.'
+    ]
+  },
+
   bewertungen: {
     zweck: 'Was die Helfer nach ihren Schichten zurückgemeldet haben.',
     ablauf: [

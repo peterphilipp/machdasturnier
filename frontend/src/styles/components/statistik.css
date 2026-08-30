@@ -272,3 +272,76 @@
   font-size: var(--font-size-xs);
   color: var(--text-muted);
 }
+
+/* ---- Zeitangebote (Organisatorenseite) --------------------------------- */
+.angebot-admin-liste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+.angebot-admin-karte {
+  padding: var(--spacing-4);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #ffc107;
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+}
+.angebot-admin-karte--angenommen { border-left-color: #198754; opacity: 0.85; }
+.angebot-admin-karte--abgelehnt  { border-left-color: #adb5bd; opacity: 0.7; }
+
+.angebot-admin-kopf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  justify-content: space-between;
+}
+.angebot-admin-zeit {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.angebot-admin-notiz {
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  color: var(--text-muted);
+}
+.angebot-admin-antwort {
+  margin-top: var(--spacing-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+.angebot-admin-notizfeld {
+  flex: 1 1 220px;
+  min-height: 44px;
+  padding: 0 var(--spacing-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+}
+.angebot-admin-aktionen {
+  display: flex;
+  gap: var(--spacing-2);
+}
+.angebot-admin-btn {
+  min-height: 44px;
+  padding: 0 var(--spacing-4);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.angebot-admin-btn:disabled { opacity: 0.6; cursor: default; }
+.angebot-admin-btn--ja   { background: #198754; color: #fff; }
+.angebot-admin-btn--nein { background: #f8f9fa; color: #495057; border: 1px solid #ced4da; }
+
+.angebot-admin-erledigt {
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
