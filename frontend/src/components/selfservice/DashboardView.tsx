@@ -99,6 +99,8 @@ export default function DashboardView() {
   const [rateOrganization, setRateOrganization] = useState<number | null>(null);
   const [rateFun, setRateFun] = useState<number | null>(null);
   const [rateComment, setRateComment] = useState<string>('');
+  // Nach dem Speichern zeigt dasselbe Fenster den Dank, statt es zu schliessen.
+  const [dankeSichtbar, setDankeSichtbar] = useState(false);
 
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -437,6 +439,7 @@ export default function DashboardView() {
   // korrigieren, statt bei null zu beginnen. Ohne Vorbewertung die neutrale
   // Mitte - eine Skala, die bei 1 startet, faerbt die Antwort.
   const openRatingModal = (vs: VolunteerShift) => {
+    setDankeSichtbar(false);
     setRatingModalVs(vs);
     setRateWorkload(vs.ratingWorkload ?? 3);
     setRateOrganization(vs.ratingOrganization ?? 3);
@@ -460,10 +463,12 @@ export default function DashboardView() {
           ratingComment: rateComment.trim() || null
         })
       });
-      setRatingModalVs(null);
+      // Kein zweiter Dialog, den man wegklicken muss: Das Formular wird selbst
+      // zum Dankeschoen und verabschiedet sich nach ein paar Sekunden. Wer
+      // gerade fuenf Felder ausgefuellt hat, soll nicht noch auf "OK" tippen.
+      setDankeSichtbar(true);
       await loadAvailable();
       queryClient.invalidateQueries({ queryKey: ['volunteerShifts'] });
-      await modal.alert({ title: 'Danke!', message: 'Deine Bewertung wurde gespeichert.' });
     } catch (err: unknown) {
       const e = err as Error;
       await modal.alert({ title: 'Fehler', message: e.message || 'Bewertung konnte nicht gespeichert werden.' });
@@ -471,6 +476,14 @@ export default function DashboardView() {
       setBusy(false);
     }
   };
+
+  // Das Dankeschoen verabschiedet sich von selbst - wer will, tippt vorher
+  // "Fertig". Der Timer wird aufgeraeumt, falls genau das passiert.
+  useEffect(() => {
+    if (!dankeSichtbar) return;
+    const timer = setTimeout(() => setRatingModalVs(null), 4000);
+    return () => clearTimeout(timer);
+  }, [dankeSichtbar]);
 
   const TIME_BLOCKS = {
     morgen: { label: 'Morgen', startMin: 0, endMin: 720 },
@@ -1145,7 +1158,27 @@ export default function DashboardView() {
         )}
       </div>
 
-      {ratingModalVs && (
+      {ratingModalVs && dankeSichtbar && (
+        <div className="feedback-modal-overlay" onClick={() => setRatingModalVs(null)}>
+          <div
+            className="feedback-modal-content feedback-modal-content--schmal rating-danke"
+            onClick={e => e.stopPropagation()}
+            role="status"
+          >
+            <div className="rating-danke-symbol">🎉</div>
+            <h3 className="rating-danke-titel">Danke dir!</h3>
+            <p className="rating-danke-text">
+              Deine Rückmeldung hilft uns, das nächste Turnier besser zu planen –
+              genau dafür fragen wir danach.
+            </p>
+            <button className="feedback-modal-btn" onClick={() => setRatingModalVs(null)}>
+              Fertig
+            </button>
+          </div>
+        </div>
+      )}
+
+      {ratingModalVs && !dankeSichtbar && (
         <div className="feedback-modal-overlay" onClick={() => setRatingModalVs(null)}>
           {/* Klick im Inneren darf nicht schliessen - sonst ist ein halb
               ausgefuelltes Formular bei jedem Fehlgriff weg. */}

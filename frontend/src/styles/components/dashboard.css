@@ -570,6 +570,52 @@
   max-width: 450px;
 }
 
+/* ---- Dankeschoen nach dem Absenden ------------------------------------
+   Dasselbe Fenster, anderer Inhalt: Statt eines nuechternen System-Dialogs,
+   den man noch wegklicken muss, bedankt sich das Formular selbst. */
+.rating-danke {
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-8) var(--spacing-6);
+  gap: var(--spacing-3);
+  /* Ohne das rechnet der Innenabstand oben auf die max-width drauf - die Karte
+     waere 498 statt 450 breit und ragte auf schmalen Handys aus dem Bild. */
+  box-sizing: border-box;
+}
+.rating-danke-symbol {
+  font-size: 56px;
+  line-height: 1;
+  animation: rating-danke-auftritt 480ms cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+.rating-danke-titel {
+  margin: 0;
+  font-size: var(--font-size-2xl);
+  color: var(--club-primary);
+}
+.rating-danke-text {
+  margin: 0;
+  max-width: 34ch;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.rating-danke .feedback-modal-btn {
+  margin-top: var(--spacing-2);
+  min-width: 140px;
+  /* Einziger Knopf im Fenster und auf dem Handy bedient - unter 44px wird das
+     Tippen zum Zielen. */
+  min-height: 44px;
+}
+
+@keyframes rating-danke-auftritt {
+  from { transform: scale(0.4); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+/* Wer Bewegung reduziert haben moechte, bekommt sie hier auch nicht. */
+@media (prefers-reduced-motion: reduce) {
+  .rating-danke-symbol { animation: none; }
+}
+
 .rating-feld {
   display: flex;
   flex-direction: column;

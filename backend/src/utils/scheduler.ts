@@ -1,5 +1,5 @@
 import prisma from '../config/prisma.js';
-import { sendPushToUser } from './push.js';
+import { notifyUser } from './notify.js';
 import { deleteUserAccount } from './accountDeletion.js';
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
@@ -13,13 +13,13 @@ const minToTime = (m: number): string =>
   `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 /**
- * Startet den Push-Reminder-Scheduler.
+ * Startet den Reminder-Scheduler.
  * Läuft alle 60 Sekunden und prüft:
  *  1. Termin-Reminder: 2 Stunden vor Schichtbeginn
  *  2. Dankeschön + Bewertungs-Reminder: 30 Minuten nach Schichtende
  */
 export function startScheduler(): void {
-  console.log('[Scheduler] Push-Reminder-Scheduler gestartet (Intervall: 60s).');
+  console.log('[Scheduler] Reminder-Scheduler gestartet (Intervall: 60s).');
 
   setInterval(async () => {
     try {
@@ -88,9 +88,13 @@ async function checkInactiveUserCleanup(): Promise<void> {
 }
 
 /**
- * Termin-Reminder: Sendet eine Push-Nachricht an Helfer,
- * deren Schicht in 90–130 Minuten beginnt (Fenster von 40 Min,
- * damit kein Reminder durch den 60s-Jitter übersprungen wird).
+ * Termin-Reminder an Helfer, deren Schicht in 90–130 Minuten beginnt
+ * (Fenster von 40 Min, damit kein Reminder durch den 60s-Jitter
+ * übersprungen wird).
+ *
+ * Geht über notifyUser und damit über beide Kanaele - Push UND dauerhaft
+ * gespeichert. Push allein erreichte kaum jemanden: die App ist selten
+ * installiert und Benachrichtigungen noch seltener erlaubt.
  */
 async function checkRemindersBefore(): Promise<void> {
   const now = new Date();
@@ -127,10 +131,12 @@ async function checkRemindersBefore(): Promise<void> {
       const startStr = minToTime(startMin);
 
       console.log(`[Scheduler] Sende Termin-Reminder an User ${vs.userId} für Schicht ${vs.id} um ${startStr}.`);
-      await sendPushToUser(
+      await notifyUser(
         vs.userId,
-        `⏰ Gleich geht’s los!`,
-        `Deine Schicht als ${areaName} beginnt in ca. 2 Stunden (${startStr}). Wir freuen uns auf dich! 💪`,
+        '⏰ Gleich geht’s los!',
+        ({ vertretend, name }) => vertretend
+          ? `Die Schicht von ${name} als ${areaName} beginnt in ca. 2 Stunden (${startStr}).`
+          : `Deine Schicht als ${areaName} beginnt in ca. 2 Stunden (${startStr}). Wir freuen uns auf dich! 💪`,
         '/'
       );
 
@@ -143,8 +149,12 @@ async function checkRemindersBefore(): Promise<void> {
 }
 
 /**
- * Dankeschön + Bewertungs-Reminder: Sendet eine Push-Nachricht
- * an Helfer, deren Schicht vor 30–90 Minuten geendet hat.
+ * Dankeschön + Bitte um Bewertung an Helfer, deren Schicht vor 30–90
+ * Minuten geendet hat.
+ *
+ * Ueber notifyUser, damit das Danke auch in der App steht und nicht nur als
+ * Push-Meldung vorbeizieht - sonst sieht es fast niemand, und die
+ * Bewertungen bleiben aus.
  */
 async function checkRemindersAfter(): Promise<void> {
   const now = new Date();
@@ -179,10 +189,14 @@ async function checkRemindersAfter(): Promise<void> {
       const areaName = vs.shift.workArea?.name || vs.role || 'deiner Schicht';
 
       console.log(`[Scheduler] Sende Danke+Bewertungs-Reminder an User ${vs.userId} für Schicht ${vs.id}.`);
-      await sendPushToUser(
+      await notifyUser(
         vs.userId,
         '🙏 Danke für deinen Einsatz!',
-        `Du warst als ${areaName} im Einsatz – vielen Dank! Hast du eine Minute? Bewerte deine Schicht gerne in der App. ⭐`,
+        ({ vertretend, name }) => vertretend
+          ? `${name} war als ${areaName} im Einsatz – vielen Dank! Hast du eine Minute? `
+            + 'Über „Deine Jobs" lässt sich die Schicht bewerten. ⭐'
+          : `Du warst als ${areaName} im Einsatz – vielen Dank! Hast du eine Minute? `
+            + 'Über „Deine Jobs" kannst du die Schicht bewerten. ⭐',
         '/'
       );
 
