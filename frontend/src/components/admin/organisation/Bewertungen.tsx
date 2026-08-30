@@ -32,6 +32,8 @@ interface FeedbackItem {
   } | null;
 }
 
+type EmpfehlungsTon = 'warnung' | 'chance' | 'lob';
+
 interface Auswertung {
   workAreaName: string;
   workAreaIcon: string;
@@ -39,7 +41,18 @@ interface Auswertung {
   avgWorkload: number | null;
   avgOrganization: number | null;
   avgFun: number | null;
+  /** Kommt fertig abgeleitet vom Server - siehe backend/src/utils/ratingUtils.ts. */
+  empfehlungen: { ton: EmpfehlungsTon; text: string }[];
 }
+
+/** Unter so vielen Rueckmeldungen ist ein Mittelwert kaum belastbar. */
+const BELASTBAR_AB = 3;
+
+const TON_DARSTELLUNG: Record<EmpfehlungsTon, { symbol: string; label: string }> = {
+  warnung: { symbol: '💡', label: 'Learning:' },
+  chance:  { symbol: '↔️', label: 'Spielraum:' },
+  lob:     { symbol: '✅', label: 'Beibehalten:' }
+};
 
 interface Props {
   selectedTournament: number | null;
@@ -134,11 +147,15 @@ export default function Bewertungen({ selectedTournament }: Props) {
         <div className="feedback-grid">
           {bereiche.map(name => {
             const agg = auswertung[name];
-            const hoheLast = agg.avgWorkload !== null && agg.avgWorkload >= 4.0;
+            const hinweise = agg.empfehlungen ?? [];
+            // Nur echte Probleme faerben die Karte ein - eine Einsparchance
+            // oder ein Lob soll nicht wie eine Warnung aussehen.
+            const brauchtAufmerksamkeit = hinweise.some(h => h.ton === 'warnung');
+            const duenneDatenlage = agg.totalRatings > 0 && agg.totalRatings < BELASTBAR_AB;
             return (
               <div
                 key={name}
-                className={`feedback-agg-card ${hoheLast ? 'feedback-agg-card-highload' : 'feedback-agg-card-normal'}`}
+                className={`feedback-agg-card ${brauchtAufmerksamkeit ? 'feedback-agg-card-highload' : 'feedback-agg-card-normal'}`}
               >
                 <div className="feedback-agg-header">
                   <span className="feedback-agg-icon">{agg.workAreaIcon}</span>
@@ -167,13 +184,19 @@ export default function Bewertungen({ selectedTournament }: Props) {
                   </div>
                 </div>
 
-                {hoheLast && (
-                  <div className="feedback-learning-alert">
-                    <span>💡</span>
+                {hinweise.map((h, i) => (
+                  <div key={i} className={`feedback-learning-alert feedback-learning-alert--${h.ton}`}>
+                    <span>{TON_DARSTELLUNG[h.ton].symbol}</span>
                     <span>
-                      <strong>Learning:</strong> Hohe Arbeitsbelastung. Für künftige Turniere
-                      {' '}+1 Helfer oder kürzere Schichten prüfen!
+                      <strong>{TON_DARSTELLUNG[h.ton].label}</strong> {h.text}
                     </span>
+                  </div>
+                ))}
+
+                {duenneDatenlage && hinweise.length > 0 && (
+                  <div className="feedback-datenlage">
+                    Beruht auf {agg.totalRatings === 1 ? 'einer einzelnen Rückmeldung' : `${agg.totalRatings} Rückmeldungen`}
+                    {' '}– noch wenig belastbar.
                   </div>
                 )}
               </div>

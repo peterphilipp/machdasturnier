@@ -440,6 +440,9 @@
   font-weight: var(--font-weight-bold);
 }
 
+/* Empfehlung fuer die naechste Planung. Drei Toene, weil nicht jede Erkenntnis
+   ein Problem ist: etwas laeuft schief (warnung), irgendwo ist Luft (chance),
+   oder etwas hat funktioniert und soll so bleiben (lob). */
 .feedback-learning-alert {
   margin-top: var(--spacing-3);
   padding: var(--spacing-2) 10px;
@@ -449,6 +452,24 @@
   font-size: var(--font-size-xs);
   display: flex;
   gap: 6px;
+  line-height: 1.45;
+}
+.feedback-learning-alert--chance {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+.feedback-learning-alert--lob {
+  background: #d4edda;
+  color: #155724;
+}
+
+/* Ehrlichkeit ueber die Grundlage: Ein Mittelwert aus einer Rueckmeldung
+   sieht genauso aus wie einer aus zwanzig, traegt aber viel weniger. */
+.feedback-datenlage {
+  margin-top: var(--spacing-2);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .feedback-comments-header {

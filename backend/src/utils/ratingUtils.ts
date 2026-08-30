@@ -13,6 +13,19 @@ export interface FeedbackItem {
   } | null;
 }
 
+/**
+ * Ein Ton, kein Schweregrad: Nicht jede Erkenntnis ist ein Problem.
+ * `warnung` - hier lief etwas schief.
+ * `chance`  - hier ist Luft, die woanders fehlt.
+ * `lob`     - das hat funktioniert und soll so bleiben.
+ */
+export type EmpfehlungsTon = 'warnung' | 'chance' | 'lob';
+
+export interface Empfehlung {
+  ton: EmpfehlungsTon;
+  text: string;
+}
+
 export interface WorkAreaFeedbackAggregation {
   workAreaName: string;
   workAreaIcon: string;
@@ -20,7 +33,85 @@ export interface WorkAreaFeedbackAggregation {
   avgWorkload: number | null;
   avgOrganization: number | null;
   avgFun: number | null;
+  /** Was aus den Werten fuer die naechste Planung folgt. */
+  empfehlungen: Empfehlung[];
   comments: { id: number; comment: string; workAreaName: string }[];
+}
+
+/**
+ * Ab wann ein Wert eine Empfehlung ausloest.
+ *
+ * Die Stress-Schwellen sind dieselben, nach denen die Anzeige "Hoch" bzw.
+ * "Ruhig" ausweist - sonst widerspraeche der Hinweis der Zeile darueber.
+ * Bei Organisation und Spass ist 3 die neutrale Mitte der Skala von 1 bis 5;
+ * 2,5 liegt klar darunter und heisst "mehrheitlich unzufrieden", nicht
+ * "durchwachsen".
+ */
+export const SCHWELLEN = {
+  stressHoch: 4.0,
+  stressNiedrig: 1.8,
+  deutlichSchwach: 2.5,
+  richtigGut: 4.5
+} as const;
+
+/**
+ * Was ein Arbeitsbereich fuer die naechste Planung bedeutet.
+ *
+ * Bewusst Handlungsempfehlung statt Bewertung - die Zahlen stehen schon
+ * daneben, hier geht es um das, was man daraus macht. Mehrere Hinweise
+ * gleichzeitig sind moeglich: Ein Bereich kann zugleich ueberlastet und
+ * schlecht eingewiesen sein, und daraus folgen zwei verschiedene Dinge.
+ */
+export function empfehlungenFuer(agg: {
+  avgWorkload: number | null;
+  avgOrganization: number | null;
+  avgFun: number | null;
+}): Empfehlung[] {
+  const liste: Empfehlung[] = [];
+  const { avgWorkload: stress, avgOrganization: orga, avgFun: spass } = agg;
+
+  if (stress !== null && stress >= SCHWELLEN.stressHoch) {
+    liste.push({
+      ton: 'warnung',
+      text: 'Hohe Arbeitsbelastung. Für künftige Turniere +1 Helfer oder kürzere Schichten prüfen.'
+    });
+  }
+  if (stress !== null && stress <= SCHWELLEN.stressNiedrig) {
+    liste.push({
+      ton: 'chance',
+      text: 'Hier war wenig zu tun. Ein Helfer weniger reicht vermutlich – und wird anderswo gebraucht.'
+    });
+  }
+  if (orga !== null && orga <= SCHWELLEN.deutlichSchwach) {
+    liste.push({
+      ton: 'warnung',
+      text: 'Die Einweisung kam nicht an. Eine feste Ansprechperson und eine kurze Übergabe zu '
+        + 'Schichtbeginn helfen hier mehr als ein zusätzlicher Helfer.'
+    });
+  }
+  if (spass !== null && spass <= SCHWELLEN.deutlichSchwach) {
+    liste.push({
+      ton: 'warnung',
+      // Schlechte Stimmung ist selten die Ursache, meist die Folge. Der Hinweis
+      // schickt deshalb zu den beiden anderen Werten desselben Bereichs.
+      text: 'Gedrückte Stimmung. Das ist meist eine Folge – schau auf Stress und Organisation '
+        + 'in diesem Bereich, dort liegt in der Regel der Grund.'
+    });
+  }
+  // Was gut lief, zaehlt fuer die Planung genauso wie das, was nicht lief -
+  // sonst wird beim naechsten Mal ausgerechnet daran geschraubt.
+  if (
+    liste.length === 0
+    && spass !== null && spass >= SCHWELLEN.richtigGut
+    && (orga === null || orga >= SCHWELLEN.richtigGut)
+  ) {
+    liste.push({
+      ton: 'lob',
+      text: 'Lief rund. Besetzung und Zuschnitt dieses Bereichs beim nächsten Turnier so lassen.'
+    });
+  }
+
+  return liste;
 }
 
 /** Gueltig ist 1 bis 5 - alles andere zaehlt nicht mit. */
@@ -61,6 +152,7 @@ export function aggregateFeedbackByWorkArea(feedbacks: FeedbackItem[]): Record<s
         avgWorkload: null,
         avgOrganization: null,
         avgFun: null,
+        empfehlungen: [],
         comments: []
       };
       summen[areaName] = {
@@ -107,6 +199,8 @@ export function aggregateFeedbackByWorkArea(feedbacks: FeedbackItem[]): Record<s
     result[key].avgWorkload = schnitt(summen[key].workload);
     result[key].avgOrganization = schnitt(summen[key].organization);
     result[key].avgFun = schnitt(summen[key].fun);
+    // Erst jetzt, wo die Schnitte feststehen - vorher waeren sie sinnlos.
+    result[key].empfehlungen = empfehlungenFuer(result[key]);
   }
 
   return result;
