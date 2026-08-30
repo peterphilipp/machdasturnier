@@ -27,6 +27,46 @@ interface LayoutContext {
   setTournamentName: (name: string) => void;
 }
 
+/**
+ * Eine Bewertungsstufe von 1 bis 5.
+ *
+ * Die Zahl allein sagt nicht, in welche Richtung sie zeigt - bei "Stress" ist
+ * 5 das Warnsignal, bei "Spass" das Lob. Deshalb steht die gewaehlte Stufe
+ * immer ausgeschrieben daneben, und jeder Knopf traegt seine Bedeutung als
+ * title (fuer Maus und Screenreader).
+ */
+function RatingSkala({ frage, stufen, symbole, wert, onChange }: {
+  frage: string;
+  stufen: string[];
+  symbole: string[];
+  wert: number | null;
+  onChange: (stufe: number) => void;
+}) {
+  return (
+    <div className="rating-feld">
+      <label className="rating-feld-label">
+        {frage}
+        {wert != null && <span className="rating-feld-stufe"> — {stufen[wert - 1]}</span>}
+      </label>
+      <div className="rating-skala" role="group" aria-label={frage}>
+        {[1, 2, 3, 4, 5].map(stufe => (
+          <button
+            key={stufe}
+            type="button"
+            onClick={() => onChange(stufe)}
+            aria-pressed={wert === stufe}
+            aria-label={`${stufe}: ${stufen[stufe - 1]}`}
+            title={stufen[stufe - 1]}
+            className={`rating-skala-btn${wert === stufe ? ' rating-skala-btn--aktiv' : ''}`}
+          >
+            {symbole[stufe - 1]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardView() {
   const { volunteer, token, isLoggedIn, login } = useUser();
   const { clubPrimary, clubSecondary, clubAccent, fetchClubColors, setAvailableTournaments, selectedTournamentId, setSelectedTournamentId, setTournamentName } = useOutletContext<LayoutContext>();
@@ -388,6 +428,50 @@ export default function DashboardView() {
     }
   };
 
+  /** Hat der Helfer diese Schicht schon bewertet? Ein einzelnes Feld genuegt -
+   *  das Formular speichert immer alle drei Stufen zusammen. */
+  const bereitsBewertet = (vs: VolunteerShift) =>
+    vs.ratingWorkload != null || vs.ratingOrganization != null || vs.ratingFun != null;
+
+  // Voreinstellung beim Oeffnen: eine schon abgegebene Bewertung laesst sich so
+  // korrigieren, statt bei null zu beginnen. Ohne Vorbewertung die neutrale
+  // Mitte - eine Skala, die bei 1 startet, faerbt die Antwort.
+  const openRatingModal = (vs: VolunteerShift) => {
+    setRatingModalVs(vs);
+    setRateWorkload(vs.ratingWorkload ?? 3);
+    setRateOrganization(vs.ratingOrganization ?? 3);
+    setRateFun(vs.ratingFun ?? 3);
+    setRateComment(vs.ratingComment ?? '');
+  };
+
+  const saveRating = async () => {
+    if (!ratingModalVs || busy) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/api/self/shifts/${ratingModalVs.id}/rating`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ratingWorkload: rateWorkload,
+          ratingOrganization: rateOrganization,
+          ratingFun: rateFun,
+          // Leerer Text heisst "keine Anmerkung" und nicht "leerer Kommentar" -
+          // sonst taucht er in der Auswertung als leere Zeile auf.
+          ratingComment: rateComment.trim() || null
+        })
+      });
+      setRatingModalVs(null);
+      await loadAvailable();
+      queryClient.invalidateQueries({ queryKey: ['volunteerShifts'] });
+      await modal.alert({ title: 'Danke!', message: 'Deine Bewertung wurde gespeichert.' });
+    } catch (err: unknown) {
+      const e = err as Error;
+      await modal.alert({ title: 'Fehler', message: e.message || 'Bewertung konnte nicht gespeichert werden.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const TIME_BLOCKS = {
     morgen: { label: 'Morgen', startMin: 0, endMin: 720 },
     mittag: { label: 'Mittag', startMin: 720, endMin: 840 },
@@ -662,8 +746,15 @@ export default function DashboardView() {
                               </div>
                             )}
                             {isPast ? (
-                              <button onClick={() => {}} title="Bewertung bearbeiten" style={{ background: '#0d6efd', color: '#fff' }} className="dashboard-btn-action">
-                                📝
+                              <button
+                                onClick={() => openRatingModal(vs)}
+                                title={bereitsBewertet(vs) ? 'Bewertung bearbeiten' : 'Schicht bewerten'}
+                                style={bereitsBewertet(vs)
+                                  ? { background: '#ffc107', color: '#000' }
+                                  : { background: '#0d6efd', color: '#fff' }}
+                                className="dashboard-btn-action"
+                              >
+                                {bereitsBewertet(vs) ? '✏️' : '📝'}
                               </button>
                             ) : (
                               <button onClick={() => cancelShift(vs)} disabled={busy} className="dashboard-btn-action" style={{ background: '#fde8e8', color: '#dc3545' }}>
@@ -1053,6 +1144,85 @@ export default function DashboardView() {
           </div>
         )}
       </div>
+
+      {ratingModalVs && (
+        <div className="feedback-modal-overlay" onClick={() => setRatingModalVs(null)}>
+          {/* Klick im Inneren darf nicht schliessen - sonst ist ein halb
+              ausgefuelltes Formular bei jedem Fehlgriff weg. */}
+          <div
+            className="feedback-modal-content feedback-modal-content--schmal"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="feedback-modal-header">
+              <div>
+                <h3 className="feedback-modal-title">⭐ Schicht bewerten</h3>
+                <div className="feedback-modal-subtitle">
+                  {ratingModalVs.shift?.arbeitsbereich?.name || ratingModalVs.role}
+                  {' am '}
+                  {new Date(ratingModalVs.date).toLocaleDateString('de-DE')}
+                  {ratingModalVs.shift?.startMin != null && (
+                    <> ({minToTime(ratingModalVs.shift.startMin)}–{minToTime(ratingModalVs.shift.endMin)})</>
+                  )}
+                </div>
+              </div>
+              <button className="feedback-modal-close" onClick={() => setRatingModalVs(null)} aria-label="Schließen">✕</button>
+            </div>
+
+            <div className="feedback-modal-body">
+              <RatingSkala
+                frage="1. Stress & Auslastung"
+                stufen={['Viel zu ruhig', 'Eher ruhig', 'Genau richtig', 'Stressig', 'Überlastet / zu wenig Helfer']}
+                symbole={['😴', '🙂', '😊', '🥵', '🚨']}
+                wert={rateWorkload}
+                onChange={setRateWorkload}
+              />
+              <RatingSkala
+                frage="2. Organisation & Einweisung"
+                stufen={['Chaotisch', 'Lückenhaft', 'Okay', 'Gut', 'Perfekt organisiert']}
+                symbole={['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']}
+                wert={rateOrganization}
+                onChange={setRateOrganization}
+              />
+              <RatingSkala
+                frage="3. Spaß & Stimmung"
+                stufen={['Kein Spaß', 'Eher zäh', 'In Ordnung', 'Gut', 'Super Stimmung!']}
+                symbole={['😞', '😐', '🙂', '😄', '🤩']}
+                wert={rateFun}
+                onChange={setRateFun}
+              />
+
+
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="rating-kommentar">
+                  Notiz / Verbesserungsvorschlag (optional)
+                </label>
+                <textarea
+                  id="rating-kommentar"
+                  className="rating-kommentar"
+                  value={rateComment}
+                  onChange={e => setRateComment(e.target.value)}
+                  placeholder="Was können wir beim nächsten Mal besser machen? (z. B. fehlendes Material, Uhrzeit …)"
+                  rows={3}
+                  maxLength={1000}
+                />
+              </div>
+            </div>
+
+            <div className="feedback-modal-footer rating-modal-footer">
+              <button
+                onClick={() => setRatingModalVs(null)}
+                className="feedback-modal-btn"
+                style={{ background: '#fff', color: '#333', border: '1px solid #ccc' }}
+              >
+                Abbrechen
+              </button>
+              <button onClick={saveRating} disabled={busy} className="feedback-modal-btn">
+                {busy ? 'Speichert …' : 'Bewertung speichern'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
