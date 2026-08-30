@@ -69,7 +69,11 @@
   margin-bottom: 0;
   border-left: 6px solid var(--club-accent);
 }
-.dashboard-shift-card-past {
+/* Eine vergangene Schicht tritt zurueck - aber nur ihre Beschreibung.
+   Der Knopf daneben ist das Einzige, was hier noch zu tun ist (bewerten);
+   blasst er mit, liest er sich als deaktiviert und wird nicht angetippt. */
+.dashboard-shift-card-past .dashboard-shift-card-inner,
+.dashboard-shift-card-past .dashboard-shift-remaining {
   opacity: 0.6;
 }
 .dashboard-shift-card-inner {
