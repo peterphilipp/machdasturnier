@@ -7,6 +7,12 @@ import '../../../styles/components/statistik.css';
 /**
  * Zeitangebote von Helfern, über die zu entscheiden ist.
  *
+ * Sitzt eingebettet im Dienstplan (Uebersicht.tsx) statt als eigener Reiter -
+ * genau wie die "Zusätzliche Verpflegung ohne Ziel" bei den Spenden: beides
+ * ist ein Vorschlag, der zum Dienstplan gehört, nicht ein eigenständiger
+ * Themenbereich. Zeigt sich deshalb nur, wenn es tatsächlich etwas gibt -
+ * eine leere Karte auf jeder Turnierseite waere nur Ballast.
+ *
  * Ein angenommenes Angebot plant NIEMANDEN ein - es ist eine
  * Willensbekundung. Nach dem Annehmen schneidet ihr die Schicht im
  * Dienstplan zu und plant den Helfer dort regulär ein. Automatisch
@@ -25,6 +31,7 @@ interface Angebot {
   decidedAt: string | null;
   user?: { id: number; name: string; email?: string | null } | null;
   shift?: { id: number; workArea?: { name?: string; icon?: string } | null } | null;
+  workArea?: { name?: string; icon?: string } | null;
 }
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -37,8 +44,11 @@ export default function Zeitangebote({ selectedTournament }: { selectedTournamen
   // Optionale Rueckmeldung je Angebot. Direkt in der Karte statt im Dialog:
   // so steht beim Schreiben noch da, worauf man antwortet.
   const [notizen, setNotizen] = useState<Record<number, string>>({});
+  // Entschiedene Angebote sind Historie, keine Aufgabe - eingeklappt, damit
+  // sie die eigentlichen Aufgaben (offene Angebote) nicht verdraengen.
+  const [historieOffen, setHistorieOffen] = useState(false);
 
-  const { data: angebote = [], isLoading } = useQuery<Angebot[]>({
+  const { data: angebote = [] } = useQuery<Angebot[]>({
     queryKey: ['shiftOffers', selectedTournament],
     queryFn: () => apiFetch(`/api/shift-offers?tournamentId=${selectedTournament}`),
     enabled: !!selectedTournament
@@ -73,99 +83,96 @@ export default function Zeitangebote({ selectedTournament }: { selectedTournamen
     }
   };
 
-  if (!selectedTournament) {
-    return (
-      <div className="feedback-empty">
-        <div className="feedback-empty-icon">🙋</div>
-        <div className="feedback-empty-title">Kein Turnier ausgewählt</div>
-      </div>
-    );
-  }
-  if (isLoading) return <div className="feedback-loading">Lade Angebote …</div>;
+  // Nichts zu zeigen: kein Turnier, oder schlicht keine Angebote - beides
+  // heisst hier "keine Ausgabe", die "leer, aber sichtbar"-Karte lohnt sich
+  // nur, wenn tatsaechlich etwas ansteht oder anstand.
+  if (!selectedTournament || angebote.length === 0) return null;
 
-  if (angebote.length === 0) {
+  const bereichVon = (a: Angebot) => a.shift?.workArea ?? a.workArea;
+
+  const karte = (a: Angebot, mitAktionen: boolean) => {
+    const bereich = bereichVon(a);
     return (
-      <div className="feedback-empty">
-        <div className="feedback-empty-icon">🙋</div>
-        <div className="feedback-empty-title">Keine Zeitangebote</div>
-        <div className="feedback-empty-desc">
-          Helfer, für die keine Schicht passt, können im Self-Service ihre Zeit anbieten.
-          Diese Vorschläge erscheinen hier.
+      <div key={a.id} className={`angebot-admin-karte angebot-admin-karte--${a.status.toLowerCase()}`}>
+        <div className="angebot-admin-kopf">
+          <strong>{a.user?.name || 'Unbekannt'}</strong>
+          <span className="angebot-admin-zeit">
+            {tagKurz(a.date)} · {hhmm(a.startMin)}–{hhmm(a.endMin)}
+            {bereich?.name && <> · {bereich.icon} {bereich.name}</>}
+          </span>
         </div>
-      </div>
-    );
-  }
+        {a.note && <div className="angebot-admin-notiz">„{a.note}"</div>}
 
-  const karte = (a: Angebot, mitAktionen: boolean) => (
-    <div key={a.id} className={`angebot-admin-karte angebot-admin-karte--${a.status.toLowerCase()}`}>
-      <div className="angebot-admin-kopf">
-        <strong>{a.user?.name || 'Unbekannt'}</strong>
-        <span className="angebot-admin-zeit">
-          {tagKurz(a.date)} · {hhmm(a.startMin)}–{hhmm(a.endMin)}
-          {a.shift?.workArea?.name && <> · {a.shift.workArea.icon} {a.shift.workArea.name}</>}
-        </span>
-      </div>
-      {a.note && <div className="angebot-admin-notiz">„{a.note}"</div>}
-
-      {mitAktionen ? (
-        <div className="angebot-admin-antwort">
-          <input
-            className="angebot-admin-notizfeld"
-            placeholder="Rückmeldung an den Helfer (optional)"
-            maxLength={500}
-            value={notizen[a.id] ?? ''}
-            onChange={e => setNotizen(prev => ({ ...prev, [a.id]: e.target.value }))}
-            aria-label={`Rückmeldung an ${a.user?.name || 'den Helfer'}`}
-          />
-          <div className="angebot-admin-aktionen">
-          <button
-            className="angebot-admin-btn angebot-admin-btn--ja"
-            disabled={busyId === a.id}
-            onClick={() => entscheide(a, 'ANGENOMMEN')}
-          >
-            Annehmen
-          </button>
-          <button
-            className="angebot-admin-btn angebot-admin-btn--nein"
-            disabled={busyId === a.id}
-            onClick={() => entscheide(a, 'ABGELEHNT')}
-          >
-            Ablehnen
-          </button>
+        {mitAktionen ? (
+          <div className="angebot-admin-antwort">
+            <input
+              className="angebot-admin-notizfeld"
+              placeholder="Rückmeldung an den Helfer (optional)"
+              maxLength={500}
+              value={notizen[a.id] ?? ''}
+              onChange={e => setNotizen(prev => ({ ...prev, [a.id]: e.target.value }))}
+              aria-label={`Rückmeldung an ${a.user?.name || 'den Helfer'}`}
+            />
+            <div className="angebot-admin-aktionen">
+              <button
+                className="angebot-admin-btn angebot-admin-btn--ja"
+                disabled={busyId === a.id}
+                onClick={() => entscheide(a, 'ANGENOMMEN')}
+              >
+                Annehmen
+              </button>
+              <button
+                className="angebot-admin-btn angebot-admin-btn--nein"
+                disabled={busyId === a.id}
+                onClick={() => entscheide(a, 'ABGELEHNT')}
+              >
+                Ablehnen
+              </button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="angebot-admin-erledigt">
-          {a.status === 'ANGENOMMEN' ? '👍 angenommen' : 'abgelehnt'}
-          {a.decidedAt && <> am {new Date(a.decidedAt).toLocaleDateString('de-DE')}</>}
-          {a.decisionNote && <> · „{a.decisionNote}"</>}
-        </div>
-      )}
-    </div>
-  );
+        ) : (
+          <div className="angebot-admin-erledigt">
+            {a.status === 'ANGENOMMEN' ? '👍 angenommen' : 'abgelehnt'}
+            {a.decidedAt && <> am {new Date(a.decidedAt).toLocaleDateString('de-DE')}</>}
+            {a.decisionNote && <> · „{a.decisionNote}"</>}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="stat-seite">
-      <section>
-        <h3 className="feedback-section-title">🙋 Zu entscheiden ({offene.length})</h3>
-        {offene.length === 0 ? (
-          <p className="stat-hinweis">Nichts offen – alle Angebote sind beantwortet.</p>
-        ) : (
-          <>
-            <p className="stat-hinweis">
-              Ein angenommenes Angebot ist eine Zusage, aber noch keine Einplanung: Trage die
-              Schicht danach im Dienstplan ein – bei Bedarf mit passend zugeschnittener Zeit.
-            </p>
-            <div className="angebot-admin-liste">{offene.map(a => karte(a, true))}</div>
-          </>
+    <div className="angebot-admin-karte-aussen">
+      <div className="angebot-admin-kopfzeile">
+        <h3 className="angebot-admin-titel">
+          🙋 Zeitangebote{offene.length > 0 && <span className="angebot-admin-badge">{offene.length}</span>}
+        </h3>
+        {erledigte.length > 0 && (
+          <button
+            type="button"
+            className="angebot-admin-historie-btn"
+            onClick={() => setHistorieOffen(o => !o)}
+            aria-expanded={historieOffen}
+          >
+            {historieOffen ? 'Verlauf ausblenden' : `Verlauf anzeigen (${erledigte.length})`}
+          </button>
         )}
-      </section>
+      </div>
 
-      {erledigte.length > 0 && (
-        <section>
-          <h3 className="feedback-section-title">Bereits entschieden ({erledigte.length})</h3>
-          <div className="angebot-admin-liste">{erledigte.map(a => karte(a, false))}</div>
-        </section>
+      {offene.length > 0 && (
+        <>
+          <p className="stat-hinweis">
+            Ein angenommenes Angebot ist eine Zusage, aber noch keine Einplanung: Trage die Schicht
+            danach im Dienstplan ein – bei Bedarf mit passend zugeschnittener Zeit.
+          </p>
+          <div className="angebot-admin-liste">{offene.map(a => karte(a, true))}</div>
+        </>
+      )}
+
+      {historieOffen && erledigte.length > 0 && (
+        <div className="angebot-admin-liste angebot-admin-liste--historie">
+          {erledigte.map(a => karte(a, false))}
+        </div>
       )}
     </div>
   );

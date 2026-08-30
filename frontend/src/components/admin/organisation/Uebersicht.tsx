@@ -10,6 +10,7 @@ import { modal } from '../Modal';
 import { btnStyle, inputStyle, tdStyle, thStyle, BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from '../shared';
 import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
+import Zeitangebote from './Zeitangebote';
 import StationPrintModal from './StationPrintModal';
 import { Ladefehler } from '../../Verbindung';
 import PersonenAuswahl from '../PersonenAuswahl';
@@ -562,6 +563,8 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
           <Ladefehler was="Der Dienstplan" fehler={schichtenFehlerObj} erneut={() => schichtenNeu()} />
         </div>
       )}
+
+      {tid && <Zeitangebote selectedTournament={tid} />}
 
       {tid && (
         <RosterSetupPanel

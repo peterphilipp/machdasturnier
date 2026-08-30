@@ -33,7 +33,8 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
       'Die Farbe der Balken zeigt die Besetzung, nicht den Arbeitsbereich: rot = niemand eingeplant, gelb = teilweise, grün = voll. Die schmale Kante links ist die Farbe des Bereichs.',
       'Ein Bereich kann mehrfach gleichzeitig laufen – zwei Verkaufsstände etwa. Dafür im Schicht-Dialog „➕ Parallele Schicht". Die Zeile bekommt dann mehrere Spuren übereinander.',
       'Wer eingeplant wird, bekommt eine Nachricht. Auch beim Verschieben und beim Entfernen einer Schicht. Wer die App nicht nutzt, wird über seine Kontaktperson erreicht.',
-      'Am Handy zeigt jede Karte einen „⏰ Zeit"-Knopf, weil es dort kein Diagramm zum Ziehen gibt.'
+      'Am Handy zeigt jede Karte einen „⏰ Zeit"-Knopf, weil es dort kein Diagramm zum Ziehen gibt.',
+      'Passt keine Schicht zu einem Helfer, kann er im Self-Service seine Zeit anbieten. Diese Angebote erscheinen als eigene Karte oben in dieser Übersicht, sobald welche vorliegen. Annehmen plant niemanden ein – die Schicht trägst du danach hier ein.'
     ]
   },
 
@@ -86,20 +87,6 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
       'Wer Kinder in mehreren Jahrgängen hat, zählt in jedem davon mit. Die Summe der Helferzahlen ist deshalb höher als die Gesamtzahl – die Seite weist darauf hin, wenn es vorkommt.',
       'Die Rangliste zeigt bewusst nur die Fleißigsten und keine Schlusslichter.',
       'Die Zahlen stehen sofort zur Verfügung, nicht erst nach dem Turnier – während der Planung zeigen sie vor allem, wo noch Plätze offen sind.'
-    ]
-  },
-
-  zeitangebote: {
-    zweck: 'Helfer, für die keine Schicht passt, bieten hier ihre Zeit an.',
-    ablauf: [
-      'Oben stehen die offenen Angebote mit Tag, Zeitraum und Anmerkung.',
-      'Optional eine Rückmeldung schreiben, dann annehmen oder ablehnen.',
-      'Der Helfer bekommt die Entscheidung als Nachricht.'
-    ],
-    hinweise: [
-      'Annehmen plant NIEMANDEN ein. Es ist eine Zusage – die Schicht trägst du danach im Dienstplan ein, bei Bedarf mit passend zugeschnittener Zeit.',
-      'Der Grund für diese Trennung: Würde der Helfer automatisch in eine Schicht mit anderer Zeit gesetzt, sähe er eine Zeit, die es so nicht gibt.',
-      'Auch eine Absage ist besser als keine Antwort – wer nichts hört, bietet beim nächsten Turnier nichts mehr an.'
     ]
   },
 

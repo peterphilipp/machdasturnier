@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { driver, type DriveStep } from 'driver.js';
@@ -17,6 +17,7 @@ interface ShiftOffer {
   note: string | null; status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
   decisionNote: string | null;
   shift?: { arbeitsbereich?: { name: string } | null } | null;
+  workArea?: { id: number; name: string; icon?: string } | null;
 }
 interface FoodCategory { id: number; name: string; icon: string; items: { id: number; name: string; price: string | null; unit: string }[]; }
 interface FoodDonation { id: number; foodItemId: number; quantity: number; note: string | null; createdAt: string; foodDonationSlotId: number | null; foodItem: { id: number; name: string; unit: string; category: { id: number; name: string; icon: string } } | null; }
@@ -109,6 +110,7 @@ export default function DashboardView() {
   const [meineAngebote, setMeineAngebote] = useState<ShiftOffer[]>([]);
   const [angebotOffen, setAngebotOffen] = useState(false);
   const [angebotBezug, setAngebotBezug] = useState<{ shiftId: number; bereich: string } | null>(null);
+  const [angebotBereichId, setAngebotBereichId] = useState<number | null>(null);
   const [angebotDatum, setAngebotDatum] = useState('');
   const [angebotVon, setAngebotVon] = useState('09:00');
   const [angebotBis, setAngebotBis] = useState('12:00');
@@ -445,6 +447,29 @@ export default function DashboardView() {
     }
   };
 
+  /**
+   * Die Tage, an denen es ueberhaupt Schichten gibt - aus den geladenen
+   * Schichten abgeleitet statt frei eingebbar. Ein Datum ausserhalb des
+   * Turniers waere fuer die Organisatoren nur eine weitere Frage, keine
+   * Hilfe: "welcher Tag war das nochmal gemeint?".
+   */
+  const turnierTage = useMemo(() => {
+    const tage = new Set<string>();
+    shifts.forEach(s => { if (s.date) tage.add(new Date(s.date).toISOString().slice(0, 10)); });
+    return [...tage].sort();
+  }, [shifts]);
+
+  /** Arbeitsbereiche, die es in diesem Turnier gibt - fuer die optionale Auswahl. */
+  const angebotBereiche = useMemo(() => {
+    const map = new Map<number, { id: number; name: string; icon: string }>();
+    shifts.forEach(s => {
+      if (s.arbeitsbereichId != null && s.arbeitsbereich) {
+        map.set(s.arbeitsbereichId, { id: s.arbeitsbereichId, name: s.arbeitsbereich.name, icon: s.arbeitsbereich.icon });
+      }
+    });
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  }, [shifts]);
+
   /** "09:30" -> Minuten seit Mitternacht. */
   const zeitZuMin = (t: string) => {
     const [h, m] = t.split(':').map(Number);
@@ -466,18 +491,22 @@ export default function DashboardView() {
     setAngebotBezug(bezug ? { shiftId: bezug.shiftId, bereich: bezug.bereich } : null);
     // Ein Vorschlag als Startpunkt: die Schichtzeit selbst, sonst der erste
     // Turniertag. Ein leeres Formular beantwortet niemand gern.
-    const tag = bezug?.datum ?? shifts[0]?.date ?? new Date().toISOString();
-    setAngebotDatum(new Date(tag).toISOString().slice(0, 10));
+    const tag = bezug?.datum ? new Date(bezug.datum).toISOString().slice(0, 10) : turnierTage[0];
+    setAngebotDatum(tag ?? '');
     if (bezug) {
       setAngebotVon(minToTime(bezug.startMin));
       setAngebotBis(minToTime(bezug.endMin));
     }
+    setAngebotBereichId(null);
     setAngebotNotiz('');
     setAngebotOffen(true);
   };
 
   const sendeAngebot = async () => {
     if (!selectedTournamentId || busy) return;
+    if (!angebotDatum) {
+      return await modal.alert({ title: 'Hinweis', message: 'Bitte einen Turniertag wählen.' });
+    }
     const von = zeitZuMin(angebotVon), bis = zeitZuMin(angebotBis);
     if (bis <= von) {
       return await modal.alert({ title: 'Hinweis', message: 'Die Endzeit muss nach der Startzeit liegen.' });
@@ -487,6 +516,7 @@ export default function DashboardView() {
       await apiPost('/api/shift-offers', {
         tournamentId: selectedTournamentId,
         shiftId: angebotBezug?.shiftId ?? null,
+        workAreaId: angebotBereichId,
         date: new Date(angebotDatum + 'T00:00:00.000Z').toISOString(),
         startMin: von, endMin: bis,
         note: angebotNotiz.trim() || null
@@ -1053,7 +1083,9 @@ export default function DashboardView() {
                     <div className="angebot-karte-zeit">
                       {new Date(a.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       {' · '}{minToTime(a.startMin)}–{minToTime(a.endMin)}
-                      {a.shift?.arbeitsbereich?.name && <> · {a.shift.arbeitsbereich.name}</>}
+                      {(a.shift?.arbeitsbereich?.name || a.workArea?.name) && (
+                        <> · {a.workArea?.icon} {a.shift?.arbeitsbereich?.name || a.workArea?.name}</>
+                      )}
                     </div>
                     {a.note && <div className="angebot-karte-notiz">„{a.note}"</div>}
                     <div className="angebot-karte-fuss">
@@ -1316,10 +1348,34 @@ export default function DashboardView() {
             <div className="feedback-modal-body">
               <div className="rating-feld">
                 <label className="rating-feld-label" htmlFor="angebot-datum">Tag</label>
-                <input
-                  id="angebot-datum" type="date" className="rating-kommentar"
-                  value={angebotDatum} onChange={e => setAngebotDatum(e.target.value)}
-                />
+                {turnierTage.length > 0 ? (
+                  <select
+                    id="angebot-datum" className="rating-kommentar"
+                    value={angebotDatum} onChange={e => setAngebotDatum(e.target.value)}
+                  >
+                    {turnierTage.map(tag => (
+                      <option key={tag} value={tag}>
+                        {new Date(tag).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="angebot-erklaerung">Für dieses Turnier sind noch keine Turniertage hinterlegt.</p>
+                )}
+              </div>
+
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="angebot-bereich">Arbeitsbereich (optional)</label>
+                <select
+                  id="angebot-bereich" className="rating-kommentar"
+                  value={angebotBereichId ?? ''}
+                  onChange={e => setAngebotBereichId(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">Egal, wo ihr mich braucht</option>
+                  {angebotBereiche.map(b => (
+                    <option key={b.id} value={b.id}>{b.icon} {b.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="angebot-zeitraum">

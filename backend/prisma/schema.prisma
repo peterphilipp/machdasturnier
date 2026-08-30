@@ -396,6 +396,7 @@ model TournamentWorkArea {
   active            Boolean                 @default(true)
   shifts            Shift[]
   dayWorkAreas      TournamentDayWorkArea[]
+  shiftOffers       ShiftOffer[]
   tournament        Tournament              @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@index([tournamentId])
@@ -764,6 +765,9 @@ model ShiftOffer {
   /// Optionaler Bezug: "diese Schicht, aber nur von-bis". Ohne shiftId ist es
   /// ein freies Zeitangebot ("setzt mich ein, wo ihr mich braucht").
   shiftId      Int?      @map("shift_id")
+  /// Optionaler Wunsch-Arbeitsbereich, unabhaengig von shiftId - "irgendwas
+  /// am Grillstand" ist oft leichter zu beantworten als eine konkrete Schicht.
+  workAreaId   Int?      @map("work_area_id")
   date         DateTime
   startMin     Int       @map("start_min")
   endMin       Int       @map("end_min")
@@ -775,9 +779,10 @@ model ShiftOffer {
   decisionNote String?   @map("decision_note")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shift      Shift?     @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  tournament Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift      Shift?              @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  workArea   TournamentWorkArea? @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
 
   @@index([tournamentId, status])
   @@index([userId])

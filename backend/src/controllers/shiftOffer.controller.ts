@@ -24,6 +24,9 @@ import { ROLES } from '../utils/roles.js';
 export const shiftOfferSchema = z.object({
   tournamentId: z.number().int().positive(),
   shiftId: z.number().int().positive().nullable().optional(),
+  /// Wunsch-Arbeitsbereich, unabhaengig von shiftId - "irgendwas am
+  /// Grillstand" ist oft leichter zu beantworten als eine konkrete Schicht.
+  workAreaId: z.number().int().positive().nullable().optional(),
   date: z.string().or(z.date()),
   startMin: z.number().int().min(0).max(1439),
   endMin: z.number().int().min(1).max(1440),
@@ -45,7 +48,7 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
   const userId = req.userId;
   if (!userId) return res.status(401).json({ error: 'Nicht angemeldet' });
 
-  const { tournamentId, shiftId, date, startMin, endMin, note } = req.body;
+  const { tournamentId, shiftId, workAreaId, date, startMin, endMin, note } = req.body;
 
   // Doppelte Angebote fuer denselben Zeitraum abfangen - ein zweiter Anlauf
   // aus Unsicherheit soll den Organisatoren nicht dieselbe Zeile zweimal in
@@ -62,11 +65,16 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
     data: {
       tournamentId, userId,
       shiftId: shiftId ?? null,
+      workAreaId: workAreaId ?? null,
       date: new Date(date),
       startMin, endMin,
       note: note?.trim() || null
     },
-    include: { user: { select: { name: true } }, shift: { include: { workArea: true } } }
+    include: {
+      user: { select: { name: true } },
+      shift: { include: { workArea: true } },
+      workArea: true
+    }
   });
 
   // Die Organisatoren erfahren davon - sonst liegt das Angebot in einer Liste,
@@ -76,7 +84,8 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
     select: { id: true }
   });
   if (organisatoren.length > 0) {
-    const bereich = angebot.shift?.workArea?.name;
+    // Bezug auf eine konkrete Schicht ist praeziser als der reine Wunsch-Bereich.
+    const bereich = angebot.shift?.workArea?.name ?? angebot.workArea?.name;
     await notifyUsers(
       organisatoren.map(o => o.id),
       '🙋 Neues Helfer-Angebot',
@@ -102,7 +111,8 @@ export const getShiftOffers = async (req: AuthRequest, res: Response) => {
     orderBy: [{ status: 'asc' }, { date: 'asc' }, { startMin: 'asc' }],
     include: {
       user: { select: { id: true, name: true, email: true } },
-      shift: { include: { workArea: true, day: true } }
+      shift: { include: { workArea: true, day: true } },
+      workArea: true
     }
   });
 
@@ -117,7 +127,7 @@ export const getMyShiftOffers = async (req: AuthRequest, res: Response) => {
   const angebote = await prisma.shiftOffer.findMany({
     where: { userId },
     orderBy: { date: 'asc' },
-    include: { shift: { include: { workArea: true } } }
+    include: { shift: { include: { workArea: true } }, workArea: true }
   });
   return res.json(angebote);
 };

@@ -18,6 +18,14 @@ describe('shiftOfferSchema', () => {
     expect(shiftOfferSchema.safeParse({ ...gueltig, shiftId: 42, note: 'nur bis 12' }).success).toBe(true);
   });
 
+  // workAreaId ist der Wunsch-Bereich, unabhaengig von einer konkreten Schicht -
+  // beide Bezuege duerfen gleichzeitig fehlen, vorkommen oder kombiniert sein.
+  it('nimmt einen Wunsch-Arbeitsbereich unabhängig von shiftId an', () => {
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaId: 7 }).success).toBe(true);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, shiftId: 42, workAreaId: 7 }).success).toBe(true);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaId: null }).success).toBe(true);
+  });
+
   // Der haeufigste Fehlgriff im Formular: Von und Bis vertauscht.
   it('weist eine Endzeit vor der Startzeit zurück', () => {
     const r = shiftOfferSchema.safeParse({ ...gueltig, startMin: 720, endMin: 540 });
