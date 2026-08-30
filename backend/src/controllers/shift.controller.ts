@@ -4,6 +4,7 @@ import prisma from '../config/prisma.js';
 import { notifyUser, notifyUsers } from '../utils/notify.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { protokolliere, datumKurz, zeitKurz } from '../utils/protokoll.js';
+import { minToTime, slotText, benachrichtigeBeiZeitaenderung } from '../utils/schichtzeit.js';
 
 // Hinweis: Das Erzeugen von Shifts erfolgt künftig über die Tag-/Template-basierte
 // Generierung (Etappe 2), nicht mehr über manuelles Anlegen einzelner Slots.
@@ -158,7 +159,7 @@ export const deleteShift = async (req: AuthRequest, res: Response) => {
 export const updateShift = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string);
   const { startMin, endMin, minVolunteers, maxVolunteers, description } = req.body;
-  
+
   if (startMin !== undefined && endMin !== undefined && startMin != null && endMin != null && Number(endMin) <= Number(startMin)) {
     return res.status(400).json({ error: 'Endzeit muss nach der Startzeit liegen.' });
   }
@@ -174,7 +175,7 @@ export const updateShift = async (req: AuthRequest, res: Response) => {
   // die eingeplanten Helfer zu erreichen.
   const vorher = await prisma.shift.findUnique({
     where: { id },
-    include: { daySlot: true, day: true, workArea: true, volunteerShifts: { select: { userId: true } } }
+    include: { daySlot: true, day: true, workArea: true, volunteerShifts: { select: { userId: true, id: true } } }
   });
   if (!vorher) return res.status(404).json({ error: 'Schicht nicht gefunden' });
 
@@ -183,6 +184,19 @@ export const updateShift = async (req: AuthRequest, res: Response) => {
     data,
     include: { day: true, daySlot: true, workArea: true }
   });
+
+  // Aktualisiere die Zeiten aller eingeplanten Helfer, wenn sich die Schichtzeiten geändert haben
+  const altStart = vorher.startMin ?? vorher.daySlot?.startMin ?? null;
+  const altEnde = vorher.endMin ?? vorher.daySlot?.endMin ?? null;
+  const neuStart = updated.startMin ?? updated.daySlot?.startMin ?? null;
+  const neuEnde = updated.endMin ?? updated.daySlot?.endMin ?? null;
+
+  if ((altStart !== neuStart || altEnde !== neuEnde) && neuStart != null && neuEnde != null && vorher.volunteerShifts.length > 0) {
+    await prisma.volunteerShift.updateMany({
+      where: { shiftId: id },
+      data: { slot: slotText(neuStart, neuEnde) }
+    });
+  }
 
   await benachrichtigeBeiZeitaenderung(vorher, updated);
   await protokolliereSchichtaenderung(vorher, updated, req.userId);
@@ -231,47 +245,6 @@ async function protokolliereSchichtaenderung(
 }
 
 /**
- * Meldet eine verschobene Schicht an die bereits eingeplanten Helfer.
- *
- * Nur bei tatsaechlich geaenderter Uhrzeit - ein Speichern ohne Zeitwechsel
- * (etwa nur die Helferzahl) soll niemanden behelligen. Die effektive Zeit
- * kann aus der Schicht selbst oder ersatzweise aus dem Slot kommen, deshalb
- * wird sie hier genauso aufgeloest wie in der Anzeige.
- */
-async function benachrichtigeBeiZeitaenderung(
-  vorher: { startMin: number | null; endMin: number | null; daySlot?: { startMin: number; endMin: number } | null; day?: { date: Date } | null; workArea?: { name: string } | null; volunteerShifts: { userId: number | null }[] },
-  nachher: { startMin: number | null; endMin: number | null; daySlot?: { startMin: number; endMin: number } | null }
-): Promise<void> {
-  const altStart = vorher.startMin ?? vorher.daySlot?.startMin ?? null;
-  const altEnde = vorher.endMin ?? vorher.daySlot?.endMin ?? null;
-  const neuStart = nachher.startMin ?? nachher.daySlot?.startMin ?? null;
-  const neuEnde = nachher.endMin ?? nachher.daySlot?.endMin ?? null;
-  if (altStart === neuStart && altEnde === neuEnde) return;
-
-  const betroffene = vorher.volunteerShifts.map(vs => vs.userId).filter((id): id is number => id != null);
-  if (betroffene.length === 0) return;
-
-  const bereich = vorher.workArea?.name || 'Deine Schicht';
-  const datum = vorher.day?.date ? new Date(vorher.day.date).toLocaleDateString('de-DE') : '';
-  const alt = altStart != null && altEnde != null ? `${minToTime(altStart)}-${minToTime(altEnde)}` : 'bisher';
-  const neu = neuStart != null && neuEnde != null ? `${minToTime(neuStart)}-${minToTime(neuEnde)}` : 'neu';
-
-  await notifyUsers(
-    betroffene,
-    'Schicht verschoben',
-    ({ vertretend, name }) => vertretend
-      ? `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neu} (vorher ${alt}). Bitte prüfe, ob das für ${name} passt.`
-      : `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neu} (vorher ${alt}). Bitte prüfe, ob das für dich passt.`,
-    '/'
-  );
-}
-
-/** Minuten seit Mitternacht → "HH:MM". */
-function minToTime(m: number): string {
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
-/**
  * Übernimmt mehrere Zeit-Änderungen als eine Business-Transaktion (Editiermodus
  * im Dienstplan): entweder werden alle Schichten aktualisiert, oder keine.
  * Verhindert einen Teil-Zustand, falls z. B. Schicht 3 von 5 an einer
@@ -282,18 +255,42 @@ export const updateShiftsBatch = async (req: AuthRequest, res: Response) => {
 
   const vorherListe = await prisma.shift.findMany({
     where: { id: { in: changes.map(c => c.id) } },
-    include: { daySlot: true, day: true, workArea: true, volunteerShifts: { select: { userId: true } } }
+    include: { daySlot: true, day: true, workArea: true, volunteerShifts: { select: { userId: true, id: true } } }
   });
 
-  const updated = await prisma.$transaction(
-    changes.map(c =>
-      prisma.shift.update({
+  // Sequenziell statt Promise.all: SQLite kennt nur einen Schreiber, und
+  // parallele Queries auf derselben Transaktions-Connection kaufen hier nichts.
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = [];
+
+    for (const c of changes) {
+      const nachher = await tx.shift.update({
         where: { id: c.id },
         data: { startMin: c.startMin, endMin: c.endMin },
         include: { day: true, daySlot: true, workArea: true }
-      })
-    )
-  );
+      });
+      result.push(nachher);
+
+      // Die gespeicherte Zeit der eingeplanten Helfer mitziehen - sonst zeigt
+      // die Uebersicht weiter die Zeit von vor der Verschiebung.
+      const vorher = vorherListe.find(v => v.id === nachher.id);
+      if (!vorher || vorher.volunteerShifts.length === 0) continue;
+
+      const altStart = vorher.startMin ?? vorher.daySlot?.startMin ?? null;
+      const altEnde = vorher.endMin ?? vorher.daySlot?.endMin ?? null;
+      const neuStart = nachher.startMin ?? nachher.daySlot?.startMin ?? null;
+      const neuEnde = nachher.endMin ?? nachher.daySlot?.endMin ?? null;
+      if (altStart === neuStart && altEnde === neuEnde) continue;
+      if (neuStart == null || neuEnde == null) continue;
+
+      await tx.volunteerShift.updateMany({
+        where: { shiftId: nachher.id },
+        data: { slot: slotText(neuStart, neuEnde) }
+      });
+    }
+
+    return result;
+  });
 
   // Erst nach der Transaktion benachrichtigen: schlaegt sie fehl, wurde nichts
   // geaendert und es darf auch nichts gemeldet werden.
