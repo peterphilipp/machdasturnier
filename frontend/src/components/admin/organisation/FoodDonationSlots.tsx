@@ -56,6 +56,9 @@ export default function FoodDonationSlots({ selectedTournament, tournament, admi
   // plus Bearbeiten/Löschen des Ziels selbst).
   const [selectedSlotDetail, setSelectedSlotDetail] = useState<FoodDonationSlot | null>(null);
 
+  // Welche Artikel in der zusammengefassten Ansicht nach Jahrgang aufgeklappt sind.
+  const [aufgeklappt, setAufgeklappt] = useState<Set<number>>(new Set());
+
   const resetSlotForm = () => setSlotForm({ yearGroupIds: [], categoryId: 0, foodItemId: 0, targetQuantity: 0, description: '' });
 
   const openEditSlot = (slot: FoodDonationSlot) => {
@@ -118,6 +121,49 @@ export default function FoodDonationSlots({ selectedTournament, tournament, admi
     }
   };
 
+  /**
+   * Ein Artikel über alle Jahrgänge zusammengefasst - das mobile Gegenstück
+   * zur "Gesamt"-Spalte der Desktop-Matrix.
+   *
+   * Ohne Jahrgangsfilter zeigte die Kartenliste dasselbe Ziel so oft, wie es
+   * Jahrgänge gibt ("Kuchen 2017", "Kuchen 2019", "Kuchen 2020") - man musste
+   * im Kopf addieren, um zu wissen, ob genug Kuchen zusammenkommt.
+   */
+  const artikelZusammenfassung = useMemo(() => {
+    const passend = slots.filter(s => !filterCategory || s.foodItem?.categoryId === filterCategory);
+    const proArtikel = new Map<number, {
+      id: number; name: string; icon: string; unit: string;
+      ziel: number; gesammelt: number; spenden: number;
+      jahrgaenge: { slot: FoodDonationSlot; name: string }[];
+    }>();
+
+    for (const slot of passend) {
+      const key = slot.foodItem?.id ?? -1;
+      if (!proArtikel.has(key)) {
+        proArtikel.set(key, {
+          id: key,
+          name: slot.foodItem?.name || 'Unbekannt',
+          icon: slot.foodItem?.category?.icon || '🍽️',
+          unit: slot.foodItem?.unit || 'Stk',
+          ziel: 0, gesammelt: 0, spenden: 0, jahrgaenge: []
+        });
+      }
+      const eintrag = proArtikel.get(key)!;
+      eintrag.ziel += slot.targetQuantity;
+      eintrag.gesammelt += slot.collected;
+      eintrag.spenden += foodDonations.filter(d => d.foodDonationSlotId === slot.id).length;
+      eintrag.jahrgaenge.push({ slot, name: slot.yearGroup?.name || 'Ohne Jahrgang' });
+    }
+
+    // Offene Ziele zuerst: Was noch fehlt, gehoert nach oben.
+    return [...proArtikel.values()]
+      .map(a => ({ ...a, jahrgaenge: a.jahrgaenge.sort((x, y) => x.name.localeCompare(y.name)) }))
+      .sort((a, b) => {
+        const offenA = a.ziel - a.gesammelt, offenB = b.ziel - b.gesammelt;
+        return offenB - offenA || a.name.localeCompare(b.name);
+      });
+  }, [slots, foodDonations, filterCategory]);
+
   if (!selectedTournament) {
     return <div style={{ padding: 24, background: '#fff', borderRadius: 16 }}>Bitte wähle zunächst oben ein Turnier aus.</div>;
   }
@@ -156,6 +202,7 @@ export default function FoodDonationSlots({ selectedTournament, tournament, admi
     }
     return { target, collected };
   };
+
 
   const formContent = (
     <div style={{ background: '#f8f9fa', padding: 20, borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -316,6 +363,88 @@ export default function FoodDonationSlots({ selectedTournament, tournament, admi
 
       {slots.length === 0 ? (
         <div style={{ textAlign: 'center', color: '#6c757d', padding: 20, lineHeight: 1.6, fontSize: 14 }}>Noch keine Verpflegungs-Ziele angelegt.<br /><span style={{ fontSize: 13 }}>Lege je Jahrgang fest, welcher Artikel in welcher Menge gebraucht wird – die Eltern sehen im Self-Service nur die Ziele ihres eigenen Jahrgangs und sagen dort zu.</span></div>
+      ) : isMobile && !filterYear ? (
+        /* Ohne Jahrgangsfilter zählt die Gesamtmenge: "Reicht der Kuchen?"
+           lässt sich nicht beantworten, wenn dasselbe Ziel je Jahrgang
+           einzeln dasteht. Wer es aufgeschlüsselt braucht, klappt auf. */
+        <div className="mobile-food-cards-list">
+          {artikelZusammenfassung.map(a => {
+            const fertig = a.gesammelt >= a.ziel;
+            const fortschritt = a.ziel > 0 ? Math.min(100, Math.round((a.gesammelt / a.ziel) * 100)) : 0;
+            const offen = aufgeklappt.has(a.id);
+            return (
+              <div key={a.id} className="mobile-food-card">
+                <div className="mobile-food-card-header">
+                  <div className="mobile-food-card-title">{a.icon} {a.name}</div>
+                  <span className="mobile-food-card-year">
+                    {a.jahrgaenge.length} {a.jahrgaenge.length === 1 ? 'Jahrgang' : 'Jahrgänge'}
+                  </span>
+                </div>
+                <div className="mobile-progress-container">
+                  <div className="mobile-progress-track">
+                    <div
+                      className="mobile-progress-fill"
+                      style={{
+                        width: `${fortschritt}%`,
+                        background: fertig ? '#198754' : fortschritt > 0 ? '#ffc107' : '#adb5bd'
+                      }}
+                    />
+                  </div>
+                  <div className="mobile-progress-text">
+                    <span>{a.gesammelt} von {a.ziel} {a.unit}</span>
+                    <span>{fortschritt}%</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setAufgeklappt(prev => {
+                    const neu = new Set(prev);
+                    neu.has(a.id) ? neu.delete(a.id) : neu.add(a.id);
+                    return neu;
+                  })}
+                  aria-expanded={offen}
+                  style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    width: '100%', marginTop: 8, paddingTop: 8, border: 'none', background: 'transparent',
+                    borderTop: '1px dashed #e9ecef', fontSize: 12, cursor: 'pointer', minHeight: 36
+                  }}
+                >
+                  <span style={{ color: '#6c757d' }}>💬 {a.spenden} Spenden</span>
+                  <span style={{ color: adminPrimary, fontWeight: 'bold' }}>
+                    {offen ? 'Jahrgänge ausblenden ⌃' : 'nach Jahrgang ⌄'}
+                  </span>
+                </button>
+
+                {offen && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {a.jahrgaenge.map(({ slot, name }) => {
+                      const jgFertig = slot.collected >= slot.targetQuantity;
+                      return (
+                        <button
+                          key={slot.id}
+                          type="button"
+                          onClick={() => setSelectedSlotDetail(slot)}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            gap: 8, padding: '8px 10px', minHeight: 40,
+                            border: '1px solid #e9ecef', borderRadius: 8, background: '#f8f9fa',
+                            fontSize: 13, cursor: 'pointer', textAlign: 'left'
+                          }}
+                        >
+                          <span>{name}</span>
+                          <span style={{ color: jgFertig ? '#198754' : '#664d03', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+                            {slot.collected} / {slot.targetQuantity} {slot.foodItem?.unit || 'Stk'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : isMobile ? (
         <div className="mobile-food-cards-list">
           {slots
