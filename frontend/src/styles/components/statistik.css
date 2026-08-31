@@ -396,3 +396,43 @@
   padding-top: var(--spacing-3);
   border-top: 1px dashed var(--border-color);
 }
+
+/* ---- Dialog zum Zeitangebot (aus dem Gantt heraus) --------------------- */
+.angebot-dialog-daten {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--spacing-2) var(--spacing-4);
+  margin: 0;
+  font-size: var(--font-size-sm);
+}
+.angebot-dialog-daten dt {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  align-self: center;
+}
+.angebot-dialog-daten dd {
+  margin: 0;
+  color: var(--text-main);
+}
+
+.angebot-dialog-fuss {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+/* Zurueckhaltend: die einzige Aktion im Dialog, die nichts rueckgaengig macht. */
+.angebot-dialog-loeschen {
+  background: none;
+  border: none;
+  color: #b02a37;
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 var(--spacing-2);
+}
+.angebot-dialog-loeschen:disabled { opacity: 0.5; cursor: default; }

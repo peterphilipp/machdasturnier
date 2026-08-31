@@ -38,7 +38,19 @@ const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${St
 const tagKurz = (iso: string) =>
   new Date(iso).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 
-export default function Zeitangebote({ selectedTournament }: { selectedTournament: number | null }) {
+export default function Zeitangebote({
+  selectedTournament,
+  nurTageOhneDiagramm
+}: {
+  selectedTournament: number | null;
+  /**
+   * Tage, die bereits ein Gantt haben. Deren Angebote werden dort direkt
+   * entschieden und hier weggelassen - sonst stuende dasselbe zweimal auf
+   * der Seite. Ohne diese Angabe (oder auf dem Handy, wo es kein Diagramm
+   * gibt) zeigt die Liste alles.
+   */
+  nurTageOhneDiagramm?: Set<string>;
+}) {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<number | null>(null);
   // Optionale Rueckmeldung je Angebot. Direkt in der Karte statt im Dialog:
@@ -54,8 +66,13 @@ export default function Zeitangebote({ selectedTournament }: { selectedTournamen
     enabled: !!selectedTournament
   });
 
-  const offene = angebote.filter(a => a.status === 'OFFEN');
-  const erledigte = angebote.filter(a => a.status !== 'OFFEN');
+  // Was im Diagramm des jeweiligen Tages steht, braucht hier keine zweite Zeile.
+  const sichtbar = nurTageOhneDiagramm
+    ? angebote.filter(a => !nurTageOhneDiagramm.has(new Date(a.date).toLocaleDateString('de-DE')))
+    : angebote;
+
+  const offene = sichtbar.filter(a => a.status === 'OFFEN');
+  const erledigte = sichtbar.filter(a => a.status !== 'OFFEN');
 
   const entscheide = async (a: Angebot, status: 'ANGENOMMEN' | 'ABGELEHNT') => {
     const wann = `${tagKurz(a.date)} ${hhmm(a.startMin)}–${hhmm(a.endMin)}`;
@@ -86,7 +103,7 @@ export default function Zeitangebote({ selectedTournament }: { selectedTournamen
   // Nichts zu zeigen: kein Turnier, oder schlicht keine Angebote - beides
   // heisst hier "keine Ausgabe", die "leer, aber sichtbar"-Karte lohnt sich
   // nur, wenn tatsaechlich etwas ansteht oder anstand.
-  if (!selectedTournament || angebote.length === 0) return null;
+  if (!selectedTournament || sichtbar.length === 0) return null;
 
   /** Der Bezug zur Schicht ist praeziser als die Wunschliste - er gewinnt. */
   const bereicheVon = (a: Angebot): string =>

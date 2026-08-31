@@ -12,6 +12,7 @@ import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
 import Zeitangebote from './Zeitangebote';
 import AngeboteTimeline, { TimelineAngebot } from './AngeboteTimeline';
+import AngebotDialog from './AngebotDialog';
 import StationPrintModal from './StationPrintModal';
 import { Ladefehler } from '../../Verbindung';
 import PersonenAuswahl from '../PersonenAuswahl';
@@ -51,6 +52,8 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
    * (Personen) - letzteres macht Doppelbelegungen und knappe Wechsel sichtbar.
    */
   const [ganttSicht, setGanttSicht] = useState<'bereich' | 'person'>('bereich');
+  // Angeklicktes Zeitangebot im Gantt - der Dialog entscheidet darueber.
+  const [gewaehltesAngebot, setGewaehltesAngebot] = useState<TimelineAngebot | null>(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const queryClient = useQueryClient();
   const windowWidth = useWindowWidth();
@@ -558,6 +561,13 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
     grouped[dateKey].push(slot);
   });
 
+  /**
+   * Tage, fuer die es ein Gantt gibt - dort werden die Angebote direkt im
+   * Diagramm entschieden. Auf dem Handy rendert die Uebersicht Karten statt
+   * eines Diagramms; dann bleibt die Liste der einzige Weg und bekommt alles.
+   */
+  const tageMitDiagramm = isMobile ? new Set<string>() : new Set(Object.keys(grouped));
+
   const unbesetzteSlots = jobSlots.filter(s => {
     const count = volunteerShifts.filter(vs => vs.shiftId === s.id).length;
     return count < s.maxVolunteers;
@@ -957,6 +967,7 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
                   angebote={angeboteDesTages}
                   globalStartMin={globalStartMin}
                   globalEndMin={globalEndMin}
+                  onAngebotClick={setGewaehltesAngebot}
                 />
                 </Fragment>
               );
@@ -967,8 +978,18 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
 
       {/* Modal für Helfer-Details */}
       {/* Nach dem Dienstplan: Die Angebote sind erst dann interessant, wenn man
-          gesehen hat, wo Luecken sind - vorher fehlt der Bezug. */}
-      {tid && <Zeitangebote selectedTournament={tid} />}
+          gesehen hat, wo Luecken sind - vorher fehlt der Bezug. Die Liste zeigt
+          nur noch, was in keinem Tages-Diagramm auftaucht (Tage ohne
+          Schichten); alles andere wird direkt im Gantt entschieden. */}
+      {tid && <Zeitangebote selectedTournament={tid} nurTageOhneDiagramm={tageMitDiagramm} />}
+
+      {gewaehltesAngebot && (
+        <AngebotDialog
+          angebot={gewaehltesAngebot}
+          tournamentId={tid}
+          onClose={() => setGewaehltesAngebot(null)}
+        />
+      )}
 
       {selectedShift && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? 0 : 20 }}>

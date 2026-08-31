@@ -5,7 +5,10 @@ import { AuthRequest } from '../middleware/auth.js';
 import { notifyUsers, notifyUser } from '../utils/notify.js';
 import { protokolliere, datumKurz } from '../utils/protokoll.js';
 import { minToTime } from '../utils/schichtzeit.js';
-import { ROLES } from '../utils/roles.js';
+import { ROLES, hasAdminAccess } from '../utils/roles.js';
+import { getUserRoles } from '../utils/userRoles.js';
+import { effektiveZeit } from '../utils/schichtzeit.js';
+import { findeKonflikt, konfliktMeldung, utcTag, Belegung } from '../utils/zeitueberschneidung.js';
 
 /**
  * Zeitangebote von Helfern.
@@ -43,6 +46,64 @@ export const entscheidungSchema = z.object({
 
 const zeitraum = (startMin: number, endMin: number) => `${minToTime(startMin)}-${minToTime(endMin)}`;
 
+/**
+ * Sammelt, womit der Helfer an diesem Tag bereits belegt ist, und sucht die
+ * erste Ueberschneidung mit dem gewuenschten Zeitraum.
+ *
+ * Zaehlt beides: bestehende Einplanungen und bereits angenommene Angebote.
+ * Ein abgelehntes oder noch offenes Angebot blockiert bewusst nicht - offen
+ * heisst, es koennte noch abgelehnt werden.
+ */
+async function findeBelegungsKonflikt(
+  userId: number,
+  tournamentId: number,
+  datum: Date,
+  startMin: number,
+  endMin: number
+): Promise<Belegung | null> {
+  const tag = utcTag(datum);
+
+  const [einplanungen, zusagen] = await Promise.all([
+    prisma.volunteerShift.findMany({
+      where: { userId, tournamentId },
+      include: { shift: { include: { daySlot: true, day: true, workArea: true } } }
+    }),
+    prisma.shiftOffer.findMany({
+      where: { userId, tournamentId, status: 'ANGENOMMEN' }
+    })
+  ]);
+
+  const belegungen: Belegung[] = [];
+
+  for (const vs of einplanungen) {
+    if (!vs.shift) continue;
+    const { start, ende } = effektiveZeit(vs.shift, vs.shift.daySlot);
+    if (start == null || ende == null) continue;
+    // Der Tag der Schicht, nicht der des Eintrags - massgeblich ist, wann
+    // tatsaechlich gearbeitet wird.
+    const schichtTag = vs.shift.day?.date ? utcTag(vs.shift.day.date) : utcTag(vs.date);
+    belegungen.push({
+      art: 'schicht',
+      tag: schichtTag,
+      startMin: start,
+      endMin: ende,
+      bezeichnung: vs.shift.workArea?.name || vs.role || 'Schicht'
+    });
+  }
+
+  for (const z of zusagen) {
+    belegungen.push({
+      art: 'angebot',
+      tag: utcTag(z.date),
+      startMin: z.startMin,
+      endMin: z.endMin,
+      bezeichnung: 'dein angenommenes Angebot'
+    });
+  }
+
+  return findeKonflikt({ tag, startMin, endMin }, belegungen);
+}
+
 /** Ein Helfer bietet Zeit an. Laeuft ueber das eigene Konto, nicht ueber Admin. */
 export const createShiftOffer = async (req: AuthRequest, res: Response) => {
   const userId = req.userId;
@@ -60,6 +121,14 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
     }
   });
   if (schonDa) return res.status(200).json(schonDa);
+
+  // Nicht anbieten, was schon vergeben ist: Wer zur selben Stunde eingeplant
+  // ist oder bereits eine Zusage hat, wuerde den Organisatoren als zweiter
+  // Helfer erscheinen, obwohl es derselbe ist.
+  const konflikt = await findeBelegungsKonflikt(userId, tournamentId, new Date(date), startMin, endMin);
+  if (konflikt) {
+    return res.status(409).json({ error: konfliktMeldung(konflikt) });
+  }
 
   const angebot = await prisma.shiftOffer.create({
     data: {
@@ -196,18 +265,82 @@ export const entscheideShiftOffer = async (req: AuthRequest, res: Response) => {
   return res.json(angebot);
 };
 
-/** Zurueckziehen durch den Helfer selbst - solange noch nicht entschieden. */
+/**
+ * Entfernen eines Angebots.
+ *
+ * Zwei Faelle mit unterschiedlichen Regeln:
+ *  - Der Helfer zieht sein eigenes zurueck, solange nicht entschieden wurde.
+ *  - Die Organisatoren raeumen auf, auch Entschiedenes: ein angenommenes
+ *    Angebot ist erledigt, sobald die Schicht eingetragen ist, und soll dann
+ *    nicht dauerhaft in der Ansicht stehenbleiben.
+ */
 export const deleteShiftOffer = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string, 10);
-  const angebot = await prisma.shiftOffer.findUnique({ where: { id } });
+  const angebot = await prisma.shiftOffer.findUnique({
+    where: { id },
+    include: { user: { select: { name: true } } }
+  });
   if (!angebot) return res.status(404).json({ error: 'Angebot nicht gefunden' });
-  if (angebot.userId !== req.userId) {
-    return res.status(403).json({ error: 'Das ist nicht dein Angebot.' });
-  }
-  if (angebot.status !== 'OFFEN') {
-    return res.status(409).json({ error: 'Über dieses Angebot wurde bereits entschieden.' });
+
+  const rollen = req.userId ? await getUserRoles(req.userId) : [];
+  const istOrganisator = hasAdminAccess(rollen);
+
+  if (!istOrganisator) {
+    if (angebot.userId !== req.userId) {
+      return res.status(403).json({ error: 'Das ist nicht dein Angebot.' });
+    }
+    if (angebot.status !== 'OFFEN') {
+      return res.status(409).json({ error: 'Über dieses Angebot wurde bereits entschieden.' });
+    }
   }
 
   await prisma.shiftOffer.delete({ where: { id } });
+
+  // Nur protokollieren, wenn jemand ein fremdes Angebot entfernt - das eigene
+  // Zurueckziehen ist Alltag und muss den Verlauf nicht fuellen.
+  if (istOrganisator && angebot.userId !== req.userId) {
+    await protokolliere({
+      tournamentId: angebot.tournamentId,
+      userId: req.userId,
+      art: 'helfer',
+      beschreibung: `hat das Zeitangebot von ${angebot.user?.name ?? 'einem Helfer'} `
+        + `für ${datumKurz(angebot.date)} ${zeitraum(angebot.startMin, angebot.endMin)} entfernt`,
+      objektTyp: 'shift',
+      objektId: angebot.shiftId
+    });
+  }
+
   return res.status(204).send();
+};
+
+/**
+ * Eine Entscheidung zuruecknehmen - das Angebot ist wieder offen.
+ *
+ * Ohne diesen Weg waere ein Fehlgriff endgueltig: einmal abgelehnt, koennte
+ * der Helfer nur ueber ein neues Angebot wieder ins Spiel kommen, und das
+ * kann er nach einer Absage kaum ahnen.
+ */
+export const oeffneShiftOffer = async (req: AuthRequest, res: Response) => {
+  const id = parseInt(req.params.id as string, 10);
+  const vorher = await prisma.shiftOffer.findUnique({ where: { id } });
+  if (!vorher) return res.status(404).json({ error: 'Angebot nicht gefunden' });
+  if (vorher.status === 'OFFEN') return res.json(vorher);
+
+  const angebot = await prisma.shiftOffer.update({
+    where: { id },
+    data: { status: 'OFFEN', decidedById: null, decidedAt: null, decisionNote: null },
+    include: { user: { select: { id: true, name: true } }, workAreas: true }
+  });
+
+  await protokolliere({
+    tournamentId: angebot.tournamentId,
+    userId: req.userId,
+    art: 'helfer',
+    beschreibung: `hat die Entscheidung zum Zeitangebot von ${angebot.user?.name ?? 'einem Helfer'} `
+      + `für ${datumKurz(angebot.date)} ${zeitraum(angebot.startMin, angebot.endMin)} zurückgenommen`,
+    objektTyp: 'shift',
+    objektId: angebot.shiftId
+  });
+
+  return res.json(angebot);
 };

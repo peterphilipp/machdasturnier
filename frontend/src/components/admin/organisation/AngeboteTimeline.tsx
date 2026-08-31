@@ -23,6 +23,8 @@ export interface TimelineAngebot {
   endMin: number;
   note: string | null;
   status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
+  decisionNote?: string | null;
+  decidedAt?: string | null;
   user?: { id: number; name: string } | null;
   shift?: { workArea?: { name?: string; icon?: string } | null } | null;
   workAreas?: { name?: string; icon?: string }[];
@@ -111,7 +113,7 @@ export default function AngeboteTimeline({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <span style={{ fontWeight: 600, fontSize: 15, color: '#212557' }}>🙋 Zeitangebote an diesem Tag</span>
         <span style={{ fontSize: 13, color: '#64748b' }}>
-          Gleiche Zeitachse wie oben – was hier liegt, könnte die Lücke darüber füllen.
+          Gleiche Zeitachse wie oben – was hier liegt, könnte die Lücke darüber füllen. Balken antippen zum Entscheiden.
         </span>
       </div>
 
