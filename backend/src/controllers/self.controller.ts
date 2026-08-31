@@ -8,6 +8,7 @@ import { getVapidPublicKey as getPubKey } from '../utils/push.js';
 import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
 import { isTrainer } from '../utils/roles.js';
 import { getUserRoles } from '../utils/userRoles.js';
+import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
 
 // Öffentliche Self-Service-Endpunkte: Body-Formen entsprechen exakt dem, was
 // das Frontend sendet (SelfServiceView.tsx / utils/push.ts) - hier werden nur
@@ -501,7 +502,7 @@ export const getTrainerDashboard = async (req: Request, res: Response) => {
       // trainedYearGroups MUSS mit: das Frontend liest es ohne Guard aus, ein
       // Fehlen wuerde die Ansicht mit einem TypeError abschiessen - und genau
       // dieser Fall (Trainer noch ohne Jahrgang) ist der Erstzustand.
-      return res.json({ trainedYearGroups: [], foodDonationSlots: [], volunteerShifts: [] });
+      return res.json({ trainedYearGroups: [], foodDonationSlots: [], volunteerShifts: [], beteiligung: [] });
     }
 
     // 1. Verpflegungsspenden für diese Jahrgänge
@@ -571,10 +572,75 @@ export const getTrainerDashboard = async (req: Request, res: Response) => {
       return { ...vs, user: vs.user ? userOhneKinder : vs.user, yearGroupIds };
     });
 
+    /**
+     * Beteiligung der eigenen Jahrgaenge - wer traegt, wer war noch nicht dabei.
+     *
+     * Dieselbe Rechnung wie im Organisatoren-Bereich, damit beide Seiten
+     * dieselben Zahlen sehen. Anschliessend hart auf die betreuten Jahrgaenge
+     * gefiltert: Ein Trainer soll seinen Jahrgang kennen, nicht die anderen.
+     *
+     * Ohne Turnierbezug bleibt es leer - eine Beteiligung ueber alle Turniere
+     * hinweg waere keine Aussage, sondern eine Vermischung.
+     */
+    let beteiligung: unknown[] = [];
+    if (tid) {
+      const [alleShifts, alleEinplanungen, mitglieder] = await Promise.all([
+        prisma.shift.findMany({
+          where: { tournamentId: tid },
+          include: { daySlot: true, day: true, workArea: true }
+        }),
+        prisma.volunteerShift.findMany({
+          where: { tournamentId: tid },
+          include: {
+            user: {
+              select: {
+                id: true, name: true,
+                children: { select: { childYear: true } },
+                trainedYearGroups: { select: { id: true } }
+              }
+            }
+          }
+        }),
+        prisma.user.findMany({
+          where: {
+            OR: [
+              { tournamentMemberships: { some: { tournamentId: tid } } },
+              { tournamentId: tid }
+            ]
+          },
+          select: {
+            id: true, name: true, phone: true,
+            children: { select: { childYear: true } },
+            trainedYearGroups: { select: { id: true } }
+          }
+        })
+      ]);
+
+      const statistik = berechneTurnierStatistik(
+        alleShifts, alleEinplanungen, user.trainedYearGroups, mitglieder
+      );
+
+      // Telefonnummern nur fuer die Unbeteiligten der eigenen Jahrgaenge -
+      // die Aktiven tragen sie ohnehin schon in der Schichtliste. Wer
+      // angesprochen werden soll, soll auch erreichbar sein.
+      const telefonBuch = new Map(mitglieder.map(m => [m.id, m.phone]));
+
+      beteiligung = statistik.jahrgaenge.liste
+        .filter(j => yearGroupIds.includes(j.id))
+        .map(j => ({
+          ...j,
+          ohneBeteiligung: j.ohneBeteiligung.map(pp => ({
+            ...pp,
+            phone: telefonBuch.get(pp.userId) ?? null
+          }))
+        }));
+    }
+
     return res.json({
       trainedYearGroups: user.trainedYearGroups,
       foodDonationSlots,
-      volunteerShifts: shiftsMitJahrgang
+      volunteerShifts: shiftsMitJahrgang,
+      beteiligung
     });
   } catch (error) {
     console.error('Error in getTrainerDashboard:', error);

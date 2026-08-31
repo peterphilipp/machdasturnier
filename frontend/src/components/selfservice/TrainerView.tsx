@@ -11,12 +11,26 @@ interface LayoutContext {
   selectedTournamentId: number | null;
 }
 
-type Bereich = 'jobs' | 'verpflegung';
+type Bereich = 'jobs' | 'verpflegung' | 'beteiligung';
+
+interface Beteiligung {
+  id: number;
+  name: string;
+  helfer: number;
+  schichten: number;
+  stunden: number;
+  kinder: number;
+  stundenProKind: number | null;
+  personen: { userId: number; name: string; schichten: number; stunden: number }[];
+  ohneBeteiligung: { userId: number; name: string; phone: string | null }[];
+  lastAnteilObereHaelfte: number | null;
+}
 
 interface TrainerData {
   trainedYearGroups: { id: number; name: string }[];
   foodDonationSlots: any[];
   volunteerShifts: any[];
+  beteiligung?: Beteiligung[];
 }
 
 const minToTime = (min: number | null | undefined) => {
@@ -92,6 +106,7 @@ export default function TrainerView() {
 
   const slotsDesJahrgangs = (data?.foodDonationSlots || []).filter(s => s.yearGroupId === jahrgangId);
   const schichtenDesJahrgangs = (data?.volunteerShifts || []).filter(vs => (vs.yearGroupIds || []).includes(jahrgangId));
+  const beteiligungDesJahrgangs = (data?.beteiligung || []).find(b => b.id === jahrgangId) ?? null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -169,6 +184,11 @@ export default function TrainerView() {
               className={`dashboard-pill-tab ${bereich === 'verpflegung' ? 'active' : ''}`}
               style={{ background: bereich === 'verpflegung' ? clubSecondary : 'var(--bg-surface)', color: bereich === 'verpflegung' ? '#fff' : 'var(--text-muted)' }}
             >🍔 Verpflegung ({slotsDesJahrgangs.length})</button>
+            <button
+              onClick={() => setBereich('beteiligung')}
+              className={`dashboard-pill-tab ${bereich === 'beteiligung' ? 'active' : ''}`}
+              style={{ background: bereich === 'beteiligung' ? clubSecondary : 'var(--bg-surface)', color: bereich === 'beteiligung' ? '#fff' : 'var(--text-muted)' }}
+            >📊 Beteiligung</button>
           </div>
 
           <section style={{ display: bereich === 'verpflegung' ? 'block' : 'none' }}>
@@ -256,6 +276,95 @@ export default function TrainerView() {
               </div>
             ) : (
               <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Noch keine Schichten von Eltern dieses Jahrgangs übernommen.</p>
+            )}
+          </section>
+
+          {/* Beteiligung: beantwortet eine andere Frage als die Schichtliste -
+              nicht "wer macht wann was", sondern "wie verteilt sich die Last
+              und wen kann ich noch fragen". */}
+          <section style={{ display: bereich === 'beteiligung' ? 'block' : 'none' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 17, color: 'var(--text-main)' }}>Beteiligung im Jahrgang</h3>
+
+            {!beteiligungDesJahrgangs ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                Für diesen Jahrgang liegen noch keine Zahlen vor.
+              </p>
+            ) : (
+              <div className="trainer-beteiligung">
+                <div className="trainer-kennzahlen">
+                  <div className="trainer-kennzahl">
+                    <span className="trainer-kennzahl-wert">{beteiligungDesJahrgangs.helfer}</span>
+                    <span className="trainer-kennzahl-label">Eltern im Einsatz</span>
+                  </div>
+                  <div className="trainer-kennzahl">
+                    <span className="trainer-kennzahl-wert">
+                      {beteiligungDesJahrgangs.stunden.toLocaleString('de-DE')} h
+                    </span>
+                    <span className="trainer-kennzahl-label">Stunden gesamt</span>
+                  </div>
+                  {beteiligungDesJahrgangs.stundenProKind !== null && (
+                    <div className="trainer-kennzahl">
+                      <span className="trainer-kennzahl-wert">
+                        {beteiligungDesJahrgangs.stundenProKind.toLocaleString('de-DE')} h
+                      </span>
+                      <span className="trainer-kennzahl-label">je Kind</span>
+                    </div>
+                  )}
+                </div>
+
+                {beteiligungDesJahrgangs.lastAnteilObereHaelfte !== null && (
+                  <p className="trainer-hinweis">
+                    Die aktivere Hälfte trägt{' '}
+                    <strong>{beteiligungDesJahrgangs.lastAnteilObereHaelfte} %</strong> der Stunden.
+                  </p>
+                )}
+
+                <h4 className="trainer-untertitel">
+                  Wer mitgemacht hat ({beteiligungDesJahrgangs.personen.length})
+                </h4>
+                <ol className="trainer-liste">
+                  {beteiligungDesJahrgangs.personen.map(pp => (
+                    <li key={pp.userId}>
+                      <span>{pp.name}</span>
+                      <span className="trainer-liste-wert">
+                        {pp.stunden.toLocaleString('de-DE')} h · {pp.schichten} Sch.
+                      </span>
+                    </li>
+                  ))}
+                  {beteiligungDesJahrgangs.personen.length === 0 && (
+                    <li style={{ color: 'var(--text-muted)' }}>noch niemand</li>
+                  )}
+                </ol>
+
+                <h4 className="trainer-untertitel">
+                  Noch nicht dabei ({beteiligungDesJahrgangs.ohneBeteiligung.length})
+                </h4>
+                {beteiligungDesJahrgangs.ohneBeteiligung.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                    Alle erfassten Familien dieses Jahrgangs haben etwas übernommen.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="trainer-liste trainer-liste--offen">
+                      {beteiligungDesJahrgangs.ohneBeteiligung.map(pp => (
+                        <li key={pp.userId}>
+                          <span>{pp.name}</span>
+                          {pp.phone && (
+                            <a href={`tel:${pp.phone}`} className="trainer-anruf" style={{ color: clubPrimary }}>
+                              📞 {pp.phone}
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="trainer-hinweis">
+                      Als Gesprächsgrundlage gedacht – wer hier steht, wurde vielleicht schlicht
+                      noch nicht gefragt. Aufgeführt sind nur Familien mit Konto und hinterlegtem
+                      Kind; wer beides nicht hat, fehlt in der Liste.
+                    </p>
+                  </>
+                )}
+              </div>
             )}
           </section>
         </>

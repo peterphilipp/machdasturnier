@@ -1022,3 +1022,86 @@
   color: var(--text-inverse);
   font-weight: var(--font-weight-bold);
 }
+
+/* ---- Trainer: Beteiligung im Jahrgang ---------------------------------
+   Eigene Klassen statt der Statistik-Styles: Der Trainer-Bereich gehört zum
+   Self-Service und wird fast nur auf dem Handy geöffnet - eine Tabelle wie
+   im Organisatoren-Bereich wäre dort der falsche Zuschnitt. */
+.trainer-beteiligung {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.trainer-kennzahlen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--spacing-2);
+}
+.trainer-kennzahl {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3);
+  text-align: center;
+}
+.trainer-kennzahl-wert {
+  display: block;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--club-primary);
+  line-height: 1.15;
+}
+.trainer-kennzahl-label {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.trainer-hinweis {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.trainer-untertitel {
+  margin: var(--spacing-3) 0 var(--spacing-1);
+  font-size: var(--font-size-md);
+  color: var(--text-main);
+}
+
+.trainer-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  font-size: var(--font-size-sm);
+}
+.trainer-liste li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  /* Touch-Ziel: In der zweiten Liste steckt ein Anruf-Link. */
+  min-height: 44px;
+  padding: var(--spacing-2) var(--spacing-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+.trainer-liste-wert {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+/* Wer noch nicht dabei ist, wird nicht rot markiert - es ist eine Liste zum
+   Ansprechen, kein Tadel. */
+.trainer-liste--offen li { color: var(--text-muted); }
+.trainer-anruf {
+  text-decoration: none;
+  white-space: nowrap;
+  font-weight: var(--font-weight-semibold);
+}
