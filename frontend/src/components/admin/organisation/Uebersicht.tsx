@@ -152,6 +152,14 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
     refetchInterval: 5000 // alle 5 Sekunden automatisch aktualisieren
   });
 
+  // Selber queryKey wie in Zeitangebote.tsx: beide teilen sich den Cache,
+  // es entsteht keine zweite Anfrage.
+  const { data: zeitangebote = [] } = useQuery<TimelineAngebot[]>({
+    queryKey: ['shiftOffers', tid],
+    queryFn: () => apiFetch(`/api/shift-offers?tournamentId=${tid}`),
+    enabled: !!tid
+  });
+
   const { data: areas = [] } = useQuery<TournamentWorkArea[]>({ queryKey: ['t-work-areas', tid], queryFn: () => getTournamentWorkAreas(tid), enabled: !!tid });
   const { data: days = [] } = useQuery<TournamentDay[]>({ queryKey: ['t-days', tid], queryFn: () => getTournamentDays(tid), enabled: !!tid });
   const { data: tournaments = [] } = useQuery<Tournament[]>({ queryKey: ['tournaments'], queryFn: getTournaments });
@@ -548,14 +556,6 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
     const dateKey = new Date(dateVal).toLocaleDateString('de-DE');
     if (!grouped[dateKey]) grouped[dateKey] = [];
     grouped[dateKey].push(slot);
-  });
-
-  // Selber queryKey wie in Zeitangebote.tsx: beide teilen sich den Cache,
-  // es entsteht keine zweite Anfrage.
-  const { data: zeitangebote = [] } = useQuery<TimelineAngebot[]>({
-    queryKey: ['shiftOffers', tid],
-    queryFn: () => apiFetch(`/api/shift-offers?tournamentId=${tid}`),
-    enabled: !!tid
   });
 
   const unbesetzteSlots = jobSlots.filter(s => {
