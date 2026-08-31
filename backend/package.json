@@ -1,6 +1,6 @@
 {
   "name": "tsv-holm-backend",
-  "version": "1.22.1",
+  "version": "1.23.0",
   "type": "module",
   "scripts": {
     "start": "tsx --env-file=.env src/server.ts",
