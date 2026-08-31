@@ -24,9 +24,9 @@ import { ROLES } from '../utils/roles.js';
 export const shiftOfferSchema = z.object({
   tournamentId: z.number().int().positive(),
   shiftId: z.number().int().positive().nullable().optional(),
-  /// Wunsch-Arbeitsbereich, unabhaengig von shiftId - "irgendwas am
-  /// Grillstand" ist oft leichter zu beantworten als eine konkrete Schicht.
-  workAreaId: z.number().int().positive().nullable().optional(),
+  /// Wunsch-Arbeitsbereiche, mehrere moeglich - wer Zeit anbietet, kann sich
+  /// oft mehr als eine Aufgabe vorstellen. Leer heisst "egal".
+  workAreaIds: z.array(z.number().int().positive()).max(20).optional(),
   date: z.string().or(z.date()),
   startMin: z.number().int().min(0).max(1439),
   endMin: z.number().int().min(1).max(1440),
@@ -48,7 +48,7 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
   const userId = req.userId;
   if (!userId) return res.status(401).json({ error: 'Nicht angemeldet' });
 
-  const { tournamentId, shiftId, workAreaId, date, startMin, endMin, note } = req.body;
+  const { tournamentId, shiftId, workAreaIds, date, startMin, endMin, note } = req.body;
 
   // Doppelte Angebote fuer denselben Zeitraum abfangen - ein zweiter Anlauf
   // aus Unsicherheit soll den Organisatoren nicht dieselbe Zeile zweimal in
@@ -65,15 +65,17 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
     data: {
       tournamentId, userId,
       shiftId: shiftId ?? null,
-      workAreaId: workAreaId ?? null,
       date: new Date(date),
       startMin, endMin,
-      note: note?.trim() || null
+      note: note?.trim() || null,
+      workAreas: workAreaIds?.length
+        ? { connect: workAreaIds.map((id: number) => ({ id })) }
+        : undefined
     },
     include: {
       user: { select: { name: true } },
       shift: { include: { workArea: true } },
-      workArea: true
+      workAreas: true
     }
   });
 
@@ -84,8 +86,9 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
     select: { id: true }
   });
   if (organisatoren.length > 0) {
-    // Bezug auf eine konkrete Schicht ist praeziser als der reine Wunsch-Bereich.
-    const bereich = angebot.shift?.workArea?.name ?? angebot.workArea?.name;
+    // Bezug auf eine konkrete Schicht ist praeziser als die Wunsch-Bereiche.
+    const bereich = angebot.shift?.workArea?.name
+      ?? (angebot.workAreas.length > 0 ? angebot.workAreas.map(w => w.name).join(', ') : undefined);
     await notifyUsers(
       organisatoren.map(o => o.id),
       '🙋 Neues Helfer-Angebot',
@@ -112,7 +115,7 @@ export const getShiftOffers = async (req: AuthRequest, res: Response) => {
     include: {
       user: { select: { id: true, name: true, email: true } },
       shift: { include: { workArea: true, day: true } },
-      workArea: true
+      workAreas: true
     }
   });
 
@@ -127,7 +130,7 @@ export const getMyShiftOffers = async (req: AuthRequest, res: Response) => {
   const angebote = await prisma.shiftOffer.findMany({
     where: { userId },
     orderBy: { date: 'asc' },
-    include: { shift: { include: { workArea: true } }, workArea: true }
+    include: { shift: { include: { workArea: true } }, workAreas: true }
   });
   return res.json(angebote);
 };

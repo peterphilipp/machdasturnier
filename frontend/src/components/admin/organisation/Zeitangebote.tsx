@@ -31,7 +31,7 @@ interface Angebot {
   decidedAt: string | null;
   user?: { id: number; name: string; email?: string | null } | null;
   shift?: { id: number; workArea?: { name?: string; icon?: string } | null } | null;
-  workArea?: { name?: string; icon?: string } | null;
+  workAreas?: { name?: string; icon?: string }[];
 }
 
 const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
@@ -88,17 +88,21 @@ export default function Zeitangebote({ selectedTournament }: { selectedTournamen
   // nur, wenn tatsaechlich etwas ansteht oder anstand.
   if (!selectedTournament || angebote.length === 0) return null;
 
-  const bereichVon = (a: Angebot) => a.shift?.workArea ?? a.workArea;
+  /** Der Bezug zur Schicht ist praeziser als die Wunschliste - er gewinnt. */
+  const bereicheVon = (a: Angebot): string =>
+    a.shift?.workArea?.name
+      ? `${a.shift.workArea.icon ?? ''} ${a.shift.workArea.name}`.trim()
+      : (a.workAreas ?? []).map(w => `${w.icon ?? ''} ${w.name}`.trim()).join(', ');
 
   const karte = (a: Angebot, mitAktionen: boolean) => {
-    const bereich = bereichVon(a);
+    const bereiche = bereicheVon(a);
     return (
       <div key={a.id} className={`angebot-admin-karte angebot-admin-karte--${a.status.toLowerCase()}`}>
         <div className="angebot-admin-kopf">
           <strong>{a.user?.name || 'Unbekannt'}</strong>
           <span className="angebot-admin-zeit">
             {tagKurz(a.date)} · {hhmm(a.startMin)}–{hhmm(a.endMin)}
-            {bereich?.name && <> · {bereich.icon} {bereich.name}</>}
+            {bereiche && <> · {bereiche}</>}
           </span>
         </div>
         {a.note && <div className="angebot-admin-notiz">„{a.note}"</div>}

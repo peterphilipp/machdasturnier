@@ -18,12 +18,21 @@ describe('shiftOfferSchema', () => {
     expect(shiftOfferSchema.safeParse({ ...gueltig, shiftId: 42, note: 'nur bis 12' }).success).toBe(true);
   });
 
-  // workAreaId ist der Wunsch-Bereich, unabhaengig von einer konkreten Schicht -
-  // beide Bezuege duerfen gleichzeitig fehlen, vorkommen oder kombiniert sein.
-  it('nimmt einen Wunsch-Arbeitsbereich unabhängig von shiftId an', () => {
-    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaId: 7 }).success).toBe(true);
-    expect(shiftOfferSchema.safeParse({ ...gueltig, shiftId: 42, workAreaId: 7 }).success).toBe(true);
-    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaId: null }).success).toBe(true);
+  // Die Wunsch-Bereiche sind eine Liste: wer sich drei Aufgaben vorstellen kann,
+  // soll das sagen duerfen. Leer heisst "egal".
+  it('nimmt mehrere Wunsch-Arbeitsbereiche an', () => {
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: [7] }).success).toBe(true);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: [7, 8, 9] }).success).toBe(true);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: [] }).success).toBe(true);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, shiftId: 42, workAreaIds: [7] }).success).toBe(true);
+  });
+
+  it('weist unbrauchbare Bereichs-Angaben zurück', () => {
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: [0] }).success).toBe(false);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: [-3] }).success).toBe(false);
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: 7 }).success).toBe(false);
+    // Obergrenze, damit niemand die Zuordnungstabelle vollschreibt
+    expect(shiftOfferSchema.safeParse({ ...gueltig, workAreaIds: Array.from({ length: 21 }, (_, i) => i + 1) }).success).toBe(false);
   });
 
   // Der haeufigste Fehlgriff im Formular: Von und Bis vertauscht.

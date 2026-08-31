@@ -25,7 +25,7 @@ export interface TimelineAngebot {
   status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
   user?: { id: number; name: string } | null;
   shift?: { workArea?: { name?: string; icon?: string } | null } | null;
-  workArea?: { name?: string; icon?: string } | null;
+  workAreas?: { name?: string; icon?: string }[];
 }
 
 /** Farbe des Balkens nach Status - hier drueckt die Flaeche keine Besetzung aus. */
@@ -64,7 +64,11 @@ export default function AngeboteTimeline({
     proHelfer.get(key)!.items.push(a);
   }
 
-  const bereichVon = (a: TimelineAngebot) => a.shift?.workArea ?? a.workArea;
+  /** Der Bezug zur Schicht ist praeziser als die Wunschliste - er gewinnt. */
+  const bereicheVon = (a: TimelineAngebot): string =>
+    a.shift?.workArea?.name
+      ? `${a.shift.workArea.icon ?? ''} ${a.shift.workArea.name}`.trim()
+      : (a.workAreas ?? []).map(w => `${w.icon ?? ''} ${w.name}`.trim()).join(', ');
 
   const rows: GanttRow[] = [...proHelfer.entries()]
     .sort((a, b) => a[1].name.localeCompare(b[1].name, 'de'))
@@ -81,7 +85,7 @@ export default function AngeboteTimeline({
         color: ZEILEN_FARBE[fuehrend.status],
         items: helfer.items.map(a => {
           const stil = STATUS_STIL[a.status];
-          const bereich = bereichVon(a);
+          const bereiche = bereicheVon(a);
           const dauer = a.endMin - a.startMin;
           const zeit = `${minToTime(a.startMin)}–${minToTime(a.endMin)}`;
 
@@ -91,9 +95,9 @@ export default function AngeboteTimeline({
             endMin: a.endMin,
             // Auf schmalen Balken ist fuer den Bereich kein Platz - die Zeit
             // steht ohnehin auf der Achse, der Name links in der Zeile.
-            label: dauer > 60 && bereich?.name ? `${bereich.icon ?? ''} ${bereich.name}` : '',
+            label: dauer > 60 && bereiche ? bereiche : '',
             tooltip: `${helfer.name} · ${zeit} · ${stil.wort}`
-              + (bereich?.name ? ` · Wunsch: ${bereich.name}` : ' · ohne Bereichswunsch')
+              + (bereiche ? ` · Wunsch: ${bereiche}` : ' · ohne Bereichswunsch')
               + (a.note ? ` · „${a.note}"` : ''),
             background: stil.flaeche,
             border: `1px solid ${stil.rand}`

@@ -998,3 +998,27 @@
   cursor: pointer;
   min-height: 32px;
 }
+
+/* Mehrfachauswahl der Wunsch-Arbeitsbereiche. Chips statt Dropdown: die
+   getroffene Wahl bleibt sichtbar, und mehrere Bereiche kosten mehrere
+   Tipser statt einer Mehrfachauswahl-Liste, die auf dem Handy kaum zu
+   bedienen ist. */
+.angebot-bereich-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}
+.angebot-bereich-chip {
+  padding: 8px var(--spacing-3);
+  min-height: 40px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.angebot-bereich-chip--aktiv {
+  color: var(--text-inverse);
+  font-weight: var(--font-weight-bold);
+}

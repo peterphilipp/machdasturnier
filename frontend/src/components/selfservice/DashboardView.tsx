@@ -17,7 +17,7 @@ interface ShiftOffer {
   note: string | null; status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
   decisionNote: string | null;
   shift?: { arbeitsbereich?: { name: string } | null } | null;
-  workArea?: { id: number; name: string; icon?: string } | null;
+  workAreas?: { id: number; name: string; icon?: string }[];
 }
 interface FoodCategory { id: number; name: string; icon: string; items: { id: number; name: string; price: string | null; unit: string }[]; }
 interface FoodDonation { id: number; foodItemId: number; quantity: number; note: string | null; createdAt: string; foodDonationSlotId: number | null; foodItem: { id: number; name: string; unit: string; category: { id: number; name: string; icon: string } } | null; }
@@ -110,7 +110,7 @@ export default function DashboardView() {
   const [meineAngebote, setMeineAngebote] = useState<ShiftOffer[]>([]);
   const [angebotOffen, setAngebotOffen] = useState(false);
   const [angebotBezug, setAngebotBezug] = useState<{ shiftId: number; bereich: string } | null>(null);
-  const [angebotBereichId, setAngebotBereichId] = useState<number | null>(null);
+  const [gewaehlteBereiche, setGewaehlteBereiche] = useState<Set<number>>(new Set());
   const [angebotDatum, setAngebotDatum] = useState('');
   const [angebotVon, setAngebotVon] = useState('09:00');
   const [angebotBis, setAngebotBis] = useState('12:00');
@@ -513,7 +513,7 @@ export default function DashboardView() {
       setAngebotVon(minToTime(bezug.startMin));
       setAngebotBis(minToTime(bezug.endMin));
     }
-    setAngebotBereichId(null);
+    setGewaehlteBereiche(new Set());
     setAngebotNotiz('');
     setAngebotOffen(true);
   };
@@ -532,7 +532,7 @@ export default function DashboardView() {
       await apiPost('/api/shift-offers', {
         tournamentId: selectedTournamentId,
         shiftId: angebotBezug?.shiftId ?? null,
-        workAreaId: angebotBereichId,
+        workAreaIds: [...gewaehlteBereiche],
         date: new Date(angebotDatum + 'T00:00:00.000Z').toISOString(),
         startMin: von, endMin: bis,
         note: angebotNotiz.trim() || null
@@ -1099,9 +1099,11 @@ export default function DashboardView() {
                     <div className="angebot-karte-zeit">
                       {new Date(a.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
                       {' · '}{minToTime(a.startMin)}–{minToTime(a.endMin)}
-                      {(a.shift?.arbeitsbereich?.name || a.workArea?.name) && (
-                        <> · {a.workArea?.icon} {a.shift?.arbeitsbereich?.name || a.workArea?.name}</>
-                      )}
+                      {a.shift?.arbeitsbereich?.name
+                        ? <> · {a.shift.arbeitsbereich.name}</>
+                        : (a.workAreas && a.workAreas.length > 0) && (
+                          <> · {a.workAreas.map(w => `${w.icon ?? ''} ${w.name}`.trim()).join(', ')}</>
+                        )}
                     </div>
                     {a.note && <div className="angebot-karte-notiz">„{a.note}"</div>}
                     <div className="angebot-karte-fuss">
@@ -1380,18 +1382,45 @@ export default function DashboardView() {
                 )}
               </div>
 
+              {/* Mehrfachauswahl als Chips statt Dropdown: Wer sich drei Aufgaben
+                  vorstellen kann, soll das mit drei Tipsern sagen koennen - und
+                  sieht dabei die getroffene Wahl, ohne die Liste zu oeffnen. */}
               <div className="rating-feld">
-                <label className="rating-feld-label" htmlFor="angebot-bereich">Arbeitsbereich (optional)</label>
-                <select
-                  id="angebot-bereich" className="rating-kommentar"
-                  value={angebotBereichId ?? ''}
-                  onChange={e => setAngebotBereichId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Egal, wo ihr mich braucht</option>
-                  {angebotBereiche.map(b => (
-                    <option key={b.id} value={b.id}>{b.icon} {b.name}</option>
-                  ))}
-                </select>
+                <label className="rating-feld-label" id="angebot-bereich-label">
+                  Arbeitsbereiche (optional, mehrere möglich)
+                </label>
+                {angebotBereiche.length === 0 ? (
+                  <p className="angebot-erklaerung">Für dieses Turnier sind noch keine Arbeitsbereiche angelegt.</p>
+                ) : (
+                  <>
+                    <div className="angebot-bereich-chips" role="group" aria-labelledby="angebot-bereich-label">
+                      {angebotBereiche.map(b => {
+                        const gewaehlt = gewaehlteBereiche.has(b.id);
+                        return (
+                          <button
+                            key={b.id}
+                            type="button"
+                            aria-pressed={gewaehlt}
+                            onClick={() => setGewaehlteBereiche(prev => {
+                              const neu = new Set(prev);
+                              neu.has(b.id) ? neu.delete(b.id) : neu.add(b.id);
+                              return neu;
+                            })}
+                            className={`angebot-bereich-chip${gewaehlt ? ' angebot-bereich-chip--aktiv' : ''}`}
+                            style={gewaehlt ? { borderColor: clubPrimary, background: clubPrimary } : undefined}
+                          >
+                            {b.icon} {b.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="angebot-erklaerung">
+                      {gewaehlteBereiche.size === 0
+                        ? 'Nichts ausgewählt heißt: egal, wo ihr mich braucht.'
+                        : `${gewaehlteBereiche.size} ausgewählt – wir versuchen, etwas davon zu treffen.`}
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="angebot-zeitraum">

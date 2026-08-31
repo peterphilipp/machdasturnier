@@ -397,6 +397,7 @@ model TournamentWorkArea {
   shifts            Shift[]
   dayWorkAreas      TournamentDayWorkArea[]
   shiftOffers       ShiftOffer[]
+  offerWishes       ShiftOffer[]            @relation("ShiftOfferWorkAreas")
   tournament        Tournament              @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@index([tournamentId])
@@ -765,8 +766,10 @@ model ShiftOffer {
   /// Optionaler Bezug: "diese Schicht, aber nur von-bis". Ohne shiftId ist es
   /// ein freies Zeitangebot ("setzt mich ein, wo ihr mich braucht").
   shiftId      Int?      @map("shift_id")
-  /// Optionaler Wunsch-Arbeitsbereich, unabhaengig von shiftId - "irgendwas
-  /// am Grillstand" ist oft leichter zu beantworten als eine konkrete Schicht.
+  /// VERALTET - ersetzt durch die Mehrfachauswahl `workAreas`. Bleibt vorerst
+  /// bestehen, damit "prisma db push" die bereits erfassten Wuensche nicht
+  /// mitloescht; ein Startskript uebertraegt sie in die neue Zuordnung. Kann
+  /// in einer spaeteren Version entfallen.
   workAreaId   Int?      @map("work_area_id")
   date         DateTime
   startMin     Int       @map("start_min")
@@ -779,10 +782,14 @@ model ShiftOffer {
   decisionNote String?   @map("decision_note")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  tournament Tournament          @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
-  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  shift      Shift?              @relation(fields: [shiftId], references: [id], onDelete: SetNull)
-  workArea   TournamentWorkArea? @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
+  tournament Tournament           @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift      Shift?               @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  workArea   TournamentWorkArea?  @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
+  /// Wunsch-Arbeitsbereiche, mehrere moeglich: wer Zeit anbietet, kann sich
+  /// oft mehr als eine Aufgabe vorstellen - das erhoeht die Chance, dass
+  /// etwas Passendes dabei ist.
+  workAreas  TournamentWorkArea[] @relation("ShiftOfferWorkAreas")
 
   @@index([tournamentId, status])
   @@index([userId])
