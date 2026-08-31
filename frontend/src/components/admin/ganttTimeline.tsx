@@ -17,6 +17,21 @@ export interface GanttItem {
   isPending?: boolean;
   assignedCount?: number | null;
   maxVolunteers?: number;
+  /**
+   * Eigene Flaechenfarbe statt der Zeilen-Toenung. Fuer Balken, die keine
+   * Besetzung ausdruecken - etwa Zeitangebote, deren Farbe den Status meint.
+   * Die Besetzungsfarbe hat weiterhin Vorrang, sonst waere die Kernaussage
+   * des Dienstplans ueberschreibbar.
+   */
+  background?: string;
+  /**
+   * Zusatztext im Besetzungs-Balken, wo `label` nicht greift (dort rendert das
+   * Gantt Punkte und Belegungszahl selbst). Ersetzt die Uhrzeit - die steht
+   * ohnehin auf der Achse, waehrend etwa die Namen der Eingeplanten sonst
+   * nirgends sichtbar waeren. Der Aufrufer entscheidet, ob der Balken dafuer
+   * breit genug ist.
+   */
+  detail?: string;
 }
 
 export interface GanttRow {
@@ -79,7 +94,7 @@ interface DragState {
   containerWidth: number;
 }
 
-function getSoftTint(color: string, opacityPercent = 16): string {
+export function getSoftTint(color: string, opacityPercent = 16): string {
   if (!color) return '#f1f5f9';
   if (color.startsWith('#') && color.length === 7) {
     const alphaHex = Math.round((opacityPercent / 100) * 255).toString(16).padStart(2, '0');
@@ -88,7 +103,7 @@ function getSoftTint(color: string, opacityPercent = 16): string {
   return color;
 }
 
-function getSoftBorder(color: string, opacityPercent = 45): string {
+export function getSoftBorder(color: string, opacityPercent = 45): string {
   if (!color) return '#cbd5e1';
   if (color.startsWith('#') && color.length === 7) {
     const alphaHex = Math.round((opacityPercent / 100) * 255).toString(16).padStart(2, '0');
@@ -388,7 +403,7 @@ export function GanttTimeline({
                           position: 'absolute', left: `${left}%`, width: `${width}%`,
                           top: (spurVon.get(item.id) ?? 0) * SPUR_HOEHE + 2,
                           height: SPUR_HOEHE - 4,
-                          background: farben ? farben.flaeche : rowTintBg,
+                          background: farben ? farben.flaeche : (item.background || rowTintBg),
                           border: item.isPending ? '2px dashed #fd7e14' : item.border || `1px solid ${farben ? farben.rand : rowBorderTint}`,
                           borderLeft: `4px solid ${row.color}`,
                           borderRadius: 6,
@@ -415,22 +430,36 @@ export function GanttTimeline({
                       {/* Besetzung zuerst, Uhrzeit nur wenn der Balken breit genug ist */}
                       {zeigtBesetzung && farben ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden', pointerEvents: 'none' }}>
-                          <BesetzungsPunkte
-                            belegt={item.assignedCount as number}
-                            max={item.maxVolunteers as number}
-                            farbe={farben.punkt}
-                          />
+                          {/* Auf sehr schmalen Balken verdraengen die Punkte die Zahl,
+                              und uebrig bleibt ein angeschnittenes "2/". Die Zahl
+                              traegt die Aussage allein, die Punkte sind die Zugabe. */}
+                          {width > 3 && (
+                            <BesetzungsPunkte
+                              belegt={item.assignedCount as number}
+                              max={item.maxVolunteers as number}
+                              farbe={farben.punkt}
+                            />
+                          )}
                           <span style={{ fontSize: 12, fontWeight: 700, color: farben.text, flexShrink: 0 }}>
                             {item.assignedCount}/{item.maxVolunteers}
                           </span>
-                          {width > 18 && (
+                          {item.detail ? (
+                            <span style={{ fontSize: 10, color: '#334155', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.detail}
+                            </span>
+                          ) : width > 18 && (
                             <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>
                               {minToTime(st)}–{minToTime(en)}
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 11, pointerEvents: 'none' }}>
+                        <span style={{
+                          fontWeight: 700, color: '#0f172a', fontSize: 11, pointerEvents: 'none',
+                          // Nur die Beschriftung kappen, nicht den ganzen Balken: der
+                          // Tooltip liegt ueber ihm und wuerde sonst mit abgeschnitten.
+                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%'
+                        }}>
                           {item.label || `${minToTime(st)}–${minToTime(en)}`}
                         </span>
                       )}
