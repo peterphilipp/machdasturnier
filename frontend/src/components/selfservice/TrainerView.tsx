@@ -21,7 +21,9 @@ interface Beteiligung {
   stunden: number;
   kinder: number;
   stundenProKind: number | null;
-  personen: { userId: number; name: string; schichten: number; stunden: number }[];
+  spenden: number;
+  spender: number;
+  personen: { userId: number; name: string; schichten: number; stunden: number; spenden: number }[];
   ohneBeteiligung: { userId: number; name: string; phone: string | null }[];
   lastAnteilObereHaelfte: number | null;
 }
@@ -310,6 +312,14 @@ export default function TrainerView() {
                       <span className="trainer-kennzahl-label">je Kind</span>
                     </div>
                   )}
+                  {beteiligungDesJahrgangs.spenden > 0 && (
+                    <div className="trainer-kennzahl">
+                      <span className="trainer-kennzahl-wert">{beteiligungDesJahrgangs.spenden}</span>
+                      <span className="trainer-kennzahl-label">
+                        Spenden von {beteiligungDesJahrgangs.spender}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {beteiligungDesJahrgangs.lastAnteilObereHaelfte !== null && (
@@ -322,12 +332,16 @@ export default function TrainerView() {
                 <h4 className="trainer-untertitel">
                   Wer mitgemacht hat ({beteiligungDesJahrgangs.personen.length})
                 </h4>
+                <p className="trainer-hinweis">Schichten und Verpflegung zählen beide.</p>
                 <ol className="trainer-liste">
                   {beteiligungDesJahrgangs.personen.map(pp => (
                     <li key={pp.userId}>
                       <span>{pp.name}</span>
                       <span className="trainer-liste-wert">
-                        {pp.stunden.toLocaleString('de-DE')} h · {pp.schichten} Sch.
+                        {pp.schichten > 0
+                          ? `${pp.stunden.toLocaleString('de-DE')} h · ${pp.schichten} Sch.`
+                          : ''}
+                        {pp.spenden > 0 && `${pp.schichten > 0 ? ' · ' : ''}${pp.spenden}× 🍰`}
                       </span>
                     </li>
                   ))}

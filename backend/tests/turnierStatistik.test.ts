@@ -287,3 +287,71 @@ describe('berechneTurnierStatistik – Aufschlüsselung je Jahrgang', () => {
     expect(jg.lastAnteilObereHaelfte).toBeNull();
   });
 });
+
+describe('berechneTurnierStatistik – Verpflegung zählt als Beteiligung', () => {
+  const shifts = [schicht(1, 480, 600, 10)];
+  const spende = (userId: number, jahr: number) => ({
+    userId,
+    user: { id: userId, children: [{ childYear: jahr }], trainedYearGroups: [] }
+  });
+
+  // Der eigentliche Punkt: Wer Kuchen backt, gehört nicht auf die Liste der
+  // Unbeteiligten - auch wenn er keine Schicht übernommen hat.
+  it('führt jemanden mit Spende nicht als unbeteiligt', () => {
+    const mitglieder = [
+      { id: 100, name: 'Schicht', children: [{ childYear: 2017 }] },
+      { id: 101, name: 'Nur Kuchen', children: [{ childYear: 2017 }] },
+      { id: 102, name: 'Gar nichts', children: [{ childYear: 2017 }] }
+    ];
+    const s = berechneTurnierStatistik(
+      shifts, [einplanung(1, 1, 100, 'Schicht', [2017])], JAHRGAENGE, mitglieder,
+      [spende(101, 2017)]
+    );
+    const jg = s.jahrgaenge.liste.find(j => j.name === '2017')!;
+
+    expect(jg.ohneBeteiligung.map(p => p.name)).toEqual(['Gar nichts']);
+  });
+
+  it('nimmt reine Spender in die Personenliste auf', () => {
+    const mitglieder = [{ id: 101, name: 'Nur Kuchen', children: [{ childYear: 2017 }] }];
+    const s = berechneTurnierStatistik(
+      shifts, [einplanung(1, 1, 100, 'Schicht', [2017])], JAHRGAENGE, mitglieder,
+      [spende(101, 2017), spende(101, 2017)]
+    );
+    const jg = s.jahrgaenge.liste.find(j => j.name === '2017')!;
+    const kuchen = jg.personen.find(p => p.name === 'Nur Kuchen')!;
+
+    expect(kuchen.spenden).toBe(2);
+    expect(kuchen.stunden).toBe(0);
+    // Wer Stunden hat, steht weiter oben - Spender hängen sich hinten an.
+    expect(jg.personen[0].name).toBe('Schicht');
+  });
+
+  it('zählt Spenden je Jahrgang', () => {
+    const s = berechneTurnierStatistik(
+      shifts, [], JAHRGAENGE, [],
+      [spende(101, 2017), spende(102, 2017), spende(103, 2019)]
+    );
+    const jg2017 = s.jahrgaenge.liste.find(j => j.name === '2017')!;
+    expect(jg2017.spenden).toBe(2);
+    expect(jg2017.spender).toBe(2);
+  });
+
+  it('weist Beteiligte getrennt von Helfern aus', () => {
+    const s = berechneTurnierStatistik(
+      shifts, [einplanung(1, 1, 100, 'Schicht', [2017])], JAHRGAENGE, [],
+      [spende(101, 2017)]
+    );
+    expect(s.eckdaten.helfer).toBe(1);       // nur die mit Schicht
+    expect(s.eckdaten.beteiligte).toBe(2);   // plus die Spenderin
+    expect(s.eckdaten.spender).toBe(1);
+  });
+
+  it('zählt jemanden mit Schicht UND Spende nur einmal als beteiligt', () => {
+    const s = berechneTurnierStatistik(
+      shifts, [einplanung(1, 1, 100, 'Beides', [2017])], JAHRGAENGE, [],
+      [spende(100, 2017)]
+    );
+    expect(s.eckdaten.beteiligte).toBe(1);
+  });
+});

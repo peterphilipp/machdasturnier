@@ -16,10 +16,12 @@ interface Kennzahl { plaetze: number; besetzt: number; offen: number; stunden: n
 interface Bereich extends Kennzahl { name: string; icon: string }
 interface Tag extends Kennzahl { datum: string }
 interface Helfer { userId: number; name: string; schichten: number; stunden: number }
-interface JahrgangPerson { userId: number; name: string; schichten: number; stunden: number }
+interface JahrgangPerson { userId: number; name: string; schichten: number; stunden: number; spenden: number }
 interface Jahrgang {
   id: number; name: string; helfer: number; schichten: number;
   stunden: number; kinder: number; stundenProKind: number | null;
+  spenden: number;
+  spender: number;
   personen: JahrgangPerson[];
   ohneBeteiligung: { userId: number; name: string }[];
   /** Anteil der Stunden, den die aktivere Hälfte trägt. Null bei zu wenigen. */
@@ -31,7 +33,7 @@ interface Luecke {
 }
 
 interface Statistik {
-  eckdaten: { helfer: number; schichten: number; stunden: number } & Kennzahl;
+  eckdaten: { helfer: number; beteiligte: number; spenden: number; spender: number; schichten: number; stunden: number } & Kennzahl;
   jeBereich: Bereich[];
   jeTag: Tag[];
   werHatGetragen: {
@@ -144,6 +146,9 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
         <h3 className="feedback-section-title">📋 Eckdaten</h3>
         <div className="stat-kacheln">
           <Kachel wert={eckdaten.helfer} label="Helfer im Einsatz" />
+          {eckdaten.spender > 0 && (
+            <Kachel wert={eckdaten.beteiligte} label="beteiligt insgesamt" />
+          )}
           <Kachel wert={eckdaten.schichten} label="übernommene Schichten" />
           <Kachel wert={zahl(eckdaten.stunden)} einheit=" h" label="geleistete Stunden" />
           <Kachel
@@ -337,23 +342,33 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
                 <tr className="stat-jg-detailzeile">
                   <td colSpan={5}>
                     <div className="stat-jg-detail">
-                      {j.lastAnteilObereHaelfte !== null && (
-                        <p className="stat-hinweis">
-                          Die aktivere Hälfte dieses Jahrgangs trägt{' '}
-                          <strong>{j.lastAnteilObereHaelfte} %</strong> der Stunden.
-                        </p>
-                      )}
+                      <p className="stat-hinweis">
+                        {j.lastAnteilObereHaelfte !== null && (
+                          <>Die aktivere Hälfte dieses Jahrgangs trägt{' '}
+                          <strong>{j.lastAnteilObereHaelfte} %</strong> der Stunden. </>
+                        )}
+                        {j.spenden > 0 && (
+                          <>Dazu {j.spenden} Verpflegungsspende{j.spenden === 1 ? '' : 'n'} von{' '}
+                          {j.spender} {j.spender === 1 ? 'Person' : 'Personen'}.</>
+                        )}
+                      </p>
 
                       <div className="stat-jg-spalten">
                         <div>
                           <h5 className="stat-jg-titel">Wer mitgemacht hat ({j.personen.length})</h5>
+                          <p className="stat-hinweis" style={{ marginBottom: 6 }}>
+                            Stunden und Spenden bleiben getrennt – vergleichbar sind sie nicht.
+                          </p>
                           <ol className="stat-jg-liste">
                             {j.personen.map(pp => (
                               <li key={pp.userId}>
                                 <span className="stat-jg-name">{pp.name}</span>
                                 <span className="stat-jg-wert">
-                                  {zahl(pp.stunden)} h
-                                  <span className="stat-rang-neben"> · {pp.schichten} Sch.</span>
+                                  {pp.stunden > 0 ? `${zahl(pp.stunden)} h` : '–'}
+                                  <span className="stat-rang-neben">
+                                    {pp.schichten > 0 && <> · {pp.schichten} Sch.</>}
+                                    {pp.spenden > 0 && <> · {pp.spenden}× 🍰</>}
+                                  </span>
                                 </span>
                               </li>
                             ))}

@@ -204,7 +204,7 @@ export const getStatistik = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'tournamentId ist erforderlich.' });
   }
 
-  const [shifts, einplanungen, tournament, mitglieder] = await Promise.all([
+  const [shifts, einplanungen, tournament, mitglieder, spenden] = await Promise.all([
     prisma.shift.findMany({
       where: { tournamentId },
       include: { daySlot: true, day: true, workArea: true }
@@ -243,10 +243,25 @@ export const getStatistik = async (req: Request, res: Response) => {
         children: { select: { childYear: true } },
         trainedYearGroups: { select: { id: true } }
       }
+    }),
+    // Verpflegungsspenden zaehlen als Beteiligung - wer Kuchen beisteuert,
+    // hat beigetragen, auch ohne Schicht.
+    prisma.foodDonation.findMany({
+      where: { tournamentId },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            id: true,
+            children: { select: { childYear: true } },
+            trainedYearGroups: { select: { id: true } }
+          }
+        }
+      }
     })
   ]);
 
   if (!tournament) return res.status(404).json({ error: 'Turnier nicht gefunden' });
 
-  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups, mitglieder));
+  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups, mitglieder, spenden));
 };

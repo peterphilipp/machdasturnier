@@ -584,7 +584,7 @@ export const getTrainerDashboard = async (req: Request, res: Response) => {
      */
     let beteiligung: unknown[] = [];
     if (tid) {
-      const [alleShifts, alleEinplanungen, mitglieder] = await Promise.all([
+      const [alleShifts, alleEinplanungen, mitglieder, alleSpenden] = await Promise.all([
         prisma.shift.findMany({
           where: { tournamentId: tid },
           include: { daySlot: true, day: true, workArea: true }
@@ -613,11 +613,24 @@ export const getTrainerDashboard = async (req: Request, res: Response) => {
             children: { select: { childYear: true } },
             trainedYearGroups: { select: { id: true } }
           }
+        }),
+        prisma.foodDonation.findMany({
+          where: { tournamentId: tid },
+          select: {
+            userId: true,
+            user: {
+              select: {
+                id: true,
+                children: { select: { childYear: true } },
+                trainedYearGroups: { select: { id: true } }
+              }
+            }
+          }
         })
       ]);
 
       const statistik = berechneTurnierStatistik(
-        alleShifts, alleEinplanungen, user.trainedYearGroups, mitglieder
+        alleShifts, alleEinplanungen, user.trainedYearGroups, mitglieder, alleSpenden
       );
 
       // Telefonnummern nur fuer die Unbeteiligten der eigenen Jahrgaenge -

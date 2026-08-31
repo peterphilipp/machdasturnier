@@ -41,6 +41,20 @@ export interface StatistikEinplanung {
 }
 
 /**
+ * Eine Verpflegungsspende. Zaehlt als Beteiligung: Wer drei Kuchen backt,
+ * hat beigetragen - auch ohne Schicht. Ohne sie waeren diese Familien
+ * faelschlich als "nicht dabei" gefuehrt worden.
+ */
+export interface StatistikSpende {
+  userId: number | null;
+  user?: {
+    id: number;
+    children?: { childYear: number }[];
+    trainedYearGroups?: { id: number }[];
+  } | null;
+}
+
+/**
  * Wer diesem Turnier zugeordnet ist - unabhaengig davon, ob er etwas
  * uebernommen hat. Erst dadurch laesst sich sagen, wer NICHT dabei ist;
  * aus den Einplanungen allein sind nur die Aktiven ablesbar.
@@ -89,7 +103,9 @@ export function berechneTurnierStatistik(
   einplanungen: StatistikEinplanung[],
   jahrgaenge: StatistikJahrgang[],
   /** Alle Turnier-Teilnehmer. Ohne sie bleibt die Liste der Unbeteiligten leer. */
-  mitglieder: StatistikMitglied[] = []
+  mitglieder: StatistikMitglied[] = [],
+  /** Verpflegungsspenden - zaehlen als Beteiligung, auch ohne Schicht. */
+  spenden: StatistikSpende[] = []
 ) {
   // --- Dauer je Schicht, einmal aufgeloest -------------------------------
   const dauerJeShift = new Map<number, number>();
@@ -189,6 +205,28 @@ export function berechneTurnierStatistik(
     }
   }
 
+  // Spenden je Person. Eine Beteiligung ist eine Beteiligung, egal ob sie
+  // aus Zeit oder aus Kuchen besteht - nur vergleichbar sind die beiden
+  // nicht, deshalb bleiben sie getrennte Zahlen statt einer Summe.
+  const spendenJePerson = new Map<number, number>();
+  for (const sp of spenden) {
+    if (sp.userId == null) continue;
+    spendenJePerson.set(sp.userId, (spendenJePerson.get(sp.userId) ?? 0) + 1);
+  }
+  const spenderIds = new Set(spendenJePerson.keys());
+
+  // Spenden je Jahrgang - ueber dieselbe Zuordnung wie die Schichten.
+  const spendenJeJg = new Map<number, { anzahl: number; spender: Set<number> }>();
+  for (const sp of spenden) {
+    if (sp.userId == null) continue;
+    for (const jgId of jahrgangVon(sp.user as StatistikEinplanung['user'])) {
+      if (!spendenJeJg.has(jgId)) spendenJeJg.set(jgId, { anzahl: 0, spender: new Set() });
+      const e = spendenJeJg.get(jgId)!;
+      e.anzahl += 1;
+      e.spender.add(sp.userId);
+    }
+  }
+
   const jgStat = new Map<number, {
     id: number; name: string; helfer: Set<number>; schichten: number; minuten: number;
   }>();
@@ -206,6 +244,17 @@ export function berechneTurnierStatistik(
       eintrag.schichten += 1;
       eintrag.minuten += dauerJeShift.get(e.shiftId!) ?? 0;
     }
+  }
+
+  // Ein Jahrgang, in dem nur gespendet und keine Schicht uebernommen wurde,
+  // faellt sonst ganz aus der Liste - und damit auch seine Spenden.
+  for (const jgId of spendenJeJg.keys()) {
+    if (jgStat.has(jgId)) continue;
+    jgStat.set(jgId, {
+      id: jgId,
+      name: jgId === OHNE ? 'Ohne Zuordnung' : (jahrgaenge.find(j => j.id === jgId)?.name ?? `Jahrgang ${jgId}`),
+      helfer: new Set(), schichten: 0, minuten: 0
+    });
   }
 
   // Aufwand je Person und Jahrgang - Grundlage fuer die Aufschluesselung.
@@ -237,8 +286,9 @@ export function berechneTurnierStatistik(
    */
   const ohneBeteiligungJeJg = new Map<number, { userId: number; name: string }[]>();
   for (const m of mitglieder) {
-    const hatGeholfen = helferIds.has(m.id);
-    if (hatGeholfen) continue;
+    // Beteiligt ist, wer eine Schicht ODER eine Spende beigetragen hat. Wer
+    // drei Kuchen backt, gehoert nicht auf eine Liste der Unbeteiligten.
+    if (helferIds.has(m.id) || spenderIds.has(m.id)) continue;
     for (const jgId of jahrgangVon(m)) {
       if (jgId === OHNE) continue;   // Ohne Zuordnung ist kein Jahrgang, den man ansprechen kann
       if (!ohneBeteiligungJeJg.has(jgId)) ohneBeteiligungJeJg.set(jgId, []);
@@ -249,8 +299,25 @@ export function berechneTurnierStatistik(
   const jahrgangsBeteiligung = [...jgStat.values()].map(j => {
     const kinder = kinderJeJahrgang.get(j.id)?.size ?? 0;
     const personen = [...(proPersonJeJg.get(j.id)?.values() ?? [])]
-      .map(pp => ({ userId: pp.userId, name: pp.name, schichten: pp.schichten, stunden: stundenAus(pp.minuten) }))
+      .map(pp => ({
+        userId: pp.userId, name: pp.name, schichten: pp.schichten,
+        stunden: stundenAus(pp.minuten),
+        spenden: spendenJePerson.get(pp.userId) ?? 0
+      }))
       .sort((a, b) => b.stunden - a.stunden || b.schichten - a.schichten || a.name.localeCompare(b.name, 'de'));
+
+    // Wer nur gespendet hat, taucht in `personen` nicht auf - er hat ja keine
+    // Schicht. Trotzdem hat er beigetragen und gehoert in die Aufstellung.
+    const nurSpender = [...(spendenJeJg.get(j.id)?.spender ?? [])]
+      .filter(uid => !personen.some(pp => pp.userId === uid))
+      .map(uid => ({
+        userId: uid,
+        name: mitglieder.find(m => m.id === uid)?.name ?? 'Unbekannt',
+        schichten: 0,
+        stunden: 0,
+        spenden: spendenJePerson.get(uid) ?? 0
+      }))
+      .sort((a, b) => b.spenden - a.spenden || a.name.localeCompare(b.name, 'de'));
 
     const ohneBeteiligung = (ohneBeteiligungJeJg.get(j.id) ?? [])
       .sort((a, b) => a.name.localeCompare(b.name, 'de'));
@@ -275,7 +342,9 @@ export function berechneTurnierStatistik(
       kinder,
       // Die faire Zahl: ohne sie steht ein grosser Jahrgang immer besser da.
       stundenProKind: kinder > 0 ? Math.round((j.minuten / 60 / kinder) * 10) / 10 : null,
-      personen,
+      personen: [...personen, ...nurSpender],
+      spenden: spendenJeJg.get(j.id)?.anzahl ?? 0,
+      spender: spendenJeJg.get(j.id)?.spender.size ?? 0,
       ohneBeteiligung,
       lastAnteilObereHaelfte
     };
@@ -329,6 +398,12 @@ export function berechneTurnierStatistik(
   return {
     eckdaten: {
       helfer: helferIds.size,
+      // Beteiligte insgesamt: Wer eine Schicht ODER eine Spende beigetragen
+      // hat. Sonst wirkt ein Turnier, das viel ueber Kuchen laeuft, so, als
+      // haetten sich kaum Leute beteiligt.
+      beteiligte: new Set([...helferIds, ...spenderIds]).size,
+      spenden: spenden.filter(sp => sp.userId != null).length,
+      spender: spenderIds.size,
       schichten: gueltig.length,
       stunden: stundenAus(minutenGesamt),
       plaetze: plaetzeGesamt,
