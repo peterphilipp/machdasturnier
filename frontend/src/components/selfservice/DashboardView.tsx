@@ -459,6 +459,22 @@ export default function DashboardView() {
     return [...tage].sort();
   }, [shifts]);
 
+  /**
+   * Zusagen und offene Anfragen zuerst, Absagen ans Ende.
+   *
+   * Eine Absage ist erledigt und nur noch Beleg dafuer, dass man gefragt hat -
+   * sie soll nicht ueber der Zusage stehen, auf die es ankommt. Innerhalb
+   * einer Gruppe nach Tag, damit die Reihenfolge dem Turnierverlauf folgt.
+   */
+  const sortierteAngebote = useMemo(() => {
+    const rang = { ANGENOMMEN: 0, OFFEN: 1, ABGELEHNT: 2 } as const;
+    return [...meineAngebote].sort((a, b) =>
+      rang[a.status] - rang[b.status]
+      || new Date(a.date).getTime() - new Date(b.date).getTime()
+      || a.startMin - b.startMin
+    );
+  }, [meineAngebote]);
+
   /** Arbeitsbereiche, die es in diesem Turnier gibt - fuer die optionale Auswahl. */
   const angebotBereiche = useMemo(() => {
     const map = new Map<number, { id: number; name: string; icon: string }>();
@@ -1075,10 +1091,10 @@ export default function DashboardView() {
               </div>
             )}
 
-            {meineAngebote.length > 0 && (
+            {sortierteAngebote.length > 0 && (
               <div className="angebot-liste">
                 <h4 className="angebot-liste-titel">Deine Angebote</h4>
-                {meineAngebote.map(a => (
+                {sortierteAngebote.map(a => (
                   <div key={a.id} className={`angebot-karte angebot-karte--${a.status.toLowerCase()}`}>
                     <div className="angebot-karte-zeit">
                       {new Date(a.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}
