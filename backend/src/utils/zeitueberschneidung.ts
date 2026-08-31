@@ -56,3 +56,21 @@ export function konfliktMeldung(k: Belegung): string {
     ? `Du bist in diesem Zeitraum bereits eingeplant: ${k.bezeichnung} (${zeit}).`
     : `Du hast für diesen Zeitraum schon ein Angebot, das angenommen wurde: ${k.bezeichnung} (${zeit}).`;
 }
+
+/**
+ * Liegt der Zeitraum vollstaendig in der Vergangenheit?
+ *
+ * Ein Angebot fuer gestern ist gegenstandslos - es soll nicht weiter als
+ * offene Aufgabe in der Liste stehen und dort Aufmerksamkeit binden.
+ *
+ * Gerechnet wird in UTC wie beim Reminder im Scheduler, damit dieselbe
+ * Schicht ueberall demselben Kalendertag zugerechnet wird.
+ */
+export function istVergangen(datum: Date | string, endMin: number, jetzt: Date = new Date()): boolean {
+  const d = new Date(datum);
+  const ende = new Date(Date.UTC(
+    d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+    Math.floor(endMin / 60), endMin % 60, 0
+  ));
+  return ende.getTime() < jetzt.getTime();
+}

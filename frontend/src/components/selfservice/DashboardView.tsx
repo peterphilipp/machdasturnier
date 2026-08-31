@@ -551,8 +551,17 @@ export default function DashboardView() {
     }
   };
 
-  const ziehAngebotZurueck = async (id: number) => {
-    if (!(await modal.confirm({ title: 'Angebot zurückziehen', message: 'Möchtest du dein Zeitangebot zurückziehen?' }))) return;
+  const ziehAngebotZurueck = async (id: number, warZusage = false) => {
+    const bestaetigt = await modal.confirm({
+      title: warZusage ? 'Doch nicht können?' : 'Angebot zurückziehen',
+      message: warZusage
+        ? 'Für diese Zeit hattest du schon eine Zusage. Wenn du sie zurückziehst, '
+          + 'werden die Organisatoren benachrichtigt – falls sie dich bereits '
+          + 'eingeplant haben, müssen sie umplanen.'
+        : 'Möchtest du dein Zeitangebot zurückziehen?',
+      variant: warZusage ? 'danger' : undefined
+    });
+    if (!bestaetigt) return;
     try {
       await apiDelete(`/api/shift-offers/${id}`);
       await ladeMeineAngebote();
@@ -1112,9 +1121,12 @@ export default function DashboardView() {
                           : a.status === 'ANGENOMMEN' ? '👍 Angenommen'
                           : 'Diesmal nicht'}
                       </span>
-                      {a.status === 'OFFEN' && (
-                        <button className="angebot-zurueck" onClick={() => ziehAngebotZurueck(a.id)}>
-                          zurückziehen
+                      {/* Auch eine Zusage laesst sich zurueckziehen: "ich kann doch
+                          nicht" muss moeglich sein, sonst greift man zum Telefon
+                          oder sagt gar nicht ab. Die Organisatoren werden gewarnt. */}
+                      {a.status !== 'ABGELEHNT' && (
+                        <button className="angebot-zurueck" onClick={() => ziehAngebotZurueck(a.id, a.status === 'ANGENOMMEN')}>
+                          {a.status === 'ANGENOMMEN' ? 'doch nicht' : 'zurückziehen'}
                         </button>
                       )}
                     </div>

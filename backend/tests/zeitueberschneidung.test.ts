@@ -3,6 +3,7 @@ import {
   ueberschneidetSich,
   findeKonflikt,
   konfliktMeldung,
+  istVergangen,
   Belegung
 } from '../src/utils/zeitueberschneidung.js';
 
@@ -73,5 +74,27 @@ describe('konfliktMeldung', () => {
   it('nennt bei einem Angebot die frühere Zusage', () => {
     const text = konfliktMeldung({ art: 'angebot', tag: '2026-09-05', startMin: 540, endMin: 660, bezeichnung: 'Zeitangebot' });
     expect(text).toMatch(/angenommen/);
+  });
+});
+
+describe('istVergangen', () => {
+  const jetzt = new Date('2026-09-05T14:00:00.000Z');
+
+  it('erkennt einen abgelaufenen Zeitraum am selben Tag', () => {
+    // 09:00-12:00 an diesem Tag ist um 14:00 vorbei
+    expect(istVergangen('2026-09-05T00:00:00.000Z', 720, jetzt)).toBe(true);
+  });
+
+  it('lässt einen laufenden Zeitraum stehen', () => {
+    // 13:00-16:00 laeuft gerade - noch nicht gegenstandslos
+    expect(istVergangen('2026-09-05T00:00:00.000Z', 960, jetzt)).toBe(false);
+  });
+
+  it('lässt einen künftigen Tag stehen', () => {
+    expect(istVergangen('2026-09-06T00:00:00.000Z', 600, jetzt)).toBe(false);
+  });
+
+  it('erkennt einen vergangenen Tag', () => {
+    expect(istVergangen('2026-09-04T00:00:00.000Z', 1400, jetzt)).toBe(true);
   });
 });

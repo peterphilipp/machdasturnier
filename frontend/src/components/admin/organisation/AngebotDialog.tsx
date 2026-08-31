@@ -100,7 +100,9 @@ export default function AngebotDialog({
     } catch (err) { await fehler(err); } finally { setBusy(false); }
   };
 
-  const offen = angebot.status === 'OFFEN';
+  // Verfallene lassen sich nicht mehr annehmen - der Zeitraum ist vorbei.
+  // Zurueckziehen einer Entscheidung und Loeschen bleiben moeglich.
+  const offen = angebot.status === 'OFFEN' && !angebot.verfallen;
 
   return (
     <div className="feedback-modal-overlay" onClick={onClose}>
@@ -125,10 +127,11 @@ export default function AngebotDialog({
             {angebot.note && (<><dt>Anmerkung</dt><dd>„{angebot.note}"</dd></>)}
             <dt>Status</dt>
             <dd>
-              {angebot.status === 'OFFEN' ? '⏳ offen'
+              {angebot.status === 'OFFEN' ? (angebot.verfallen ? '⌛ Zeitraum vorbei' : '⏳ offen')
                 : angebot.status === 'ANGENOMMEN' ? '👍 angenommen'
                 : 'abgelehnt'}
               {angebot.decidedAt && <> am {new Date(angebot.decidedAt).toLocaleDateString('de-DE')}</>}
+              {angebot.umgesetzt && <> · Schicht ist eingetragen</>}
             </dd>
           </dl>
 
@@ -149,7 +152,9 @@ export default function AngebotDialog({
           ) : (
             <p className="stat-hinweis">
               {angebot.decisionNote && <>Rückmeldung: „{angebot.decisionNote}"<br /></>}
-              Die Entscheidung lässt sich zurücknehmen – das Angebot ist dann wieder offen.
+              {angebot.status === 'OFFEN' && angebot.verfallen
+                ? 'Der Zeitraum ist vorbei – annehmen lässt sich das nicht mehr. Löschen räumt es weg.'
+                : 'Die Entscheidung lässt sich zurücknehmen – das Angebot ist dann wieder offen.'}
             </p>
           )}
         </div>
@@ -179,13 +184,15 @@ export default function AngebotDialog({
               </button>
             </>
           ) : (
-            <button
-              className="angebot-admin-btn angebot-admin-btn--nein"
-              onClick={zuruecknehmen}
-              disabled={busy}
-            >
-              Entscheidung zurücknehmen
-            </button>
+            angebot.status !== 'OFFEN' && (
+              <button
+                className="angebot-admin-btn angebot-admin-btn--nein"
+                onClick={zuruecknehmen}
+                disabled={busy}
+              >
+                Entscheidung zurücknehmen
+              </button>
+            )
           )}
         </div>
       </div>

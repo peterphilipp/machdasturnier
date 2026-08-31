@@ -25,6 +25,10 @@ export interface TimelineAngebot {
   status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
   decisionNote?: string | null;
   decidedAt?: string | null;
+  /** Vom Server abgeleitet: zu dieser Zusage gibt es bereits eine Einplanung. */
+  umgesetzt?: boolean;
+  /** Vom Server abgeleitet: der Zeitraum ist vorbei. */
+  verfallen?: boolean;
   user?: { id: number; name: string } | null;
   shift?: { workArea?: { name?: string; icon?: string } | null } | null;
   workAreas?: { name?: string; icon?: string }[];
@@ -55,12 +59,16 @@ export default function AngeboteTimeline({
   globalEndMin: number;
   onAngebotClick?: (a: TimelineAngebot) => void;
 }) {
-  if (angebote.length === 0) return null;
+  // Umgesetzte Zusagen haben ihren Zweck erfuellt - die Schicht steht im
+  // Dienstplan darueber. Sie hier weiter zu zeigen, hiesse dieselbe Sache
+  // zweimal darzustellen, einmal als Plan und einmal als Absicht.
+  const offeneAngebote = angebote.filter(a => !a.umgesetzt);
+  if (offeneAngebote.length === 0) return null;
 
   // Eine Zeile je Helfer. Wer zweimal angeboten hat, bekommt beide Balken in
   // seiner Zeile - die Spurenverteilung des Gantt faengt Ueberschneidungen ab.
   const proHelfer = new Map<number, { name: string; items: TimelineAngebot[] }>();
-  for (const a of angebote) {
+  for (const a of offeneAngebote) {
     const key = a.user?.id ?? -1;
     if (!proHelfer.has(key)) proHelfer.set(key, { name: a.user?.name || 'Unbekannt', items: [] });
     proHelfer.get(key)!.items.push(a);
@@ -95,10 +103,13 @@ export default function AngeboteTimeline({
             id: a.id,
             startMin: a.startMin,
             endMin: a.endMin,
+            // Verfallene treten zurueck: der Zeitraum ist vorbei, entscheiden
+            // laesst sich daran nichts mehr.
+            opacity: a.verfallen ? 0.5 : undefined,
             // Auf schmalen Balken ist fuer den Bereich kein Platz - die Zeit
             // steht ohnehin auf der Achse, der Name links in der Zeile.
             label: dauer > 60 && bereiche ? bereiche : '',
-            tooltip: `${helfer.name} · ${zeit} · ${stil.wort}`
+            tooltip: `${helfer.name} · ${zeit} · ${stil.wort}${a.verfallen ? ' · Zeitraum vorbei' : ''}`
               + (bereiche ? ` · Wunsch: ${bereiche}` : ' · ohne Bereichswunsch')
               + (a.note ? ` · „${a.note}"` : ''),
             background: stil.flaeche,
@@ -122,7 +133,7 @@ export default function AngeboteTimeline({
         globalEndMin={globalEndMin}
         rows={rows}
         onItemClick={id => {
-          const a = angebote.find(x => x.id === id);
+          const a = offeneAngebote.find(x => x.id === id);
           if (a) onAngebotClick?.(a);
         }}
       />

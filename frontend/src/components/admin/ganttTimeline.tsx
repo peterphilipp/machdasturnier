@@ -32,6 +32,12 @@ export interface GanttItem {
    * breit genug ist.
    */
   detail?: string;
+  /**
+   * Zuruecknehmen statt ausblenden - fuer Balken, die noch zur Einordnung
+   * beitragen, aber nichts mehr zu entscheiden geben (etwa ein Zeitangebot,
+   * dessen Zeitraum vorbei ist).
+   */
+  opacity?: number;
 }
 
 export interface GanttRow {
@@ -412,7 +418,7 @@ export function GanttTimeline({
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           whiteSpace: 'nowrap', padding: '0 6px', boxSizing: 'border-box',
                           cursor: isDragging(item.id) ? 'grabbing' : canDrag ? 'grab' : (onItemClick ? 'pointer' : 'default'),
-                          opacity: isDragging(item.id) ? 0.9 : 1,
+                          opacity: isDragging(item.id) ? 0.9 : (item.opacity ?? 1),
                           zIndex: isDragging(item.id) ? 50 : 1,
                           transition: isDragging(item.id) ? 'none' : 'left 0.15s, width 0.15s',
                           touchAction: canDrag ? 'none' : undefined

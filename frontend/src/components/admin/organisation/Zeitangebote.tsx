@@ -29,6 +29,8 @@ interface Angebot {
   status: 'OFFEN' | 'ANGENOMMEN' | 'ABGELEHNT';
   decisionNote: string | null;
   decidedAt: string | null;
+  umgesetzt?: boolean;
+  verfallen?: boolean;
   user?: { id: number; name: string; email?: string | null } | null;
   shift?: { id: number; workArea?: { name?: string; icon?: string } | null } | null;
   workAreas?: { name?: string; icon?: string }[];
@@ -71,8 +73,11 @@ export default function Zeitangebote({
     ? angebote.filter(a => !nurTageOhneDiagramm.has(new Date(a.date).toLocaleDateString('de-DE')))
     : angebote;
 
-  const offene = sichtbar.filter(a => a.status === 'OFFEN');
-  const erledigte = sichtbar.filter(a => a.status !== 'OFFEN');
+  // "Zu entscheiden" heisst: offen UND noch nicht verfallen. Ein Angebot für
+  // gestern laesst sich nicht mehr sinnvoll annehmen und soll die Liste der
+  // Aufgaben nicht laenger machen, als sie ist.
+  const offene = sichtbar.filter(a => a.status === 'OFFEN' && !a.verfallen);
+  const erledigte = sichtbar.filter(a => a.status !== 'OFFEN' || a.verfallen);
 
   const entscheide = async (a: Angebot, status: 'ANGENOMMEN' | 'ABGELEHNT') => {
     const wann = `${tagKurz(a.date)} ${hhmm(a.startMin)}–${hhmm(a.endMin)}`;
@@ -153,8 +158,11 @@ export default function Zeitangebote({
           </div>
         ) : (
           <div className="angebot-admin-erledigt">
-            {a.status === 'ANGENOMMEN' ? '👍 angenommen' : 'abgelehnt'}
+            {a.status === 'ANGENOMMEN' ? '👍 angenommen'
+              : a.status === 'ABGELEHNT' ? 'abgelehnt'
+              : '⌛ Zeitraum vorbei'}
             {a.decidedAt && <> am {new Date(a.decidedAt).toLocaleDateString('de-DE')}</>}
+            {a.umgesetzt && <> · Schicht ist eingetragen</>}
             {a.decisionNote && <> · „{a.decisionNote}"</>}
           </div>
         )}

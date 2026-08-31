@@ -8,7 +8,7 @@ import { minToTime } from '../utils/schichtzeit.js';
 import { ROLES, hasAdminAccess } from '../utils/roles.js';
 import { getUserRoles } from '../utils/userRoles.js';
 import { effektiveZeit } from '../utils/schichtzeit.js';
-import { findeKonflikt, konfliktMeldung, utcTag, Belegung } from '../utils/zeitueberschneidung.js';
+import { findeKonflikt, konfliktMeldung, utcTag, istVergangen, ueberschneidetSich, Belegung } from '../utils/zeitueberschneidung.js';
 
 /**
  * Zeitangebote von Helfern.
@@ -188,7 +188,38 @@ export const getShiftOffers = async (req: AuthRequest, res: Response) => {
     }
   });
 
-  return res.json(angebote);
+  // Fuer "umgesetzt": alle Einplanungen des Turniers, um sie den Zusagen
+  // gegenueberzustellen. Eine Abfrage statt einer je Angebot.
+  const einplanungen = await prisma.volunteerShift.findMany({
+    where: { tournamentId, userId: { not: null } },
+    include: { shift: { include: { daySlot: true, day: true, workArea: true } } }
+  });
+
+  /**
+   * Zwei Kennzeichen, die sich aus dem Bestand ergeben und deshalb nicht
+   * gespeichert werden - gespeichert muessten sie gepflegt werden und liefen
+   * irgendwann der Wirklichkeit hinterher:
+   *
+   *  - `umgesetzt`: Zu einer Zusage gibt es inzwischen eine Einplanung im
+   *    selben Zeitraum. Das Angebot hat seinen Zweck erfuellt und muss nicht
+   *    mehr als Aufgabe in der Ansicht stehen.
+   *  - `verfallen`: Der Zeitraum ist vorbei. Ein Angebot fuer gestern laesst
+   *    sich nicht mehr sinnvoll annehmen.
+   */
+  const angereichert = angebote.map(a => {
+    const tag = utcTag(a.date);
+    const umgesetzt = a.status === 'ANGENOMMEN' && einplanungen.some(vs => {
+      if (vs.userId !== a.userId || !vs.shift) return false;
+      const { start, ende } = effektiveZeit(vs.shift, vs.shift.daySlot);
+      if (start == null || ende == null) return false;
+      const schichtTag = vs.shift.day?.date ? utcTag(vs.shift.day.date) : utcTag(vs.date);
+      return schichtTag === tag && ueberschneidetSich(a.startMin, a.endMin, start, ende);
+    });
+
+    return { ...a, umgesetzt, verfallen: istVergangen(a.date, a.endMin) };
+  });
+
+  return res.json(angereichert);
 };
 
 /** Die eigenen Angebote - damit im Self-Service sichtbar ist, was laeuft. */
@@ -269,7 +300,8 @@ export const entscheideShiftOffer = async (req: AuthRequest, res: Response) => {
  * Entfernen eines Angebots.
  *
  * Zwei Faelle mit unterschiedlichen Regeln:
- *  - Der Helfer zieht sein eigenes zurueck, solange nicht entschieden wurde.
+ *  - Der Helfer zieht sein eigenes zurueck - auch eine Zusage, denn "ich kann
+ *    doch nicht" muss moeglich sein. Die Organisatoren werden dann gewarnt.
  *  - Die Organisatoren raeumen auf, auch Entschiedenes: ein angenommenes
  *    Angebot ist erledigt, sobald die Schicht eingetragen ist, und soll dann
  *    nicht dauerhaft in der Ansicht stehenbleiben.
@@ -284,27 +316,61 @@ export const deleteShiftOffer = async (req: AuthRequest, res: Response) => {
 
   const rollen = req.userId ? await getUserRoles(req.userId) : [];
   const istOrganisator = hasAdminAccess(rollen);
+  const eigenes = angebot.userId === req.userId;
 
-  if (!istOrganisator) {
-    if (angebot.userId !== req.userId) {
-      return res.status(403).json({ error: 'Das ist nicht dein Angebot.' });
-    }
-    if (angebot.status !== 'OFFEN') {
-      return res.status(409).json({ error: 'Über dieses Angebot wurde bereits entschieden.' });
-    }
+  if (!istOrganisator && !eigenes) {
+    return res.status(403).json({ error: 'Das ist nicht dein Angebot.' });
   }
+
+  const wann = `${datumKurz(angebot.date)} ${zeitraum(angebot.startMin, angebot.endMin)}`;
+  const warAngenommen = angebot.status === 'ANGENOMMEN';
+  const warOffen = angebot.status === 'OFFEN';
 
   await prisma.shiftOffer.delete({ where: { id } });
 
+  if (eigenes && warAngenommen) {
+    // Ein Helfer nimmt eine Zusage zurueck. Das muss auffallen: die
+    // Organisatoren haben moeglicherweise schon darauf hin geplant. Eine
+    // bereits eingetragene Schicht bleibt bestehen - die muessen sie selbst
+    // aufloesen, automatisch waere hier zu viel Automatik.
+    const organisatoren = await prisma.user.findMany({
+      where: { userRoles: { some: { role: { in: [ROLES.ADMIN, ROLES.ORGANIZER] } } } },
+      select: { id: true }
+    });
+    await notifyUsers(
+      organisatoren.map(o => o.id),
+      '⚠️ Zusage zurückgezogen',
+      () => `${angebot.user?.name ?? 'Ein Helfer'} kann für ${wann} doch nicht. `
+        + 'Falls dafür schon eine Schicht eingetragen ist, wird sie wieder frei.',
+      '/admin/organisation/uebersicht'
+    );
+  }
+
+  if (istOrganisator && !eigenes && warOffen) {
+    // Ein offenes Angebot verschwindet zu lassen, ohne etwas zu sagen, waere
+    // schlimmer als eine Absage: der Helfer wartet dann auf eine Antwort, die
+    // nie kommt.
+    await notifyUser(
+      angebot.userId,
+      'Dein Angebot',
+      ({ vertretend, name }) => vertretend
+        ? `Für ${wann} brauchen wir ${name} nicht – danke fürs Anbieten!`
+        : `Für ${wann} brauchen wir dich nicht – danke fürs Anbieten!`,
+      '/'
+    );
+  }
+
   // Nur protokollieren, wenn jemand ein fremdes Angebot entfernt - das eigene
-  // Zurueckziehen ist Alltag und muss den Verlauf nicht fuellen.
-  if (istOrganisator && angebot.userId !== req.userId) {
+  // Zurueckziehen eines offenen Angebots ist Alltag und muss den Verlauf nicht
+  // fuellen. Eine zurueckgezogene Zusage dagegen schon.
+  if ((istOrganisator && !eigenes) || (eigenes && warAngenommen)) {
     await protokolliere({
       tournamentId: angebot.tournamentId,
       userId: req.userId,
       art: 'helfer',
-      beschreibung: `hat das Zeitangebot von ${angebot.user?.name ?? 'einem Helfer'} `
-        + `für ${datumKurz(angebot.date)} ${zeitraum(angebot.startMin, angebot.endMin)} entfernt`,
+      beschreibung: eigenes
+        ? `hat die eigene Zusage für ${wann} zurückgezogen`
+        : `hat das Zeitangebot von ${angebot.user?.name ?? 'einem Helfer'} für ${wann} entfernt`,
       objektTyp: 'shift',
       objektId: angebot.shiftId
     });
