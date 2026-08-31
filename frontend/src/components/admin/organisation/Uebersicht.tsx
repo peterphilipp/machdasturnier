@@ -4,13 +4,14 @@ import { Shift, VolunteerShift, TournamentWorkArea, TournamentDay, Tournament, W
 import {
   getShifts, getVolunteerShifts, getVolunteers, updateShiftsBatch, updateShift,
   getTournamentWorkAreas, getTournamentDays, addDaySlot, getWorkAreas, adoptTournamentWorkArea,
-  exportDayToTemplate, createShift, apiDelete, apiPost, getTournaments, getAenderungen
+  exportDayToTemplate, createShift, apiDelete, apiPost, apiFetch, getTournaments, getAenderungen
 } from '../../../api';
 import { modal } from '../Modal';
 import { btnStyle, inputStyle, tdStyle, thStyle, BESETZUNG_FARBEN, besetzungsStufe, MAX_BESETZUNGS_PUNKTE } from '../shared';
 import ShiftTimeline from './ShiftTimeline';
 import RosterSetupPanel from './RosterSetupPanel';
 import Zeitangebote from './Zeitangebote';
+import AngeboteTimeline, { TimelineAngebot } from './AngeboteTimeline';
 import StationPrintModal from './StationPrintModal';
 import { Ladefehler } from '../../Verbindung';
 import PersonenAuswahl from '../PersonenAuswahl';
@@ -44,6 +45,12 @@ function vorWieLange(iso: string): string {
 }
 
 export default function Uebersicht({ selectedTournament }: { selectedTournament: number | null }) {
+  /**
+   * Bereichs- oder Personen-Sicht im Gantt. Zwei verschiedene Fragen: "wo
+   * fehlen Leute" (Bereiche) und "wie sieht der Tag einer Person aus"
+   * (Personen) - letzteres macht Doppelbelegungen und knappe Wechsel sichtbar.
+   */
+  const [ganttSicht, setGanttSicht] = useState<'bereich' | 'person'>('bereich');
   const [showPrintModal, setShowPrintModal] = useState(false);
   const queryClient = useQueryClient();
   const windowWidth = useWindowWidth();
@@ -543,6 +550,14 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
     grouped[dateKey].push(slot);
   });
 
+  // Selber queryKey wie in Zeitangebote.tsx: beide teilen sich den Cache,
+  // es entsteht keine zweite Anfrage.
+  const { data: zeitangebote = [] } = useQuery<TimelineAngebot[]>({
+    queryKey: ['shiftOffers', tid],
+    queryFn: () => apiFetch(`/api/shift-offers?tournamentId=${tid}`),
+    enabled: !!tid
+  });
+
   const unbesetzteSlots = jobSlots.filter(s => {
     const count = volunteerShifts.filter(vs => vs.shiftId === s.id).length;
     return count < s.maxVolunteers;
@@ -564,8 +579,6 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
         </div>
       )}
 
-      {tid && <Zeitangebote selectedTournament={tid} />}
-
       {tid && (
         <RosterSetupPanel
           selectedTournamentId={tid}
@@ -584,6 +597,27 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
           }}>
             {!timeEditMode ? (
               <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+                {/* Sicht-Umschalter. Im Zeiten-Modus ausgeblendet: dort wird
+                    gezogen, und das geht nur in der Bereichs-Sicht. */}
+                <div style={{ display: 'flex' }}>
+                  {([['bereich', '🏪 Bereiche'], ['person', '👤 Personen']] as const).map(([wert, text], i) => (
+                    <button
+                      key={wert}
+                      onClick={() => setGanttSicht(wert)}
+                      aria-pressed={ganttSicht === wert}
+                      style={{
+                        padding: '8px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: i === 0 ? '8px 0 0 8px' : '0 8px 8px 0',
+                        borderLeftWidth: i === 0 ? 1 : 0,
+                        background: ganttSicht === wert ? '#0d6efd' : '#fff',
+                        color: ganttSicht === wert ? '#fff' : '#475569'
+                      }}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
                 <button
                   onClick={() => setShowPrintModal(true)}
                   style={{
@@ -855,10 +889,15 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
                 );
               }
 
+              // Angebote dieses Tages - fuer das zweite Diagramm darunter.
+              const angeboteDesTages = zeitangebote.filter(a =>
+                new Date(a.date).toLocaleDateString('de-DE') === dateStr
+              );
+
               // Tablet/Desktop: bestehende Timeline
               return (
+                <Fragment key={dateStr}>
                 <ShiftTimeline
-                  key={dateStr}
                   title={`📅 ${dateStr} (${dayName})`}
                   subtitle={
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -909,9 +948,17 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
                   editable
                   timeEditMode={timeEditMode}
                   overrides={pendingTimeChanges}
+                  gruppierung={ganttSicht}
                   onShiftClick={s => setSelectedShift(s as unknown as Shift)}
                   onStageShiftTime={handleStageShiftTime}
                 />
+
+                <AngeboteTimeline
+                  angebote={angeboteDesTages}
+                  globalStartMin={globalStartMin}
+                  globalEndMin={globalEndMin}
+                />
+                </Fragment>
               );
             });
           })()}
@@ -919,6 +966,10 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
       )}
 
       {/* Modal für Helfer-Details */}
+      {/* Nach dem Dienstplan: Die Angebote sind erst dann interessant, wenn man
+          gesehen hat, wo Luecken sind - vorher fehlt der Bezug. */}
+      {tid && <Zeitangebote selectedTournament={tid} />}
+
       {selectedShift && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? 0 : 20 }}>
           <div style={{ background: '#fff', borderRadius: isMobile ? '16px 16px 0 0' : 16, width: '100%', maxWidth: isMobile ? undefined : 500, boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: isMobile ? '92vh' : '90vh' }}>
