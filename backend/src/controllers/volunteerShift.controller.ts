@@ -204,7 +204,7 @@ export const getStatistik = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'tournamentId ist erforderlich.' });
   }
 
-  const [shifts, einplanungen, tournament] = await Promise.all([
+  const [shifts, einplanungen, tournament, mitglieder] = await Promise.all([
     prisma.shift.findMany({
       where: { tournamentId },
       include: { daySlot: true, day: true, workArea: true }
@@ -225,10 +225,28 @@ export const getStatistik = async (req: Request, res: Response) => {
     prisma.tournament.findUnique({
       where: { id: tournamentId },
       include: { yearGroups: true }
+    }),
+    // Alle Turnier-Teilnehmer, nicht nur die eingeplanten: erst dadurch laesst
+    // sich sagen, wer zum Jahrgang gehoert und nichts uebernommen hat.
+    // Zwei Quellen, weil die Mitgliedschaft nachtraeglich eingefuehrt wurde
+    // und die Turnier-Praeferenz am Nutzer bei manchen der einzige Hinweis ist.
+    prisma.user.findMany({
+      where: {
+        OR: [
+          { tournamentMemberships: { some: { tournamentId } } },
+          { tournamentId }
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        children: { select: { childYear: true } },
+        trainedYearGroups: { select: { id: true } }
+      }
     })
   ]);
 
   if (!tournament) return res.status(404).json({ error: 'Turnier nicht gefunden' });
 
-  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups));
+  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups, mitglieder));
 };

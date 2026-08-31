@@ -40,6 +40,18 @@ export interface StatistikEinplanung {
   } | null;
 }
 
+/**
+ * Wer diesem Turnier zugeordnet ist - unabhaengig davon, ob er etwas
+ * uebernommen hat. Erst dadurch laesst sich sagen, wer NICHT dabei ist;
+ * aus den Einplanungen allein sind nur die Aktiven ablesbar.
+ */
+export interface StatistikMitglied {
+  id: number;
+  name: string;
+  children?: { childYear: number }[];
+  trainedYearGroups?: { id: number }[];
+}
+
 export interface StatistikJahrgang {
   id: number;
   name: string;
@@ -75,7 +87,9 @@ export const ABSCHNITT_LABEL: Record<string, string> = {
 export function berechneTurnierStatistik(
   shifts: StatistikShift[],
   einplanungen: StatistikEinplanung[],
-  jahrgaenge: StatistikJahrgang[]
+  jahrgaenge: StatistikJahrgang[],
+  /** Alle Turnier-Teilnehmer. Ohne sie bleibt die Liste der Unbeteiligten leer. */
+  mitglieder: StatistikMitglied[] = []
 ) {
   // --- Dauer je Schicht, einmal aufgeloest -------------------------------
   const dauerJeShift = new Map<number, number>();
@@ -194,8 +208,64 @@ export function berechneTurnierStatistik(
     }
   }
 
+  // Aufwand je Person und Jahrgang - Grundlage fuer die Aufschluesselung.
+  const proPersonJeJg = new Map<number, Map<number, { userId: number; name: string; schichten: number; minuten: number }>>();
+  for (const e of gueltig) {
+    if (e.userId == null) continue;
+    for (const jgId of jahrgangVon(e.user)) {
+      if (!proPersonJeJg.has(jgId)) proPersonJeJg.set(jgId, new Map());
+      const proJg = proPersonJeJg.get(jgId)!;
+      if (!proJg.has(e.userId)) {
+        proJg.set(e.userId, { userId: e.userId, name: e.user?.name || 'Unbekannt', schichten: 0, minuten: 0 });
+      }
+      const person = proJg.get(e.userId)!;
+      person.schichten += 1;
+      person.minuten += dauerJeShift.get(e.shiftId!) ?? 0;
+    }
+  }
+
+  /**
+   * Wer gehoert zum Jahrgang, hat aber nichts uebernommen?
+   *
+   * Gedacht als Arbeitsliste fuer den Jahrgangsvertreter: Man kann nur
+   * ansprechen, wen man kennt. Deshalb Klarnamen - aber nur hier, in einer
+   * Ansicht, die ohnehin nur Organisatoren sehen.
+   *
+   * Die Liste ist so vollstaendig wie die Mitgliederdaten. Wer kein Konto hat
+   * oder kein Kind hinterlegt hat, fehlt. Die Anzeige sagt das dazu, sonst
+   * wirkt sie verbindlicher als sie ist.
+   */
+  const ohneBeteiligungJeJg = new Map<number, { userId: number; name: string }[]>();
+  for (const m of mitglieder) {
+    const hatGeholfen = helferIds.has(m.id);
+    if (hatGeholfen) continue;
+    for (const jgId of jahrgangVon(m)) {
+      if (jgId === OHNE) continue;   // Ohne Zuordnung ist kein Jahrgang, den man ansprechen kann
+      if (!ohneBeteiligungJeJg.has(jgId)) ohneBeteiligungJeJg.set(jgId, []);
+      ohneBeteiligungJeJg.get(jgId)!.push({ userId: m.id, name: m.name });
+    }
+  }
+
   const jahrgangsBeteiligung = [...jgStat.values()].map(j => {
     const kinder = kinderJeJahrgang.get(j.id)?.size ?? 0;
+    const personen = [...(proPersonJeJg.get(j.id)?.values() ?? [])]
+      .map(pp => ({ userId: pp.userId, name: pp.name, schichten: pp.schichten, stunden: stundenAus(pp.minuten) }))
+      .sort((a, b) => b.stunden - a.stunden || b.schichten - a.schichten || a.name.localeCompare(b.name, 'de'));
+
+    const ohneBeteiligung = (ohneBeteiligungJeJg.get(j.id) ?? [])
+      .sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+    // Wie stark haengt der Jahrgang an wenigen Schultern? Der Anteil der
+    // Stunden, den die aktivste Haelfte traegt - 100 % hiesse: einer macht
+    // alles. Erst ab drei Aktiven aussagekraeftig.
+    const gesamtMinuten = j.minuten;
+    const haelfte = Math.ceil(personen.length / 2);
+    const obereHaelfteMinuten = personen.slice(0, haelfte)
+      .reduce((sum, pp) => sum + (proPersonJeJg.get(j.id)?.get(pp.userId)?.minuten ?? 0), 0);
+    const lastAnteilObereHaelfte = personen.length >= 3 && gesamtMinuten > 0
+      ? Math.round((obereHaelfteMinuten / gesamtMinuten) * 100)
+      : null;
+
     return {
       id: j.id,
       name: j.name,
@@ -204,7 +274,10 @@ export function berechneTurnierStatistik(
       stunden: stundenAus(j.minuten),
       kinder,
       // Die faire Zahl: ohne sie steht ein grosser Jahrgang immer besser da.
-      stundenProKind: kinder > 0 ? Math.round((j.minuten / 60 / kinder) * 10) / 10 : null
+      stundenProKind: kinder > 0 ? Math.round((j.minuten / 60 / kinder) * 10) / 10 : null,
+      personen,
+      ohneBeteiligung,
+      lastAnteilObereHaelfte
     };
   }).sort((a, b) => {
     if (a.name === 'Ohne Zuordnung') return 1;

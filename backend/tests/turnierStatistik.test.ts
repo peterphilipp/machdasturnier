@@ -218,3 +218,72 @@ describe('stundenAus', () => {
     expect(stundenAus(0)).toBe(0);
   });
 });
+
+describe('berechneTurnierStatistik – Aufschlüsselung je Jahrgang', () => {
+  const shifts = [schicht(1, 480, 600, 10), schicht(2, 600, 720, 10)]; // je 2h
+
+  it('listet die Aktiven eines Jahrgangs nach Stunden absteigend', () => {
+    const eintraege = [
+      einplanung(1, 1, 100, 'Viel Helferin', [2017]),
+      einplanung(2, 2, 100, 'Viel Helferin', [2017]),
+      einplanung(3, 1, 101, 'Wenig Helfer', [2017])
+    ];
+    const jg = berechneTurnierStatistik(shifts, eintraege, JAHRGAENGE)
+      .jahrgaenge.liste.find(j => j.name === '2017')!;
+
+    expect(jg.personen.map(p => p.name)).toEqual(['Viel Helferin', 'Wenig Helfer']);
+    expect(jg.personen[0].stunden).toBe(4);
+    expect(jg.personen[1].stunden).toBe(2);
+  });
+
+  // Der eigentliche Zweck: Wen kann der Jahrgangsvertreter noch ansprechen?
+  it('nennt Mitglieder des Jahrgangs, die nichts übernommen haben', () => {
+    const eintraege = [einplanung(1, 1, 100, 'Aktiv', [2017])];
+    const mitglieder = [
+      { id: 100, name: 'Aktiv', children: [{ childYear: 2017 }] },
+      { id: 101, name: 'Bisher nicht dabei', children: [{ childYear: 2017 }] },
+      { id: 102, name: 'Anderer Jahrgang', children: [{ childYear: 2019 }] }
+    ];
+    const s = berechneTurnierStatistik(shifts, eintraege, JAHRGAENGE, mitglieder);
+    const jg2017 = s.jahrgaenge.liste.find(j => j.name === '2017')!;
+
+    expect(jg2017.ohneBeteiligung.map(p => p.name)).toEqual(['Bisher nicht dabei']);
+    // Wer geholfen hat, steht nicht in der Liste der Unbeteiligten
+    expect(jg2017.ohneBeteiligung.some(p => p.name === 'Aktiv')).toBe(false);
+  });
+
+  it('führt jemanden nur beim eigenen Jahrgang als unbeteiligt', () => {
+    const mitglieder = [{ id: 101, name: 'Nur 2019', children: [{ childYear: 2019 }] }];
+    const s = berechneTurnierStatistik(shifts, [einplanung(1, 1, 100, 'Aktiv', [2017])], JAHRGAENGE, mitglieder);
+
+    const jg2017 = s.jahrgaenge.liste.find(j => j.name === '2017')!;
+    expect(jg2017.ohneBeteiligung).toHaveLength(0);
+  });
+
+  it('lässt die Liste leer, wenn keine Mitgliederdaten übergeben werden', () => {
+    const s = berechneTurnierStatistik(shifts, [einplanung(1, 1, 100, 'Aktiv', [2017])], JAHRGAENGE);
+    expect(s.jahrgaenge.liste.find(j => j.name === '2017')!.ohneBeteiligung).toEqual([]);
+  });
+
+  // Zeigt, wie stark ein Jahrgang an wenigen Schultern hängt.
+  it('berechnet den Lastanteil der aktiveren Hälfte', () => {
+    const vieleShifts = [1, 2, 3, 4].map(i => schicht(i, 480 + i * 30, 600 + i * 30, 10));
+    const eintraege = [
+      einplanung(1, 1, 100, 'A', [2017]), einplanung(2, 2, 100, 'A', [2017]),
+      einplanung(3, 3, 100, 'A', [2017]),
+      einplanung(4, 4, 101, 'B', [2017]),
+      einplanung(5, 1, 102, 'C', [2017])
+    ];
+    const jg = berechneTurnierStatistik(vieleShifts, eintraege, JAHRGAENGE)
+      .jahrgaenge.liste.find(j => j.name === '2017')!;
+
+    // A (6h) + B (2h) von insgesamt 10h = 80 %
+    expect(jg.lastAnteilObereHaelfte).toBe(80);
+  });
+
+  it('lässt den Lastanteil offen, wenn zu wenige mitgemacht haben', () => {
+    const jg = berechneTurnierStatistik(shifts, [einplanung(1, 1, 100, 'Allein', [2017])], JAHRGAENGE)
+      .jahrgaenge.liste.find(j => j.name === '2017')!;
+    expect(jg.lastAnteilObereHaelfte).toBeNull();
+  });
+});

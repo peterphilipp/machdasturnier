@@ -86,6 +86,8 @@ export const SEITENHILFE: Record<string, Seitenhilfe> = {
       'Die Spalte „je Kind" bei den Jahrgängen ist die vergleichbare Zahl. Absolute Stunden belohnen nur Größe: Ein Jahrgang mit zwanzig Kindern stellt selbstverständlich mehr Helfer als einer mit sechs.',
       'Wer Kinder in mehreren Jahrgängen hat, zählt in jedem davon mit. Die Summe der Helferzahlen ist deshalb höher als die Gesamtzahl – die Seite weist darauf hin, wenn es vorkommt.',
       'Die Rangliste zeigt bewusst nur die Fleißigsten und keine Schlusslichter.',
+      'Eine Jahrgangs-Zeile lässt sich aufklappen: Dann steht dort, wer wie viele Stunden übernommen hat und wer aus dem Jahrgang noch gar nicht dabei war – gedacht als Gesprächsgrundlage für den Jahrgangsvertreter, nicht als Bewertung. Aufgeführt sind nur Familien mit Konto und hinterlegtem Kind.',
+      'Der Prozentwert beim Aufklappen sagt, welchen Anteil der Stunden die aktivere Hälfte des Jahrgangs trägt. Ein hoher Wert heißt: Die Arbeit hängt an wenigen.',
       'Die Zahlen stehen sofort zur Verfügung, nicht erst nach dem Turnier – während der Planung zeigen sie vor allem, wo noch Plätze offen sind.'
     ]
   },

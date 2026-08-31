@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { apiFetch } from '../../../api';
 import { Ladefehler } from '../../Verbindung';
 import '../../../styles/components/statistik.css';
@@ -16,9 +16,14 @@ interface Kennzahl { plaetze: number; besetzt: number; offen: number; stunden: n
 interface Bereich extends Kennzahl { name: string; icon: string }
 interface Tag extends Kennzahl { datum: string }
 interface Helfer { userId: number; name: string; schichten: number; stunden: number }
+interface JahrgangPerson { userId: number; name: string; schichten: number; stunden: number }
 interface Jahrgang {
   id: number; name: string; helfer: number; schichten: number;
   stunden: number; kinder: number; stundenProKind: number | null;
+  personen: JahrgangPerson[];
+  ohneBeteiligung: { userId: number; name: string }[];
+  /** Anteil der Stunden, den die aktivere Hälfte trägt. Null bei zu wenigen. */
+  lastAnteilObereHaelfte: number | null;
 }
 interface Luecke {
   shiftId: number; bereich: string; icon: string; datum: string | null;
@@ -82,6 +87,9 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   const [fehler, setFehler] = useState<unknown>(null);
   const [versuch, setVersuch] = useState(0);
   const [topModus, setTopModus] = useState<'stunden' | 'schichten'>('stunden');
+  // Welche Jahrgänge sind aufgeschlüsselt? Zugeklappt bleibt die Tabelle
+  // überschaubar, aufgeklappt beantwortet sie "wer genau".
+  const [offeneJahrgaenge, setOffeneJahrgaenge] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!selectedTournament) { setDaten(null); setLaedt(false); return; }
@@ -286,9 +294,29 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
             </tr>
           </thead>
           <tbody>
-            {jahrgaenge.liste.map(j => (
-              <tr key={j.id}>
-                <td>{j.name}</td>
+            {jahrgaenge.liste.map(j => {
+              const aufgeklappt = offeneJahrgaenge.has(j.id);
+              const hatDetails = j.personen.length > 0 || j.ohneBeteiligung.length > 0;
+              return (
+              <Fragment key={j.id}>
+              <tr>
+                <td>
+                  {hatDetails ? (
+                    <button
+                      type="button"
+                      className="stat-jg-aufklappen"
+                      onClick={() => setOffeneJahrgaenge(prev => {
+                        const neu = new Set(prev);
+                        neu.has(j.id) ? neu.delete(j.id) : neu.add(j.id);
+                        return neu;
+                      })}
+                      aria-expanded={aufgeklappt}
+                    >
+                      <span className={`stat-jg-pfeil${aufgeklappt ? ' stat-jg-pfeil--offen' : ''}`}>›</span>
+                      {j.name}
+                    </button>
+                  ) : j.name}
+                </td>
                 <td className="stat-zahl">{j.helfer}</td>
                 <td className="stat-zahl">{j.schichten}</td>
                 <td className="stat-spalte-balken">
@@ -304,7 +332,64 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
                   ) : <span className="stat-leer" title="Kein Kind dieses Jahrgangs erfasst">–</span>}
                 </td>
               </tr>
-            ))}
+
+              {aufgeklappt && (
+                <tr className="stat-jg-detailzeile">
+                  <td colSpan={5}>
+                    <div className="stat-jg-detail">
+                      {j.lastAnteilObereHaelfte !== null && (
+                        <p className="stat-hinweis">
+                          Die aktivere Hälfte dieses Jahrgangs trägt{' '}
+                          <strong>{j.lastAnteilObereHaelfte} %</strong> der Stunden.
+                        </p>
+                      )}
+
+                      <div className="stat-jg-spalten">
+                        <div>
+                          <h5 className="stat-jg-titel">Wer mitgemacht hat ({j.personen.length})</h5>
+                          <ol className="stat-jg-liste">
+                            {j.personen.map(pp => (
+                              <li key={pp.userId}>
+                                <span className="stat-jg-name">{pp.name}</span>
+                                <span className="stat-jg-wert">
+                                  {zahl(pp.stunden)} h
+                                  <span className="stat-rang-neben"> · {pp.schichten} Sch.</span>
+                                </span>
+                              </li>
+                            ))}
+                            {j.personen.length === 0 && <li className="stat-leer">niemand</li>}
+                          </ol>
+                        </div>
+
+                        <div>
+                          <h5 className="stat-jg-titel">Noch nicht dabei ({j.ohneBeteiligung.length})</h5>
+                          {j.ohneBeteiligung.length === 0 ? (
+                            <p className="stat-leer">
+                              {j.personen.length > 0 ? 'Alle erfassten Familien haben etwas übernommen.' : '–'}
+                            </p>
+                          ) : (
+                            <>
+                              <ul className="stat-jg-liste stat-jg-liste--offen">
+                                {j.ohneBeteiligung.map(pp => (
+                                  <li key={pp.userId}><span className="stat-jg-name">{pp.name}</span></li>
+                                ))}
+                              </ul>
+                              <p className="stat-hinweis">
+                                Als Gesprächsgrundlage gedacht – wer hier steht, wurde vielleicht
+                                schlicht noch nicht gefragt. Aufgeführt sind nur Familien mit Konto
+                                und hinterlegtem Kind; wer beides nicht hat, fehlt in der Liste.
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
         </div>

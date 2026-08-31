@@ -436,3 +436,70 @@
   padding: 0 var(--spacing-2);
 }
 .angebot-dialog-loeschen:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Aufgeschlüsselter Jahrgang ---------------------------------------- */
+.stat-jg-aufklappen {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--club-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  min-height: 32px;
+}
+.stat-jg-pfeil {
+  display: inline-block;
+  transition: transform 0.15s;
+  color: var(--text-muted);
+}
+.stat-jg-pfeil--offen { transform: rotate(90deg); }
+
+.stat-jg-detailzeile > td {
+  background: var(--bg-main);
+  padding: var(--spacing-4) var(--spacing-2);
+}
+.stat-jg-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+/* Zwei Spalten nebeneinander: "wer trägt" und "wer fehlt" gehören in einen
+   Blick, sonst vergleicht man über einen Scroll hinweg. */
+.stat-jg-spalten {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-5);
+}
+.stat-jg-titel {
+  margin: 0 0 var(--spacing-2);
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
+}
+.stat-jg-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-sm);
+}
+.stat-jg-liste li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  padding: 4px var(--spacing-2);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+/* Wer noch nicht dabei ist, wird nicht rot markiert - das ist eine
+   Arbeitsliste zum Ansprechen, kein Tadel. */
+.stat-jg-liste--offen li { background: var(--bg-surface); color: var(--text-muted); }
+.stat-jg-name { font-weight: var(--font-weight-medium); }
+.stat-jg-wert {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
