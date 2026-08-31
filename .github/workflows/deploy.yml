@@ -78,6 +78,15 @@ jobs:
         working-directory: frontend
         run: npx tsc --noEmit
 
+      # Findet Hook-Verstoesse, die TypeScript nicht sieht: ein Hook hinter
+      # einem vorzeitigen Return laesst die Seite erst zur Laufzeit abstuerzen
+      # (React #310). Genau so ist v1.17.0 in Produktion gegangen.
+      # Nur rules-of-hooks ist ein Fehler, alles andere eine Warnung - der
+      # Lauf soll gruen bleiben, damit ein roter Lauf etwas bedeutet.
+      - name: Lint frontend (React-Hooks)
+        working-directory: frontend
+        run: npm run lint
+
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
