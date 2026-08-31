@@ -15,7 +15,7 @@ import '../../../styles/components/statistik.css';
 interface Kennzahl { plaetze: number; besetzt: number; offen: number; stunden: number; besetzungsgrad: number | null }
 interface Bereich extends Kennzahl { name: string; icon: string }
 interface Tag extends Kennzahl { datum: string }
-interface Helfer { userId: number; name: string; schichten: number; stunden: number }
+interface Helfer { userId: number; name: string; schichten: number; stunden: number; spenden: number }
 interface JahrgangPerson { userId: number; name: string; schichten: number; stunden: number; spenden: number }
 interface Jahrgang {
   id: number; name: string; helfer: number; schichten: number;
@@ -39,6 +39,7 @@ interface Statistik {
   werHatGetragen: {
     nachStunden: Helfer[];
     nachSchichten: Helfer[];
+    nachSpenden: Helfer[];
     verteilung: { eine: number; zwei: number; dreiOderMehr: number };
     schnittStundenProHelfer: number;
   };
@@ -88,7 +89,7 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<unknown>(null);
   const [versuch, setVersuch] = useState(0);
-  const [topModus, setTopModus] = useState<'stunden' | 'schichten'>('stunden');
+  const [topModus, setTopModus] = useState<'stunden' | 'schichten' | 'spenden'>('stunden');
   // Welche Jahrgänge sind aufgeschlüsselt? Zugeklappt bleibt die Tabelle
   // überschaubar, aufgeklappt beantwortet sie "wer genau".
   const [offeneJahrgaenge, setOffeneJahrgaenge] = useState<Set<number>>(new Set());
@@ -131,8 +132,12 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   }
 
   const { eckdaten, jeBereich, jeTag, werHatGetragen, jahrgaenge, luecken } = daten;
-  const top = topModus === 'stunden' ? werHatGetragen.nachStunden : werHatGetragen.nachSchichten;
-  const topMax = top.length ? (topModus === 'stunden' ? top[0].stunden : top[0].schichten) : 1;
+  const top = topModus === 'stunden' ? werHatGetragen.nachStunden
+    : topModus === 'schichten' ? werHatGetragen.nachSchichten
+    : werHatGetragen.nachSpenden;
+  const topWert = (h: Helfer) =>
+    topModus === 'stunden' ? h.stunden : topModus === 'schichten' ? h.schichten : h.spenden;
+  const topMax = top.length ? Math.max(1, topWert(top[0])) : 1;
   const { eine, zwei, dreiOderMehr } = werHatGetragen.verteilung;
   const helferMitSchichten = eine + zwei + dreiOderMehr;
   const jgMax = Math.max(1, ...jahrgaenge.liste.map(j => j.stunden));
@@ -255,12 +260,21 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
               onClick={() => setTopModus('schichten')}
               aria-pressed={topModus === 'schichten'}
             >nach Schichten</button>
+            {/* Nur anbieten, wenn es überhaupt Spenden gibt - ein leerer
+                Reiter wirft mehr Fragen auf, als er beantwortet. */}
+            {eckdaten.spender > 0 && (
+              <button
+                className={`stat-umschalter-btn${topModus === 'spenden' ? ' stat-umschalter-btn--aktiv' : ''}`}
+                onClick={() => setTopModus('spenden')}
+                aria-pressed={topModus === 'spenden'}
+              >nach Spenden</button>
+            )}
           </div>
         </div>
 
         <ol className="stat-rangliste">
           {top.map((h, i) => {
-            const wert = topModus === 'stunden' ? h.stunden : h.schichten;
+            const wert = topWert(h);
             return (
               <li key={h.userId} className="stat-rang">
                 <span className="stat-rang-platz">{i + 1}</span>
@@ -269,9 +283,11 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
                   <Balken anteil={(wert / topMax) * 100} />
                 </span>
                 <span className="stat-rang-wert">
-                  {topModus === 'stunden'
-                    ? <>{zahl(h.stunden)} h <span className="stat-rang-neben">· {h.schichten} Sch.</span></>
-                    : <>{h.schichten} Sch. <span className="stat-rang-neben">· {zahl(h.stunden)} h</span></>}
+                  {topModus === 'spenden'
+                    ? <>{h.spenden}× 🍰 {h.schichten > 0 && <span className="stat-rang-neben">· {zahl(h.stunden)} h</span>}</>
+                    : topModus === 'stunden'
+                    ? <>{zahl(h.stunden)} h <span className="stat-rang-neben">· {h.schichten} Sch.{h.spenden > 0 && <> · {h.spenden}× 🍰</>}</span></>
+                    : <>{h.schichten} Sch. <span className="stat-rang-neben">· {zahl(h.stunden)} h{h.spenden > 0 && <> · {h.spenden}× 🍰</>}</span></>}
                 </span>
               </li>
             );

@@ -355,3 +355,36 @@ describe('berechneTurnierStatistik – Verpflegung zählt als Beteiligung', () =
     expect(s.eckdaten.beteiligte).toBe(1);
   });
 });
+
+describe('berechneTurnierStatistik – Spender in den Top-Listen', () => {
+  const shifts = [schicht(1, 480, 720, 10)]; // 4h
+  const spende = (userId: number) => ({ userId, user: { id: userId, children: [], trainedYearGroups: [] } });
+
+  // Ohne eigene Liste wäre jemand, der nur spendet, unsichtbar: In den
+  // Stunden-Listen stünde er mit 0 h ganz unten oder gar nicht.
+  it('führt reine Spender in einer eigenen Rangfolge', () => {
+    const mitglieder = [{ id: 200, name: 'Kuchen-Königin', children: [] }];
+    const s = berechneTurnierStatistik(
+      shifts, [einplanung(1, 1, 100, 'Schicht')], [], mitglieder,
+      [spende(200), spende(200), spende(200), spende(100)]
+    );
+
+    expect(s.werHatGetragen.nachSpenden[0].name).toBe('Kuchen-Königin');
+    expect(s.werHatGetragen.nachSpenden[0].spenden).toBe(3);
+    // Wer beides macht, erscheint in beiden Listen mit beiden Werten
+    const schichtPerson = s.werHatGetragen.nachStunden[0];
+    expect(schichtPerson.stunden).toBe(4);
+    expect(schichtPerson.spenden).toBe(1);
+  });
+
+  it('lässt die Spenden-Liste leer, wenn niemand gespendet hat', () => {
+    const s = berechneTurnierStatistik(shifts, [einplanung(1, 1, 100, 'Schicht')], []);
+    expect(s.werHatGetragen.nachSpenden).toEqual([]);
+  });
+
+  it('begrenzt auch die Spenden-Liste auf zehn', () => {
+    const viele = Array.from({ length: 15 }, (_, i) => spende(300 + i));
+    const s = berechneTurnierStatistik(shifts, [], [], [], viele);
+    expect(s.werHatGetragen.nachSpenden).toHaveLength(10);
+  });
+});

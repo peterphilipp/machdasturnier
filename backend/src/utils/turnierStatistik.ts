@@ -431,11 +431,35 @@ export function berechneTurnierStatistik(
       nachStunden: [...helferListe]
         .sort((a, b) => b.minuten - a.minuten || b.schichten - a.schichten)
         .slice(0, 10)
-        .map(h => ({ userId: h.userId, name: h.name, schichten: h.schichten, stunden: stundenAus(h.minuten) })),
+        .map(h => ({
+          userId: h.userId, name: h.name, schichten: h.schichten,
+          stunden: stundenAus(h.minuten), spenden: spendenJePerson.get(h.userId) ?? 0
+        })),
+      /**
+       * Eigene Liste statt einer gemeinsamen Rangfolge: Wer nur spendet, hat
+       * null Stunden und stuende in den anderen beiden Listen ganz unten -
+       * obwohl er sich beteiligt hat. Und eine Umrechnung von Kuchen in
+       * Stunden waere eine willkuerliche Gewichtung.
+       */
+      nachSpenden: [...spendenJePerson.entries()]
+        .map(([userId, anzahl]) => ({
+          userId,
+          name: proHelfer.get(userId)?.name
+            ?? mitglieder.find(m => m.id === userId)?.name
+            ?? 'Unbekannt',
+          spenden: anzahl,
+          stunden: stundenAus(proHelfer.get(userId)?.minuten ?? 0),
+          schichten: proHelfer.get(userId)?.schichten ?? 0
+        }))
+        .sort((a, b) => b.spenden - a.spenden || a.name.localeCompare(b.name, 'de'))
+        .slice(0, 10),
       nachSchichten: [...helferListe]
         .sort((a, b) => b.schichten - a.schichten || b.minuten - a.minuten)
         .slice(0, 10)
-        .map(h => ({ userId: h.userId, name: h.name, schichten: h.schichten, stunden: stundenAus(h.minuten) })),
+        .map(h => ({
+          userId: h.userId, name: h.name, schichten: h.schichten,
+          stunden: stundenAus(h.minuten), spenden: spendenJePerson.get(h.userId) ?? 0
+        })),
       verteilung,
       schnittStundenProHelfer: helferListe.length
         ? Math.round((minutenGesamt / 60 / helferListe.length) * 10) / 10
