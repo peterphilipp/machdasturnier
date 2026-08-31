@@ -32,6 +32,16 @@ interface Luecke {
   startMin: number | null; endMin: number | null; plaetze: number; besetzt: number; offen: number;
 }
 
+interface VerlaufTag {
+  datum: string; zusagen: number; spenden: number;
+  aufrufe: { id: number; titel: string; erreicht: number }[];
+  zusagenKumuliert: number; spendenKumuliert: number;
+}
+interface VerlaufAufruf {
+  id: number; titel: string; empfaenger: string; erreicht: number; createdAt: string;
+  reaktion: { zusagen: number; spenden: number };
+}
+
 interface Statistik {
   eckdaten: { helfer: number; beteiligte: number; spenden: number; spender: number; schichten: number; stunden: number } & Kennzahl;
   jeBereich: Bereich[];
@@ -44,6 +54,12 @@ interface Statistik {
     schnittStundenProHelfer: number;
   };
   jahrgaenge: { liste: Jahrgang[]; mehrfachzaehlung: boolean };
+  verlauf?: {
+    tage: VerlaufTag[];
+    ohneZeitstempel: number;
+    aufrufe: VerlaufAufruf[];
+    fensterStunden: number;
+  };
   luecken: {
     jeAbschnitt: { abschnitt: string; label: string; plaetze: number; besetzt: number; offen: number; besetzungsgrad: number | null }[];
     groessteLuecken: Luecke[];
@@ -131,7 +147,7 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
     );
   }
 
-  const { eckdaten, jeBereich, jeTag, werHatGetragen, jahrgaenge, luecken } = daten;
+  const { eckdaten, jeBereich, jeTag, werHatGetragen, jahrgaenge, luecken, verlauf } = daten;
   const top = topModus === 'stunden' ? werHatGetragen.nachStunden
     : topModus === 'schichten' ? werHatGetragen.nachSchichten
     : werHatGetragen.nachSpenden;
@@ -425,6 +441,97 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
         </table>
         </div>
       </section>
+
+      {/* ---- Zeitlicher Verlauf ---- */}
+      {verlauf && verlauf.tage.length > 0 && (() => {
+        // Höchster Tageswert bestimmt die Balkenhöhe. Beide Reihen teilen sich
+        // die Skala, sonst wären fünf Spenden so hoch wie fünfzig Zusagen.
+        const tagesMax = Math.max(1, ...verlauf.tage.map(t => t.zusagen + t.spenden));
+        return (
+        <section>
+          <h3 className="feedback-section-title">📈 Wann kam die Hilfe zusammen</h3>
+          <p className="stat-hinweis">
+            Zusagen und Spenden je Tag. Die Markierungen sind versendete Aufrufe – was
+            danach kam, steht darunter. Ein Anhaltspunkt für die Frage, was gewirkt hat,
+            kein Beweis: Manches wäre auch ohne Aufruf gekommen.
+            {verlauf.ohneZeitstempel > 0 && (
+              <> Nicht enthalten sind <strong>{verlauf.ohneZeitstempel} Zusagen</strong> aus der
+              Zeit vor der Zeiterfassung – für sie ist der Zeitpunkt nicht bekannt.</>
+            )}
+          </p>
+
+          <div className="verlauf-diagramm">
+            {verlauf.tage.map(t => {
+              const gesamt = t.zusagen + t.spenden;
+              return (
+                <div key={t.datum} className="verlauf-tag" title={
+                  `${new Date(t.datum).toLocaleDateString('de-DE')}: `
+                  + `${t.zusagen} Zusagen, ${t.spenden} Spenden`
+                  + (t.aufrufe.length ? ` · Aufruf: ${t.aufrufe.map(a => a.titel).join(', ')}` : '')
+                }>
+                  <div className="verlauf-saeule">
+                    {t.spenden > 0 && (
+                      <div
+                        className="verlauf-teil verlauf-teil--spenden"
+                        style={{ height: `${(t.spenden / tagesMax) * 100}%` }}
+                      />
+                    )}
+                    {t.zusagen > 0 && (
+                      <div
+                        className="verlauf-teil verlauf-teil--zusagen"
+                        style={{ height: `${(t.zusagen / tagesMax) * 100}%` }}
+                      />
+                    )}
+                    {gesamt === 0 && <div className="verlauf-teil verlauf-teil--leer" />}
+                  </div>
+                  {t.aufrufe.length > 0 && <div className="verlauf-marker" aria-hidden="true">📣</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="verlauf-achse">
+            <span>{new Date(verlauf.tage[0].datum).toLocaleDateString('de-DE')}</span>
+            <span>{new Date(verlauf.tage[verlauf.tage.length - 1].datum).toLocaleDateString('de-DE')}</span>
+          </div>
+
+          <div className="verlauf-legende">
+            <span><i className="verlauf-punkt verlauf-punkt--zusagen" /> Zusagen</span>
+            <span><i className="verlauf-punkt verlauf-punkt--spenden" /> Spenden</span>
+            <span>📣 Aufruf verschickt</span>
+          </div>
+
+          {verlauf.aufrufe.length > 0 && (
+            <>
+              <h4 className="stat-untertitel">
+                Aufrufe und was in den {verlauf.fensterStunden} Stunden danach kam
+              </h4>
+              <div className="stat-tabelle-huelle">
+                <table className="stat-tabelle">
+                  <thead>
+                    <tr><th>Wann</th><th>Aufruf</th><th>Erreicht</th><th>Zusagen</th><th>Spenden</th></tr>
+                  </thead>
+                  <tbody>
+                    {verlauf.aufrufe.map(a => (
+                      <tr key={a.id}>
+                        <td>{new Date(a.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</td>
+                        <td>{a.titel}</td>
+                        <td className="stat-zahl">{a.erreicht}</td>
+                        <td className="stat-zahl">{a.reaktion.zusagen}</td>
+                        <td className="stat-zahl">{a.reaktion.spenden}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="stat-hinweis">
+                „Erreicht“ ist die Zahl der tatsächlich zugestellten Push-Nachrichten – nicht
+                die der Angeschriebenen. Wer die App nicht installiert hat, taucht hier nicht auf.
+              </p>
+            </>
+          )}
+        </section>
+        );
+      })()}
 
       {/* ---- Lücken ---- */}
       <section>

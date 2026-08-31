@@ -48,6 +48,7 @@ model Tournament {
   users                  User[]
   volunteerShifts        VolunteerShift[]
   shiftOffers            ShiftOffer[]
+  aufrufe                Aufruf[]
   yearGroups             YearGroup[]            @relation("TournamentYearGroups")
 
   @@map("tournaments")
@@ -202,6 +203,7 @@ model User {
   children              UserChild[]
   shifts                VolunteerShift[]
   shiftOffers           ShiftOffer[]
+  aufrufe               Aufruf[]
   webAuthnCredentials   WebAuthnCredential[]
   trainedYearGroups     YearGroup[]            @relation("TrainerYearGroups")
   userRoles             UserRole[]
@@ -315,6 +317,14 @@ model VolunteerShift {
   ratingComment      String?     @map("rating_comment")
   reminderSentBefore Boolean     @default(false) @map("reminder_sent_before")
   thanksSentAfter    Boolean     @default(false) @map("thanks_sent_after")
+  /// Wann die Zusage entstand - Grundlage fuer den zeitlichen Verlauf.
+  ///
+  /// Bewusst OHNE @default(now()): Ein Default wuerde beim Schema-Push allen
+  /// bereits bestehenden Zeilen den Migrationszeitpunkt verpassen, und die
+  /// Verlaufskurve zeigte einen erfundenen Ausschlag am Umstellungstag. Null
+  /// heisst ehrlich "vor der Zeiterfassung entstanden"; neue Eintraege setzen
+  /// den Wert im Code.
+  createdAt          DateTime?   @map("created_at")
   tournament         Tournament? @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   user               User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
   shift              Shift?      @relation(fields: [shiftId], references: [id], onDelete: Cascade)
@@ -794,4 +804,31 @@ model ShiftOffer {
   @@index([tournamentId, status])
   @@index([userId])
   @@map("shift_offers")
+}
+
+/// Ein versendeter Sammelaufruf (Push-Broadcast).
+///
+/// Bisher verschwand ein Aufruf nach dem Absenden spurlos. Damit liess sich
+/// die eigentliche Frage nicht beantworten: Hat der Appell etwas bewirkt?
+/// Erst mit Zeitpunkt und Empfaengerkreis lassen sich die Zusagen davor und
+/// danach gegenueberstellen.
+model Aufruf {
+  id           Int      @id @default(autoincrement())
+  tournamentId Int      @map("tournament_id")
+  /// Wer ihn ausgeloest hat - fuer den Verlauf, nicht fuer eine Bewertung.
+  userId       Int?     @map("user_id")
+  titel        String
+  text         String
+  /// all | shifts | users - derselbe Empfaengerkreis wie im Broadcast-Dialog.
+  empfaenger   String
+  /// Wie viele tatsaechlich erreicht wurden. Sagt mehr als die Absicht:
+  /// Push erreicht nur, wer die App installiert und erlaubt hat.
+  erreicht     Int      @default(0)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tournamentId, createdAt])
+  @@map("aufrufe")
 }

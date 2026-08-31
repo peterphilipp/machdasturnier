@@ -334,7 +334,11 @@ export const assignShift = async (req: Request, res: Response) => {
       date: shiftDate,
       slot: slotLabel,
       role: shift.workArea?.name || 'Helfer',
-      areaId: String(shift.tournamentWorkAreaId)
+      areaId: String(shift.tournamentWorkAreaId),
+      // Zeitpunkt der Zusage - Grundlage fuer den Verlauf. Hier gesetzt statt
+      // per Default im Schema, damit bestehende Eintraege ohne Zeitstempel
+      // bleiben, statt alle den Migrationszeitpunkt zu tragen.
+      createdAt: new Date()
     }
   });
   await ensureTournamentMembership(userId, shift.tournamentId);

@@ -271,6 +271,29 @@ export const broadcastPush = async (req: Request, res: Response) => {
     sentCount++;
   }
 
+  // Den Aufruf festhalten, damit spaeter nachvollziehbar ist, was er bewirkt
+  // hat. Ohne diesen Eintrag zeigt die Verlaufskurve nur Ausschlaege, aber
+  // keinen Anlass. Festgehalten wird die erreichte Zahl, nicht die
+  // angepeilte: Push kommt nur bei denen an, die es erlaubt haben.
+  if (tournamentId) {
+    try {
+      await prisma.aufruf.create({
+        data: {
+          tournamentId: Number(tournamentId),
+          userId: (req as AuthRequest).userId ?? null,
+          titel: title,
+          text: body,
+          empfaenger: mode,
+          erreicht: sentCount
+        }
+      });
+    } catch (err) {
+      // Ein misslungener Protokolleintrag darf den Versand nicht nachtraeglich
+      // als Fehler erscheinen lassen - die Nachricht ist raus.
+      console.error('[broadcast] Aufruf konnte nicht protokolliert werden:', (err as Error).message);
+    }
+  }
+
   return res.json({ success: true, targetedUsers: uniqueIds.length, sentPushCount: sentCount });
 };
 

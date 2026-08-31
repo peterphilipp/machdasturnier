@@ -4,13 +4,14 @@
 > Quelle ist [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 > Neu erzeugen mit `npm run docs:datamodel` im Ordner `backend`.
 
-Das Schema umfasst **38 Modelle**.
+Das Schema umfasst **39 Modelle**.
 
 ## Überblick
 
 | Modell | Tabelle | Felder |
 |--------|---------|--------|
 | [Aenderung](#aenderung) | `aenderungen` | 11 |
+| [Aufruf](#aufruf) | `aufrufe` | 10 |
 | [Club](#club) | `clubs` | 9 |
 | [DaySlot](#dayslot) | `day_slots` | 9 |
 | [Field](#field) | `fields` | 8 |
@@ -33,17 +34,17 @@ Das Schema umfasst **38 Modelle**.
 | [Team](#team) | `teams` | 16 |
 | [TemplateWorkArea](#templateworkarea) | `template_work_areas` | 8 |
 | [TimeSlot](#timeslot) | `time_slots` | 11 |
-| [Tournament](#tournament) | `tournaments` | 41 |
+| [Tournament](#tournament) | `tournaments` | 42 |
 | [TournamentClub](#tournamentclub) | `tournament_clubs` | 5 |
 | [TournamentDay](#tournamentday) | `tournament_days` | 10 |
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 17 |
-| [User](#user) | `users` | 31 |
+| [User](#user) | `users` | 32 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
-| [VolunteerShift](#volunteershift) | `volunteer_shifts` | 17 |
+| [VolunteerShift](#volunteershift) | `volunteer_shifts` | 18 |
 | [WebAuthnCredential](#webauthncredential) | `webauthn_credentials` | 11 |
 | [WorkArea](#workarea) | `arbeitsbereiche` | 13 |
 | [WorkAreaCategory](#workareacategory) | `work_area_categories` | 7 |
@@ -69,6 +70,25 @@ Tabelle: `aenderungen`
 | `objektId` | `Int?` |  |
 | `createdAt` | `DateTime` | Standard: `now()` |
 | `tournament` | `Tournament?` | Beziehung über `tournamentId`, beim Löschen: Cascade |
+| `user` | `User?` | Beziehung über `userId`, beim Löschen: SetNull |
+
+## Aufruf
+
+/ Ein versendeter Sammelaufruf (Push-Broadcast). / / Bisher verschwand ein Aufruf nach dem Absenden spurlos. Damit liess sich / die eigentliche Frage nicht beantworten: Hat der Appell etwas bewirkt? / Erst mit Zeitpunkt und Empfaengerkreis lassen sich die Zusagen davor und / danach gegenueberstellen.
+
+Tabelle: `aufrufe`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `tournamentId` | `Int` |  |
+| `userId` | `Int?` |  |
+| `titel` | `String` |  |
+| `text` | `String` |  |
+| `empfaenger` | `String` |  |
+| `erreicht` | `Int` | Standard: `0` |
+| `createdAt` | `DateTime` | Standard: `now()` |
+| `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `user` | `User?` | Beziehung über `userId`, beim Löschen: SetNull |
 
 ## Club
@@ -529,6 +549,7 @@ Tabelle: `tournaments`
 | `users` | `User[]` | Gegenstück einer Beziehung (Liste) |
 | `volunteerShifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
+| `aufrufe` | `Aufruf[]` | Gegenstück einer Beziehung (Liste) |
 | `yearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 
 ## TournamentClub
@@ -655,6 +676,7 @@ Tabelle: `users`
 | `children` | `UserChild[]` | Gegenstück einer Beziehung (Liste) |
 | `shifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
+| `aufrufe` | `Aufruf[]` | Gegenstück einer Beziehung (Liste) |
 | `webAuthnCredentials` | `WebAuthnCredential[]` | Gegenstück einer Beziehung (Liste) |
 | `trainedYearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 | `userRoles` | `UserRole[]` | Gegenstück einer Beziehung (Liste) |
@@ -724,6 +746,7 @@ Tabelle: `volunteer_shifts`
 | `ratingComment` | `String?` |  |
 | `reminderSentBefore` | `Boolean` | Standard: `false` |
 | `thanksSentAfter` | `Boolean` | Standard: `false` |
+| `createdAt` | `DateTime?` |  |
 | `tournament` | `Tournament?` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `user` | `User?` | Beziehung über `userId`, beim Löschen: Cascade |
 | `shift` | `Shift?` | Beziehung über `shiftId`, beim Löschen: Cascade |

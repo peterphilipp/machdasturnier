@@ -6,6 +6,7 @@ import { AuthRequest } from '../middleware/auth.js';
 import { protokolliere, datumKurz } from '../utils/protokoll.js';
 import { aggregateFeedbackByWorkArea } from '../utils/ratingUtils.js';
 import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
+import { berechneZeitverlauf, reaktionAufAufruf } from '../utils/zeitverlauf.js';
 
 export const volunteerShiftSchema = z.object({
   userId: z.union([z.number(), z.string()]).transform(Number),
@@ -41,6 +42,8 @@ export const createVolunteerShift = async (req: AuthRequest, res: Response) => {
       shiftId: shiftId ? parseInt(shiftId as string) : null,
       date: new Date(date).toISOString(),
       slot, role, areaId: areaId || null,
+      // Siehe self.controller: bewusst hier statt als Schema-Default.
+      createdAt: new Date(),
     },
     include: { user: true }
   });
@@ -204,7 +207,7 @@ export const getStatistik = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'tournamentId ist erforderlich.' });
   }
 
-  const [shifts, einplanungen, tournament, mitglieder, spenden] = await Promise.all([
+  const [shifts, einplanungen, tournament, mitglieder, spenden, aufrufe] = await Promise.all([
     prisma.shift.findMany({
       where: { tournamentId },
       include: { daySlot: true, day: true, workArea: true }
@@ -250,6 +253,7 @@ export const getStatistik = async (req: Request, res: Response) => {
       where: { tournamentId },
       select: {
         userId: true,
+        createdAt: true,
         user: {
           select: {
             id: true,
@@ -258,10 +262,35 @@ export const getStatistik = async (req: Request, res: Response) => {
           }
         }
       }
+    }),
+    // Die versendeten Aufrufe als Bezugspunkte im Verlauf.
+    prisma.aufruf.findMany({
+      where: { tournamentId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, titel: true, empfaenger: true, erreicht: true, createdAt: true }
     })
   ]);
 
   if (!tournament) return res.status(404).json({ error: 'Turnier nicht gefunden' });
 
-  return res.json(berechneTurnierStatistik(shifts, einplanungen, tournament.yearGroups, mitglieder, spenden));
+  const statistik = berechneTurnierStatistik(
+    shifts, einplanungen, tournament.yearGroups, mitglieder, spenden
+  );
+
+  // Zeitlicher Verlauf: wann kam was zusammen, und was ging an Aufrufen raus.
+  const verlauf = berechneZeitverlauf(einplanungen, spenden, aufrufe);
+
+  return res.json({
+    ...statistik,
+    verlauf: {
+      ...verlauf,
+      // Je Aufruf, was im Fenster danach passierte. Ein Anhaltspunkt, kein
+      // Beweis - deshalb steht das Fenster als Zahl dabei.
+      aufrufe: aufrufe.map(a => ({
+        ...a,
+        reaktion: reaktionAufAufruf(a, einplanungen, spenden)
+      })),
+      fensterStunden: 48
+    }
+  });
 };
