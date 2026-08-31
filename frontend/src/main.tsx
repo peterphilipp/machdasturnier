@@ -24,11 +24,45 @@ if ('serviceWorker' in navigator) {
     },
     onRegisteredSW(_swUrl, registration) {
       if (!registration) return
+
+      /**
+       * Auf eine neue Version pruefen.
+       *
+       * Fehler werden verschluckt: Offline schlaegt der Abruf fehl, und das
+       * ist kein Zustand, ueber den die App berichten muesste - beim naechsten
+       * Anlass wird es wieder versucht.
+       */
+      const pruefen = () => { registration.update().catch(() => {}) }
+
+      // Beim Start sofort pruefen. Ohne das erfuhr man von einer neuen Version
+      // erst, wenn zufaellig das Intervall unten zuschlug oder man die Seite
+      // von Hand neu lud - und dann brauchte es zwei Klicks statt einem.
+      pruefen()
+
       // Die App bleibt am Turniertag oft stundenlang in einem Tab offen
       // (Tablet als Hallen-Zentrale) und wird nie manuell neu geladen - ohne
       // periodischen Check würde ein neues Deployment erst sichtbar, wenn der
       // Browser zufällig sein eigenes ~24h-Intervall erreicht.
-      setInterval(() => { registration.update() }, 30 * 60 * 1000)
+      setInterval(pruefen, 30 * 60 * 1000)
+
+      /**
+       * Und beim Zurueckkehren zur App.
+       *
+       * Der eigentlich haeufigste Fall auf dem Handy: Die installierte PWA
+       * wird aus dem Hintergrund geholt. Das ist kein Seitenaufruf, es laeuft
+       * kein Ladevorgang - ohne diesen Auslauf bliebe es beim 30-Minuten-Takt.
+       *
+       * Mit Mindestabstand, damit haeufiges Hin- und Herwechseln zwischen
+       * Fenstern nicht bei jedem Wechsel eine Anfrage ausloest.
+       */
+      const MINDESTABSTAND_MS = 5 * 60 * 1000
+      let zuletztGeprueft = Date.now()
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return
+        if (Date.now() - zuletztGeprueft < MINDESTABSTAND_MS) return
+        zuletztGeprueft = Date.now()
+        pruefen()
+      })
     }
   });
   (window as any).updatePWA = updateSW;
