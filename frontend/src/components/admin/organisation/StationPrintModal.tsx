@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Tournament, TournamentDay, TournamentWorkArea, VolunteerShift } from '../shared';
+import { useKontakte, KontakteEditor, KontakteFooter } from './StationPrintKontakte';
 
 interface StationPrintModalProps {
   isOpen: boolean;
@@ -43,6 +44,10 @@ export default function StationPrintModal({
   const [nameMode, setNameMode] = useState<'short' | 'full'>('short'); // DSGVO Standard: Max M.
   const [showSignature, setShowSignature] = useState<boolean>(true);
   const [stationNote, setStationNote] = useState<string>('Bitte 5 Minuten vor Schichtbeginn an der Station einfinden. Bei Fragen oder Wechselgeld-Bedarf bitte an die Turnierleitung wenden.');
+  // Muss oberhalb des `if (!isOpen) return null` stehen - der Dialog wird
+  // geschlossen und wieder geoeffnet, und ein Hook hinter einem Early Return
+  // laesst React beim naechsten Rendern aussteigen.
+  const [kontakte, setKontakte] = useKontakte(tournament?.id);
 
   // Render filter logic
   const filteredDays = useMemo(() => {
@@ -189,6 +194,12 @@ export default function StationPrintModal({
             <span>Anwesenheits-Spalte (Handzeichen)</span>
           </label>
         </div>
+
+        <KontakteEditor
+          kontakte={kontakte}
+          setKontakte={setKontakte}
+          volunteerShifts={volunteerShifts}
+        />
 
         {/* Live A4 Print Pages Preview Container */}
         <div className="station-print-preview-container">
@@ -345,7 +356,7 @@ export default function StationPrintModal({
                   {/* Footer */}
                   <div className="station-print-footer">
                     <div>TSV Holm Planungs Tool &bull; Dienstplan Arbeitsstation <strong>{area.name}</strong></div>
-                    <div className="station-print-emergency">Notfall / Turnierleitung: Siehe Aushang</div>
+                    <KontakteFooter kontakte={kontakte} />
                     <div>Stand: {new Date().toLocaleString('de-DE')}</div>
                   </div>
                 </div>

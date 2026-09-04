@@ -102,6 +102,96 @@
   cursor: pointer;
 }
 
+/* Ansprechpartner fuer die Fusszeile.
+   Eigene Reihe statt einer Zelle im Optionsraster darueber: Es sind mehrere
+   Zeilen mit je zwei Feldern, die im 200px-Raster nicht lesbar unterkommen. */
+.station-print-kontakte {
+  padding: 14px 24px 16px;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.station-print-kontakte-kopf {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.station-print-kontakte-kopf label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.station-print-kontakte-hinweis {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.station-print-kontakte-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.station-print-kontakt-zeile {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.station-print-kontakt-weg {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.station-print-kontakt-weg:hover {
+  border-color: #fca5a5;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.station-print-kontakte-aktionen {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.station-print-kontakte-aktionen .station-print-select {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.station-print-kontakt-neu {
+  padding: 8px 14px;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.station-print-kontakt-neu:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
 .station-print-preview-container {
   padding: 24px;
   overflow-x: auto;
@@ -291,9 +381,20 @@
   color: #64748b;
 }
 
+/* Die Ansprechpartner sind der einzige Teil der Fusszeile, der wachsen kann.
+   Deshalb darf nur er umbrechen - und er bekommt den Platz, den die beiden
+   festen Angaben links und rechts uebrig lassen. */
 .station-print-emergency {
   font-weight: 700;
   color: #b91c1c;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  padding: 0 10px;
+}
+
+.station-print-emergency-trenner {
+  color: #94a3b8;
 }
 
 /* ==========================================
@@ -328,7 +429,8 @@
   }
 
   .station-print-toolbar,
-  .station-print-options {
+  .station-print-options,
+  .station-print-kontakte {
     display: none !important;
   }
 
