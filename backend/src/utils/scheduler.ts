@@ -1,16 +1,14 @@
 import prisma from '../config/prisma.js';
 import { notifyUser } from './notify.js';
 import { deleteUserAccount } from './accountDeletion.js';
+import { effektiveZeit, minToTime } from './schichtzeit.js';
+import { zeitpunktOrtszeit } from './zonenzeit.js';
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 // Läuft im 60s-Tick mit, aber die eigentliche Prüfung nur einmal pro
 // Kalendertag - taeglich reicht fuer eine 1-Jahres-Grenze voellig, jede
 // Minute waere reine Verschwendung.
 let lastInactivityCleanupDate: string | null = null;
-
-/** Hilfsfunktion: Minuten seit Mitternacht → „HH:MM" */
-const minToTime = (m: number): string =>
-  `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
 /**
  * Startet den Reminder-Scheduler.
@@ -88,6 +86,36 @@ async function checkInactiveUserCleanup(): Promise<void> {
 }
 
 /**
+ * Wann eine eingeplante Schicht tatsaechlich beginnt und endet.
+ *
+ * Zwei Dinge sind hier schon schiefgegangen und stehen deshalb an einer
+ * einzigen Stelle, mit Tests:
+ *
+ *  - Eine Schicht muss kein eigenes startMin haben; sie kann die Zeit vom
+ *    Zeitfenster des Tages erben. Wer nur shift.startMin liest, uebersieht
+ *    genau diese Schichten - und zwar lautlos.
+ *  - Die Uhrzeit ist Ortszeit in Holm. Als UTC gelesen liegt der Zeitpunkt im
+ *    Sommer zwei Stunden daneben, ohne dass die Zahl falsch aussieht.
+ */
+export interface ReminderSchicht {
+  date: Date | string;
+  shift: {
+    startMin: number | null;
+    endMin: number | null;
+    daySlot?: { startMin: number; endMin: number } | null;
+  } | null;
+}
+
+export function schichtZeitpunkte(vs: ReminderSchicht): { beginn: Date | null; ende: Date | null } {
+  if (!vs.shift) return { beginn: null, ende: null };
+  const { start, ende } = effektiveZeit(vs.shift, vs.shift.daySlot);
+  return {
+    beginn: start == null ? null : zeitpunktOrtszeit(vs.date, start),
+    ende: ende == null ? null : zeitpunktOrtszeit(vs.date, ende)
+  };
+}
+
+/**
  * Termin-Reminder an Helfer, deren Schicht in 90–130 Minuten beginnt
  * (Fenster von 40 Min, damit kein Reminder durch den 60s-Jitter
  * übersprungen wird).
@@ -95,6 +123,12 @@ async function checkInactiveUserCleanup(): Promise<void> {
  * Geht über notifyUser und damit über beide Kanaele - Push UND dauerhaft
  * gespeichert. Push allein erreichte kaum jemanden: die App ist selten
  * installiert und Benachrichtigungen noch seltener erlaubt.
+ *
+ * Die Zeit kommt ueber effektiveZeit(): eine Schicht muss kein eigenes
+ * startMin haben, sie kann es vom Zeitfenster des Tages erben. Frueher wurde
+ * ein fehlendes startMin als "nicht erinnerbar" gelesen und die Schicht
+ * kommentarlos uebersprungen - fuer die betroffenen Helfer kam nie ein
+ * Reminder, ohne dass irgendwo etwas davon stand.
  */
 async function checkRemindersBefore(): Promise<void> {
   const now = new Date();
@@ -104,31 +138,18 @@ async function checkRemindersBefore(): Promise<void> {
   // Alle VolunteerShifts laden, wo Reminder noch nicht gesendet wurde
   const candidates = await prisma.volunteerShift.findMany({
     where: { reminderSentBefore: false, userId: { not: null } },
-    include: { shift: { include: { workArea: true } } }
+    include: { shift: { include: { workArea: true, daySlot: true } } }
   });
 
   for (const vs of candidates) {
     if (!vs.userId || !vs.shift) continue;
 
-    const startMin = vs.shift.startMin;
-    if (startMin == null) continue;
-
-    // Schichtbeginn als absolute Zeit berechnen
-    const shiftDate = new Date(vs.date);
-    const shiftStart = new Date(
-      Date.UTC(
-        shiftDate.getUTCFullYear(),
-        shiftDate.getUTCMonth(),
-        shiftDate.getUTCDate(),
-        Math.floor(startMin / 60),
-        startMin % 60,
-        0
-      )
-    );
+    const { beginn: shiftStart } = schichtZeitpunkte(vs);
+    if (shiftStart == null) continue;
 
     if (shiftStart >= windowStart && shiftStart <= windowEnd) {
       const areaName = vs.shift.workArea?.name || vs.role || 'deiner Schicht';
-      const startStr = minToTime(startMin);
+      const startStr = minToTime(effektiveZeit(vs.shift, vs.shift.daySlot).start!);
 
       console.log(`[Scheduler] Sende Termin-Reminder an User ${vs.userId} für Schicht ${vs.id} um ${startStr}.`);
       await notifyUser(
@@ -163,27 +184,14 @@ async function checkRemindersAfter(): Promise<void> {
 
   const candidates = await prisma.volunteerShift.findMany({
     where: { thanksSentAfter: false, userId: { not: null } },
-    include: { shift: { include: { workArea: true } } }
+    include: { shift: { include: { workArea: true, daySlot: true } } }
   });
 
   for (const vs of candidates) {
     if (!vs.userId || !vs.shift) continue;
 
-    const endMin = vs.shift.endMin;
-    if (endMin == null) continue;
-
-    // Schichtende als absolute Zeit berechnen
-    const shiftDate = new Date(vs.date);
-    const shiftEnd = new Date(
-      Date.UTC(
-        shiftDate.getUTCFullYear(),
-        shiftDate.getUTCMonth(),
-        shiftDate.getUTCDate(),
-        Math.floor(endMin / 60),
-        endMin % 60,
-        0
-      )
-    );
+    const { ende: shiftEnd } = schichtZeitpunkte(vs);
+    if (shiftEnd == null) continue;
 
     if (shiftEnd >= windowStart && shiftEnd <= windowEnd) {
       const areaName = vs.shift.workArea?.name || vs.role || 'deiner Schicht';

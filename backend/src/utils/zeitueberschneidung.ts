@@ -8,6 +8,7 @@
  *
  * Reine Rechnung ohne Datenbankzugriff, damit sie testbar bleibt.
  */
+import { zeitpunktOrtszeit } from './zonenzeit.js';
 
 /** Zwei Zeitraeume am selben Tag ueberschneiden sich. */
 export function ueberschneidetSich(
@@ -63,14 +64,10 @@ export function konfliktMeldung(k: Belegung): string {
  * Ein Angebot fuer gestern ist gegenstandslos - es soll nicht weiter als
  * offene Aufgabe in der Liste stehen und dort Aufmerksamkeit binden.
  *
- * Gerechnet wird in UTC wie beim Reminder im Scheduler, damit dieselbe
- * Schicht ueberall demselben Kalendertag zugerechnet wird.
+ * Die Uhrzeit ist Ortszeit - wie ueberall im Dienstplan. Frueher wurde sie
+ * hier als UTC gelesen; ein Angebot galt dadurch im Sommer noch zwei Stunden
+ * nach seinem Ende als offen.
  */
 export function istVergangen(datum: Date | string, endMin: number, jetzt: Date = new Date()): boolean {
-  const d = new Date(datum);
-  const ende = new Date(Date.UTC(
-    d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
-    Math.floor(endMin / 60), endMin % 60, 0
-  ));
-  return ende.getTime() < jetzt.getTime();
+  return zeitpunktOrtszeit(datum, endMin).getTime() < jetzt.getTime();
 }

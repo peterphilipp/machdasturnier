@@ -97,4 +97,12 @@ describe('istVergangen', () => {
   it('erkennt einen vergangenen Tag', () => {
     expect(istVergangen('2026-09-04T00:00:00.000Z', 1400, jetzt)).toBe(true);
   });
+
+  // Die Endzeit ist Ortszeit, nicht UTC. Am 05.09. (MESZ, UTC+2) endet ein
+  // Angebot bis 15:00 bereits um 13:00 UTC - um 14:00 UTC ist es vorbei.
+  // Als UTC gelesen waere es noch eine Stunde lang "offen".
+  it('liest die Endzeit als Ortszeit', () => {
+    expect(istVergangen('2026-09-05T00:00:00.000Z', 15 * 60, jetzt)).toBe(true);
+    expect(istVergangen('2026-09-05T00:00:00.000Z', 17 * 60, jetzt)).toBe(false);
+  });
 });
