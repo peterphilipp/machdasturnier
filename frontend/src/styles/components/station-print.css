@@ -449,21 +449,28 @@
    PRINT SPECIFIC RULES (@media print)
    ========================================== */
 @media print {
-  /* Hide all app chrome, navigation, headers, modals overlays */
-  body * {
-    visibility: hidden !important;
+  /* Die App verschwindet aus dem Layout, nicht nur aus dem Blickfeld.
+     Vorher stand hier `body * { visibility: hidden }`: Die Admin-Oberflaeche
+     war damit unsichtbar, belegte aber weiter ihre voll Fensterbreite. Chrome
+     verkleinert die Seite so weit, dass die breiteste Layoutbreite aufs Papier
+     passt - gemessen 49%. Der Stationszettel kam winzig aus dem Drucker.
+     Der Dialog haengt per Portal direkt an <body>, deshalb genuegt es, #root
+     wegzunehmen.
+
+     Nur bei offenem Dialog: sonst druckte jedes andere Strg+P im Adminbereich
+     ein leeres Blatt. Die Klasse setzt das Modal, solange es offen ist. */
+  body.stationsdruck-offen #root {
+    display: none !important;
   }
 
-  /* Show only the station print pages */
-  .station-print-page,
-  .station-print-page * {
-    visibility: visible !important;
-  }
-
+  /* Kein position:absolute mehr: das war noetig, solange der Dialog im
+     Admin-Baum hing. Am <body> ist er ohnehin das einzige Element. */
   .station-print-overlay {
-    position: absolute !important;
-    inset: 0 !important;
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
     background: none !important;
+    backdrop-filter: none !important;
     padding: 0 !important;
     overflow: visible !important;
   }
@@ -472,8 +479,10 @@
     background: none !important;
     box-shadow: none !important;
     border: none !important;
-    max-width: 100% !important;
-    width: 100% !important;
+    border-radius: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    display: block !important;
   }
 
   .station-print-toolbar,
@@ -494,14 +503,25 @@
      umbrechen" fuer den Browser: erst eine leere Seite ausgeben und danach
      doch umbrechen. Ueberlaufen darf es also; nur eben an sinnvollen Stellen,
      dafuer sorgen die Regeln darunter. */
+  /* Masse in mm statt 100vh und 100%. Viewport-Einheiten loesen im Druck auf
+     die Bildschirmgroesse auf, nicht auf die Seite: min-height:100vh ergab die
+     Fensterhoehe, mal der Verkleinerung oben rund 104mm - daher das leere
+     Drittel unten. Und der Rand kommt jetzt nur noch aus @page, vorher kam er
+     zweimal (10mm Rand plus 10mm Innenabstand). */
   .station-print-page {
-    width: 100% !important;
-    min-height: 100vh !important;
+    width: auto !important;
+    min-height: 250mm !important;
     margin: 0 !important;
-    padding: 10mm !important;
+    padding: 0 !important;
     box-shadow: none !important;
     page-break-after: always !important;
     break-after: page !important;
+  }
+
+  /* Sonst haengt hinter dem letzten Bogen eine leere Seite. */
+  .station-print-page:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
   /* Ein Tagesabschnitt bleibt zusammen, wenn er auf eine Seite passt. Muss er
@@ -530,6 +550,10 @@
 
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    /* 12mm: genug Rand, damit Chromes eigene Kopf- und Fusszeile (Titel, URL,
+       Seitenzahl) nicht in den Bogen hineinragen, falls sie im Druckdialog
+       eingeschaltet bleiben. Ausgeschaltet sieht der Bogen besser aus - er
+       traegt Station, Stand und Ansprechpartner selbst. */
+    margin: 12mm;
   }
 }

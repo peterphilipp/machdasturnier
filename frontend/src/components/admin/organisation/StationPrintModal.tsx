@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Tournament, TournamentDay, TournamentWorkArea, VolunteerShift } from '../shared';
 import { useKontakte, KontakteEditor, KontakteFooter } from './StationPrintKontakte';
 
@@ -62,6 +63,19 @@ export default function StationPrintModal({
   // laesst React beim naechsten Rendern aussteigen.
   const [kontakte, setKontakte] = useKontakte(tournament?.id);
 
+  /**
+   * Markiert am <body>, dass gerade ein Stationszettel im Vordergrund steht.
+   *
+   * Die Druckregeln nehmen die App dann aus dem Layout. Das darf nur gelten,
+   * solange dieser Dialog offen ist - sonst druckte jeder andere Strg+P im
+   * Admin-Bereich ein leeres Blatt.
+   */
+  useEffect(() => {
+    if (!isOpen) return;
+    document.body.classList.add('stationsdruck-offen');
+    return () => document.body.classList.remove('stationsdruck-offen');
+  }, [isOpen]);
+
   // Render filter logic
   const filteredDays = useMemo(() => {
     if (selectedDayId === 'all') return days;
@@ -120,7 +134,21 @@ export default function StationPrintModal({
   const sponsorLogo = tournament?.logo;
   const sponsorName = tournament?.sponsorName || (tournament?.hasSponsor ? 'Sponsor' : null);
 
-  return (
+  /**
+   * Der Dialog haengt per Portal direkt an <body>, nicht dort, wo er im
+   * Komponentenbaum steht.
+   *
+   * Grund ist der Ausdruck. Bisher lag er tief in der Admin-Oberflaeche, die
+   * beim Drucken zwar auf visibility:hidden stand, aber im Layout blieb - und
+   * zwar fensterbreit. Chrome verkleinert die Seite, damit die breiteste
+   * Layoutbreite aufs Papier passt: gemessen 49%. Der Bogen kam winzig aus dem
+   * Drucker und fuellte ein Drittel der Seite.
+   *
+   * Am Portal laesst sich die App im Druck komplett aus dem Layout nehmen
+   * (#root auf display:none), statt sie nur unsichtbar zu machen. Dann ist der
+   * Stationszettel das einzige, was ueberhaupt eine Breite hat.
+   */
+  return createPortal(
     <div className="station-print-overlay">
       <div className="station-print-modal">
         {/* Toolbar Header */}
@@ -428,6 +456,7 @@ export default function StationPrintModal({
           })}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
