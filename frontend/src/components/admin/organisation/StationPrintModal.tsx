@@ -19,6 +19,18 @@ function minToTimeStr(min: number | null | undefined): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/** „Samstag, 05.09.2026" - fuer die Ueberschrift eines Tagesabschnitts. */
+const tagLang = (d: TournamentDay): string =>
+  d.date
+    ? new Date(d.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })
+    : d.label || 'Turniertag';
+
+/** „Sa., 05.09." - fuer die Aufzaehlung in der Kopfleiste, wo mehrere stehen. */
+const tagKurz = (d: TournamentDay): string =>
+  d.date
+    ? new Date(d.date).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })
+    : d.label || 'Turniertag';
+
 function formatHelperName(name: string, mode: 'full' | 'short'): string {
   if (!name) return 'Unbekannt';
   if (mode === 'full') return name;
@@ -43,6 +55,7 @@ export default function StationPrintModal({
   const [showPhone, setShowPhone] = useState<boolean>(false); // DSGVO Standard: Aus
   const [nameMode, setNameMode] = useState<'short' | 'full'>('short'); // DSGVO Standard: Max M.
   const [showSignature, setShowSignature] = useState<boolean>(true);
+  const [seitenAufteilung, setSeitenAufteilung] = useState<'station' | 'stationUndTag'>('station');
   const [stationNote, setStationNote] = useState<string>('Bitte 5 Minuten vor Schichtbeginn an der Station einfinden. Bei Fragen oder Wechselgeld-Bedarf bitte an die Turnierleitung wenden.');
   // Muss oberhalb des `if (!isOpen) return null` stehen - der Dialog wird
   // geschlossen und wieder geoeffnet, und ein Hook hinter einem Early Return
@@ -60,6 +73,42 @@ export default function StationPrintModal({
     if (selectedWorkAreaId === 'all') return active;
     return active.filter(w => String(w.id) === selectedWorkAreaId);
   }, [workAreas, selectedWorkAreaId]);
+
+  /**
+   * Die Blaetter, die gedruckt werden.
+   *
+   * Frueher entstand je Tag UND Station ein Blatt - bei zwei Turniertagen und
+   * acht Stationen also sechzehn. An der Station haengen dann zwei Zettel
+   * nebeneinander, die dasselbe Team an zwei Tagen zeigen, und wer nachsieht,
+   * muss erst den richtigen finden. Voreinstellung ist deshalb ein Blatt je
+   * Station mit allen Tagen darauf. Wer die alte Aufteilung braucht - etwa
+   * weil pro Tag ein frischer Zettel ausgehaengt wird - stellt sie um.
+   *
+   * Tage ohne Schichten fallen raus, Stationen ohne jede Schicht ebenfalls:
+   * ein leeres Blatt sagt nichts und kostet Papier.
+   */
+  const blaetter = useMemo(() => {
+    const proStation = filteredWorkAreas.map(area => ({
+      area,
+      tage: filteredDays
+        .map(day => ({
+          day,
+          shifts: jobSlots
+            .filter(s =>
+              s.tournamentDayId === day.id
+              && (s.tournamentWorkAreaId === area.id || s.arbeitsbereichId === area.id || s.workArea?.id === area.id))
+            .sort((a, b) =>
+              (a.startMin ?? a.daySlot?.startMin ?? 0) - (b.startMin ?? b.daySlot?.startMin ?? 0))
+        }))
+        .filter(t => t.shifts.length > 0)
+    })).filter(s => s.tage.length > 0);
+
+    if (seitenAufteilung === 'station') {
+      return proStation.map(s => ({ key: `a${s.area.id}`, area: s.area, tage: s.tage }));
+    }
+    return proStation.flatMap(s =>
+      s.tage.map(t => ({ key: `a${s.area.id}-d${t.day.id}`, area: s.area, tage: [t] })));
+  }, [filteredWorkAreas, filteredDays, jobSlots, seitenAufteilung]);
 
   if (!isOpen) return null;
 
@@ -155,6 +204,18 @@ export default function StationPrintModal({
           </div>
 
           <div className="station-print-field">
+            <label>📄 Seitenaufteilung</label>
+            <select
+              className="station-print-select"
+              value={seitenAufteilung}
+              onChange={e => setSeitenAufteilung(e.target.value as 'station' | 'stationUndTag')}
+            >
+              <option value="station">Ein Blatt je Station (alle Tage darauf)</option>
+              <option value="stationUndTag">Ein Blatt je Station und Tag</option>
+            </select>
+          </div>
+
+          <div className="station-print-field">
             <label>🔒 DSGVO Namensformat</label>
             <select
               className="station-print-select"
@@ -203,165 +264,167 @@ export default function StationPrintModal({
 
         {/* Live A4 Print Pages Preview Container */}
         <div className="station-print-preview-container">
-          {filteredDays.flatMap(day => {
-            const dayDateStr = day.date ? new Date(day.date).toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : day.label || 'Turniertag';
+          {blaetter.map(({ key, area, tage }) => {
+            const mehrereTage = tage.length > 1;
+            const schichtenGesamt = tage.reduce((s, t) => s + t.shifts.length, 0);
 
-            return filteredWorkAreas.map(area => {
-              // Find shifts for this day & work area
-              const areaShifts = jobSlots.filter(s => {
-                const dayIdMatch = s.tournamentDayId === day.id;
-                const areaIdMatch = s.tournamentWorkAreaId === area.id || s.arbeitsbereichId === area.id || s.workArea?.id === area.id;
-                return dayIdMatch && areaIdMatch;
-              }).sort((a, b) => {
-                const startA = a.startMin ?? a.daySlot?.startMin ?? 0;
-                const startB = b.startMin ?? b.daySlot?.startMin ?? 0;
-                return startA - startB;
-              });
-
-              if (areaShifts.length === 0) return null;
-
-              return (
-                <div key={`${day.id}-${area.id}`} className="station-print-page">
-                  <div>
-                    {/* Header */}
-                    <div className="station-print-header">
-                      <div className="station-print-header-left">
-                        {clubLogo ? (
-                          <img src={clubLogo} alt="Vereins Logo" className="station-print-logo" />
-                        ) : (
-                          <div style={{ fontSize: 32 }}>🏆</div>
-                        )}
-                      </div>
-
-                      <div className="station-print-title-box">
-                        <div className="station-print-tournament-name">{tournament?.name || 'Turnier Planungs Tool'}</div>
-                        <h1 className="station-print-station-title">
-                          {area.icon} {area.name}
-                        </h1>
-                      </div>
-
-                      <div className="station-print-header-right">
-                        {sponsorLogo ? (
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
-                            {/* Kein Name unter dem Logo: das Logo traegt den Namen bereits.
-                                Fuer Vorlese-Software steht er im alt-Text, und ohne Logo
-                                greift ohnehin der Textfall darunter. */}
-                            <img src={sponsorLogo} alt={sponsorName || 'Sponsor Logo'} className="station-print-logo" />
-                          </div>
-                        ) : sponsorName ? (
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{sponsorName}</div>
-                          </div>
-                        ) : null}
-                      </div>
+            return (
+              <div key={key} className="station-print-page">
+                <div>
+                  {/* Header */}
+                  <div className="station-print-header">
+                    <div className="station-print-header-left">
+                      {clubLogo ? (
+                        <img src={clubLogo} alt="Vereins Logo" className="station-print-logo" />
+                      ) : (
+                        <div style={{ fontSize: 32 }}>🏆</div>
+                      )}
                     </div>
 
-                    {/* Meta Bar */}
-                    <div className="station-print-meta-bar">
-                      <div>📅 <strong>Datum:</strong> {dayDateStr}</div>
-                      <div>📍 <strong>Station:</strong> {area.name}</div>
-                      <div>⏱️ <strong>Schichten:</strong> {areaShifts.length} insgesamt</div>
+                    <div className="station-print-title-box">
+                      <div className="station-print-tournament-name">{tournament?.name || 'Turnier Planungs Tool'}</div>
+                      <h1 className="station-print-station-title">
+                        {area.icon} {area.name}
+                      </h1>
                     </div>
 
-                    {/* Table */}
-                    <div className="station-print-table-container">
-                      <table className="station-print-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: '22%' }}>Uhrzeit / Slot</th>
-                            <th style={{ width: '45%' }}>Eingeteilte Helfer</th>
-                            {showSignature && <th style={{ width: '20%' }}>Anwesenheit</th>}
-                            <th style={{ width: '13%', textAlign: 'center' }}>Belegung</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {areaShifts.map((shift: any) => {
-                            const startMin = shift.startMin ?? shift.daySlot?.startMin;
-                            const endMin = shift.endMin ?? shift.daySlot?.endMin;
-                            const timeLabel = startMin != null && endMin != null
-                              ? `${minToTimeStr(startMin)} - ${minToTimeStr(endMin)} Uhr`
-                              : shift.slot || shift.daySlot?.label || 'Zeit unbestimmt';
-
-                            // Find volunteers assigned to this shift
-                            const assignedVS = volunteerShifts.filter(vs => vs.shiftId === shift.id || (vs.areaId === area.id && vs.date === day.date && vs.slot === shift.slot));
-                            const count = assignedVS.length;
-                            const maxVol = shift.maxVolunteers || area.maxVolunteers || 1;
-                            const isFull = count >= maxVol;
-
-                            return (
-                              <tr key={shift.id}>
-                                <td>
-                                  <span className="station-print-time-badge">{timeLabel}</span>
-                                  {shift.daySlot?.label && (
-                                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{shift.daySlot.label}</div>
-                                  )}
-                                </td>
-                                <td>
-                                  {assignedVS.length > 0 ? (
-                                    <div className="station-print-volunteer-list">
-                                      {assignedVS.map(vs => {
-                                        const hName = vs.user?.name ? formatHelperName(vs.user.name, nameMode) : 'Helfer eingetragen';
-                                        return (
-                                          <div key={vs.id} className="station-print-volunteer-item">
-                                            <span>👤 {hName}</span>
-                                            {showPhone && vs.user?.phone && (
-                                              <span className="station-print-phone-tag">📞 {vs.user.phone}</span>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                      {count < maxVol && (
-                                        <div className="station-print-empty-slot">
-                                          ➕ {maxVol - count} weitere(r) Platz/Plätze frei
-                                        </div>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="station-print-empty-slot">
-                                      ⚠️ Noch unbesetzt ({maxVol} Helfer gesucht)
-                                    </div>
-                                  )}
-                                </td>
-                                {showSignature && (
-                                  <td>
-                                    <div className="station-print-sign-box" />
-                                  </td>
-                                )}
-                                <td style={{ textAlign: 'center', fontWeight: 700 }}>
-                                  <span style={{ color: isFull ? '#16a34a' : '#d97706' }}>
-                                    {count} / {maxVol}
-                                  </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    {/* Station Instructions / Notes */}
-                    {stationNote.trim() && (
-                      <div className="station-print-notes-section">
-                        <div className="station-print-notes-title">
-                          <span>📌</span>
-                          <span>Hinweise & Anweisungen für diese Station:</span>
+                    <div className="station-print-header-right">
+                      {sponsorLogo ? (
+                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
+                          {/* Kein Name unter dem Logo: das Logo traegt den Namen bereits.
+                              Fuer Vorlese-Software steht er im alt-Text, und ohne Logo
+                              greift ohnehin der Textfall darunter. */}
+                          <img src={sponsorLogo} alt={sponsorName || 'Sponsor Logo'} className="station-print-logo" />
                         </div>
-                        <div>{stationNote}</div>
-                      </div>
-                    )}
+                      ) : sponsorName ? (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Präsentiert von</div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{sponsorName}</div>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
 
-                  {/* Footer */}
-                  <div className="station-print-footer">
+                  {/* Meta Bar */}
+                  <div className="station-print-meta-bar">
+                    {mehrereTage ? (
+                      <div>📅 <strong>Tage:</strong> {tage.map(t => tagKurz(t.day)).join(' · ')}</div>
+                    ) : (
+                      <div>📅 <strong>Datum:</strong> {tagLang(tage[0].day)}</div>
+                    )}
+                    <div>📍 <strong>Station:</strong> {area.name}</div>
+                    <div>⏱️ <strong>Schichten:</strong> {schichtenGesamt} insgesamt</div>
+                  </div>
+
+                  {/* Je Turniertag ein Abschnitt. Die Ueberschrift steht nur da,
+                      wenn es mehrere sind - bei einem einzigen Tag stuende sie
+                      unmittelbar unter demselben Datum in der Leiste darueber. */}
+                  {tage.map(({ day, shifts }) => (
+                    <div key={day.id} className="station-print-tag">
+                      {mehrereTage && (
+                        <div className="station-print-tag-titel">📅 {tagLang(day)}</div>
+                      )}
+
+                      <div className="station-print-table-container">
+                        <table className="station-print-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: '22%' }}>Uhrzeit / Slot</th>
+                              <th style={{ width: '45%' }}>Eingeteilte Helfer</th>
+                              {showSignature && <th style={{ width: '20%' }}>Anwesenheit</th>}
+                              <th style={{ width: '13%', textAlign: 'center' }}>Belegung</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {shifts.map((shift: any) => {
+                              const startMin = shift.startMin ?? shift.daySlot?.startMin;
+                              const endMin = shift.endMin ?? shift.daySlot?.endMin;
+                              const timeLabel = startMin != null && endMin != null
+                                ? `${minToTimeStr(startMin)} - ${minToTimeStr(endMin)} Uhr`
+                                : shift.slot || shift.daySlot?.label || 'Zeit unbestimmt';
+
+                              // Find volunteers assigned to this shift
+                              const assignedVS = volunteerShifts.filter(vs => vs.shiftId === shift.id || (vs.areaId === area.id && vs.date === day.date && vs.slot === shift.slot));
+                              const count = assignedVS.length;
+                              const maxVol = shift.maxVolunteers || area.maxVolunteers || 1;
+                              const isFull = count >= maxVol;
+
+                              return (
+                                <tr key={shift.id}>
+                                  <td>
+                                    <span className="station-print-time-badge">{timeLabel}</span>
+                                    {shift.daySlot?.label && (
+                                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{shift.daySlot.label}</div>
+                                    )}
+                                  </td>
+                                  <td>
+                                    {assignedVS.length > 0 ? (
+                                      <div className="station-print-volunteer-list">
+                                        {assignedVS.map(vs => {
+                                          const hName = vs.user?.name ? formatHelperName(vs.user.name, nameMode) : 'Helfer eingetragen';
+                                          return (
+                                            <div key={vs.id} className="station-print-volunteer-item">
+                                              <span>👤 {hName}</span>
+                                              {showPhone && vs.user?.phone && (
+                                                <span className="station-print-phone-tag">📞 {vs.user.phone}</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                        {count < maxVol && (
+                                          <div className="station-print-empty-slot">
+                                            ➕ {maxVol - count} weitere(r) Platz/Plätze frei
+                                          </div>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="station-print-empty-slot">
+                                        ⚠️ Noch unbesetzt ({maxVol} Helfer gesucht)
+                                      </div>
+                                    )}
+                                  </td>
+                                  {showSignature && (
+                                    <td>
+                                      <div className="station-print-sign-box" />
+                                    </td>
+                                  )}
+                                  <td style={{ textAlign: 'center', fontWeight: 700 }}>
+                                    <span style={{ color: isFull ? '#16a34a' : '#d97706' }}>
+                                      {count} / {maxVol}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Station Instructions / Notes */}
+                  {stationNote.trim() && (
+                    <div className="station-print-notes-section">
+                      <div className="station-print-notes-title">
+                        <span>📌</span>
+                        <span>Hinweise & Anweisungen für diese Station:</span>
+                      </div>
+                      <div>{stationNote}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="station-print-footer">
+                  <KontakteFooter kontakte={kontakte} />
+                  <div className="station-print-footer-meta">
                     <div>TSV Holm Planungs Tool &bull; Dienstplan Arbeitsstation <strong>{area.name}</strong></div>
-                    <KontakteFooter kontakte={kontakte} />
                     <div>Stand: {new Date().toLocaleString('de-DE')}</div>
                   </div>
                 </div>
-              );
-            });
+              </div>
+            );
           })}
         </div>
       </div>

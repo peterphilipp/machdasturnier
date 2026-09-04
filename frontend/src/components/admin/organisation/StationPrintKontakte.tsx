@@ -176,22 +176,39 @@ export function KontakteEditor({
   );
 }
 
-/** Die Ansprechpartner, wie sie im Fuss jedes Blattes erscheinen. */
+/**
+ * Die Ansprechpartner, wie sie im Fuss jedes Blattes erscheinen.
+ *
+ * Eigene Zeile ueber den Herkunftsangaben, nicht als mittlere Spalte
+ * dazwischen: In einer Dreierreihe bekommen die Kontakte nur den Rest der
+ * Breite, und der Umbruch trennt dann mitten im Eintrag Name von Nummer -
+ * "Sven Koinecke:" oben, die Nummer eine Zeile tiefer. Fuer den, der an der
+ * Station steht und waehlen will, ist genau das die unbrauchbare Variante.
+ *
+ * Jeder Eintrag ist deshalb ein eigenes, in sich unteilbares Element in einer
+ * umbrechenden Reihe. Damit traegt die Zeile einen Kontakt genauso wie fuenf:
+ * es kommen Zeilen dazu, aber nie ein Umbruch innerhalb eines Eintrags.
+ */
 export function KontakteFooter({ kontakte }: { kontakte: Kontakt[] }) {
   // Halbfertige Zeilen gehoeren nicht auf den Ausdruck: ein Name ohne Nummer
   // hilft niemandem, eine Nummer ohne Name auch nicht.
   const fertig = kontakte.filter(k => k.name.trim() && k.telefon.trim());
 
   if (fertig.length === 0) {
-    return <div className="station-print-emergency">Notfall / Turnierleitung: Siehe Aushang</div>;
+    return (
+      <div className="station-print-kontaktzeile">
+        <span className="station-print-kontaktzeile-titel">📞 Notfall / Turnierleitung:</span>
+        <span className="station-print-kontakt">Siehe Aushang</span>
+      </div>
+    );
   }
 
   return (
-    <div className="station-print-emergency">
-      {fertig.map((k, i) => (
-        <span key={k.id}>
-          {i > 0 && <span className="station-print-emergency-trenner"> · </span>}
-          {k.name}: {k.telefon}
+    <div className="station-print-kontaktzeile">
+      <span className="station-print-kontaktzeile-titel">📞 Ansprechpartner:</span>
+      {fertig.map(k => (
+        <span key={k.id} className="station-print-kontakt">
+          {k.name}: <span className="station-print-kontakt-nummer">{k.telefon}</span>
         </span>
       ))}
     </div>

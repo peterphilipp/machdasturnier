@@ -207,6 +207,12 @@
   background: #ffffff;
   width: 210mm;
   min-height: 297mm;
+  /* Der Vorschaucontainer ist eine Flex-Spalte, und Flex-Elemente schrumpfen.
+     Ein Blatt, dessen Inhalt ueber eine Seite hinausgeht, wurde dadurch auf
+     297mm zusammengedrueckt und der Rest lag unsichtbar ausserhalb - die
+     Vorschau zeigte also weniger, als spaeter aus dem Drucker kam. Beim
+     Drucken faellt das nicht auf, dort ist der Container display:block. */
+  flex-shrink: 0;
   padding: 16mm 18mm;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
@@ -276,6 +282,22 @@
   margin-bottom: 16px;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* Ein Turniertag auf dem Blatt einer Station. */
+.station-print-tag {
+  margin-bottom: 4px;
+}
+
+.station-print-tag-titel {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  background: #f1f5f9;
+  border-left: 4px solid #2563eb;
+  border-radius: 0 6px 6px 0;
+  padding: 5px 10px;
+  margin-bottom: 8px;
 }
 
 /* Table Design */
@@ -370,31 +392,57 @@
   gap: 6px;
 }
 
-/* Footer Section */
+/* Footer Section
+   Zwei Ebenen statt einer Dreierreihe: oben die Ansprechpartner, darunter die
+   Herkunftsangaben. In einer Reihe bekamen die Kontakte nur den Rest der
+   Breite und brachen mitten im Eintrag um - Name oben, Nummer eine Zeile
+   tiefer. Das ist genau die Stelle, an der ein Umbruch nicht passieren darf. */
 .station-print-footer {
   border-top: 2px solid #e2e8f0;
   padding-top: 10px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
   font-size: 11px;
   color: #64748b;
 }
 
-/* Die Ansprechpartner sind der einzige Teil der Fusszeile, der wachsen kann.
-   Deshalb darf nur er umbrechen - und er bekommt den Platz, den die beiden
-   festen Angaben links und rechts uebrig lassen. */
-.station-print-emergency {
-  font-weight: 700;
-  color: #b91c1c;
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: center;
-  padding: 0 10px;
+.station-print-footer-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.station-print-emergency-trenner {
-  color: #94a3b8;
+/* Umbrechende Reihe: ein Kontakt liest sich wie fuenf, es kommen nur Zeilen
+   dazu. Der Zeilenabstand ist bewusst groesser als der Wortabstand, damit
+   zwei Eintraege untereinander nicht als einer gelesen werden. */
+.station-print-kontaktzeile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  text-align: center;
+  column-gap: 16px;
+  row-gap: 3px;
+}
+
+.station-print-kontaktzeile-titel {
+  font-weight: 700;
+  color: #475569;
+  white-space: nowrap;
+}
+
+/* Der Eintrag ist die unteilbare Einheit: Name und Nummer gehoeren zusammen
+   oder gar nicht. */
+.station-print-kontakt {
+  white-space: nowrap;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.station-print-kontakt-nummer {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ==========================================
@@ -440,6 +488,12 @@
     display: block !important;
   }
 
+  /* Kein break-inside: avoid mehr. Solange ein Blatt genau einen Tag trug,
+     passte es immer auf eine Seite und die Regel kostete nichts. Ein Blatt mit
+     allen Tagen einer Station kann laenger werden - dann heisst "nicht
+     umbrechen" fuer den Browser: erst eine leere Seite ausgeben und danach
+     doch umbrechen. Ueberlaufen darf es also; nur eben an sinnvollen Stellen,
+     dafuer sorgen die Regeln darunter. */
   .station-print-page {
     width: 100% !important;
     min-height: 100vh !important;
@@ -448,7 +502,30 @@
     box-shadow: none !important;
     page-break-after: always !important;
     break-after: page !important;
-    break-inside: avoid !important;
+  }
+
+  /* Ein Tagesabschnitt bleibt zusammen, wenn er auf eine Seite passt. Muss er
+     doch geteilt werden, wird wenigstens keine einzelne Schicht zerschnitten
+     und die Kopfzeile der Tabelle wiederholt sich. */
+  .station-print-tag {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .station-print-table thead {
+    display: table-header-group;
+  }
+
+  .station-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Eine Ueberschrift allein am Seitenende ist eine falsche Auskunft: sie
+     verspricht eine Tabelle, die erst auf der naechsten Seite kommt. */
+  .station-print-tag-titel {
+    break-after: avoid;
+    page-break-after: avoid;
   }
 
   @page {
