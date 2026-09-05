@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiPatch, apiDelete } from '../../../api';
 import { modal } from '../Modal';
-import { minToTime } from '../shared';
+import { minToTime, TournamentWorkArea } from '../shared';
 import type { TimelineAngebot } from './AngeboteTimeline';
 import '../../../styles/components/statistik.css';
 
@@ -17,6 +17,12 @@ import '../../../styles/components/statistik.css';
  * anschliessend von Hand eingetragen, bei Bedarf mit zugeschnittener Zeit.
  * Automatisch einzuplanen hiesse, einen Eintrag mit einer Zeit anzulegen, die
  * von der Schichtzeit abweicht, und genau das soll nicht wieder passieren.
+ *
+ * Der Bereich, den der Organisator hier beim Annehmen waehlt, aendert daran
+ * nichts - er ordnet die Zusage nur zu, damit sie als Balken in der Zeile
+ * dieses Bereichs im Dienstplan auftaucht, statt nur in diesem getrennten
+ * Angebots-Diagramm. Optional: eine Zusage "egal wo gebraucht" bleibt ohne
+ * Bereich moeglich.
  */
 
 const hhmm = (m: number) => minToTime(m);
@@ -26,15 +32,25 @@ const tagLang = (iso: string) =>
 export default function AngebotDialog({
   angebot,
   tournamentId,
+  areas,
   onClose
 }: {
   angebot: TimelineAngebot;
   tournamentId: number | null;
+  /** Aktive Arbeitsbereiche des Turniers - zur Auswahl beim Annehmen. */
+  areas: TournamentWorkArea[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const [notiz, setNotiz] = useState(angebot.decisionNote ?? '');
   const [busy, setBusy] = useState(false);
+  // Vorbelegt mit dem Wunschbereich, wenn es genau einen gibt - dann ist die
+  // Entscheidung bereits offensichtlich und der Organisator muss nichts
+  // eintippen. Bei mehreren Wuenschen oder keinem bleibt es eine bewusste Wahl.
+  const wunschBereichIds = (angebot.workAreas ?? []).map(w => w.id).filter((id): id is number => id != null);
+  const [bereichId, setBereichId] = useState<number | ''>(
+    angebot.entschiedenerBereich?.id ?? (wunschBereichIds.length === 1 ? wunschBereichIds[0] : '')
+  );
 
   const aktualisieren = () => {
     queryClient.invalidateQueries({ queryKey: ['shiftOffers', tournamentId] });
@@ -54,11 +70,13 @@ export default function AngebotDialog({
     : (angebot.workAreas ?? []).map(w => `${w.icon ?? ''} ${w.name}`.trim()).join(', ');
 
   const entscheide = async (status: 'ANGENOMMEN' | 'ABGELEHNT') => {
+    const gewaehlterBereich = areas.find(a => a.id === bereichId);
     const bestaetigt = await modal.confirm({
       title: status === 'ANGENOMMEN' ? 'Angebot annehmen' : 'Angebot ablehnen',
       message: status === 'ANGENOMMEN'
-        ? `${angebot.user?.name} bekommt eine Zusage für ${wann}. Die Schicht trägst du `
-          + 'anschliessend im Dienstplan ein – das passiert nicht automatisch.'
+        ? `${angebot.user?.name} bekommt eine Zusage für ${wann}`
+          + (gewaehlterBereich ? `, zugeordnet zu ${gewaehlterBereich.icon} ${gewaehlterBereich.name}` : '')
+          + '. Die Schicht trägst du anschliessend im Dienstplan ein – das passiert nicht automatisch.'
         : `${angebot.user?.name} bekommt eine Absage für ${wann}.`,
       variant: status === 'ABGELEHNT' ? 'danger' : undefined
     });
@@ -68,7 +86,8 @@ export default function AngebotDialog({
     try {
       await apiPatch(`/api/shift-offers/${angebot.id}/entscheidung`, {
         status,
-        decisionNote: notiz.trim() || null
+        decisionNote: notiz.trim() || null,
+        bereichId: status === 'ANGENOMMEN' && bereichId !== '' ? bereichId : null
       });
       aktualisieren();
     } catch (err) { await fehler(err); } finally { setBusy(false); }
@@ -133,22 +152,51 @@ export default function AngebotDialog({
               {angebot.decidedAt && <> am {new Date(angebot.decidedAt).toLocaleDateString('de-DE')}</>}
               {angebot.umgesetzt && <> · Schicht ist eingetragen</>}
             </dd>
+            {!offen && angebot.status === 'ANGENOMMEN' && angebot.entschiedenerBereich && (
+              <>
+                <dt>Bereich</dt>
+                <dd>{angebot.entschiedenerBereich.icon} {angebot.entschiedenerBereich.name}</dd>
+              </>
+            )}
           </dl>
 
           {offen ? (
-            <div className="rating-feld">
-              <label className="rating-feld-label" htmlFor="angebot-rueckmeldung">
-                Rückmeldung an den Helfer (optional)
-              </label>
-              <input
-                id="angebot-rueckmeldung"
-                className="rating-kommentar"
-                maxLength={500}
-                value={notiz}
-                onChange={e => setNotiz(e.target.value)}
-                placeholder="z. B. „wir tragen dich für den Grillstand ein“"
-              />
-            </div>
+            <>
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="angebot-bereich">
+                  Bereich zuordnen (optional)
+                </label>
+                <select
+                  id="angebot-bereich"
+                  className="rating-kommentar"
+                  value={bereichId}
+                  onChange={e => setBereichId(e.target.value === '' ? '' : Number(e.target.value))}
+                >
+                  <option value="">egal, wo gebraucht</option>
+                  {areas.map(a => (
+                    <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
+                  ))}
+                </select>
+                <p className="stat-hinweis" style={{ marginTop: 4 }}>
+                  Nur bei „Annehmen" wirksam. Die Zusage erscheint dann als Balken in der
+                  Dienstplan-Zeile dieses Bereichs – eingetragen ist sie damit noch nicht.
+                </p>
+              </div>
+
+              <div className="rating-feld">
+                <label className="rating-feld-label" htmlFor="angebot-rueckmeldung">
+                  Rückmeldung an den Helfer (optional)
+                </label>
+                <input
+                  id="angebot-rueckmeldung"
+                  className="rating-kommentar"
+                  maxLength={500}
+                  value={notiz}
+                  onChange={e => setNotiz(e.target.value)}
+                  placeholder="z. B. „wir tragen dich für den Grillstand ein“"
+                />
+              </div>
+            </>
           ) : (
             <p className="stat-hinweis">
               {angebot.decisionNote && <>Rückmeldung: „{angebot.decisionNote}"<br /></>}

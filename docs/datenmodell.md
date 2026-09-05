@@ -28,7 +28,7 @@ Das Schema umfasst **40 Modelle**.
 | [PasswordResetToken](#passwordresettoken) | `password_reset_tokens` | 7 |
 | [PushSubscription](#pushsubscription) | `push_subscriptions` | 8 |
 | [Shift](#shift) | `shifts` | 16 |
-| [ShiftOffer](#shiftoffer) | `shift_offers` | 19 |
+| [ShiftOffer](#shiftoffer) | `shift_offers` | 21 |
 | [ShoppingCatalogItem](#shoppingcatalogitem) | `shopping_catalog_items` | 9 |
 | [ShoppingListItem](#shoppinglistitem) | `shopping_list_items` | 9 |
 | [StandingsEntry](#standingsentry) | `standings_entries` | 13 |
@@ -40,7 +40,7 @@ Das Schema umfasst **40 Modelle**.
 | [TournamentDay](#tournamentday) | `tournament_days` | 10 |
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
-| [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 17 |
+| [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 18 |
 | [User](#user) | `users` | 33 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
@@ -402,10 +402,12 @@ Tabelle: `shift_offers`
 | `decidedAt` | `DateTime?` |  |
 | `decisionNote` | `String?` |  |
 | `createdAt` | `DateTime` | Standard: `now()` |
+| `entschiedenerBereichId` | `Int?` |  |
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |
 | `shift` | `Shift?` | Beziehung über `shiftId`, beim Löschen: SetNull |
 | `workArea` | `TournamentWorkArea?` | Beziehung über `workAreaId`, beim Löschen: SetNull |
+| `entschiedenerBereich` | `TournamentWorkArea?` | beim Löschen: SetNull, Gegenstück einer Beziehung |
 | `workAreas` | `TournamentWorkArea[]` | Gegenstück einer Beziehung (Liste) |
 
 ## ShoppingCatalogItem
@@ -659,6 +661,7 @@ Tabelle: `tournament_work_areas`
 | `dayWorkAreas` | `TournamentDayWorkArea[]` | Gegenstück einer Beziehung (Liste) |
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `offerWishes` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
+| `offerEntscheidungen` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 
 ## User

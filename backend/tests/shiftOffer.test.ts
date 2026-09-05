@@ -77,4 +77,16 @@ describe('entscheidungSchema', () => {
     expect(entscheidungSchema.safeParse({ status: 'ABGELEHNT', decisionNote: 'diesmal voll' }).success).toBe(true);
     expect(entscheidungSchema.safeParse({ status: 'ABGELEHNT', decisionNote: null }).success).toBe(true);
   });
+
+  // Der Bereich ist optional - eine Zusage "egal wo gebraucht" bleibt moeglich.
+  it('nimmt einen optionalen Bereich an', () => {
+    expect(entscheidungSchema.safeParse({ status: 'ANGENOMMEN', bereichId: 3 }).success).toBe(true);
+    expect(entscheidungSchema.safeParse({ status: 'ANGENOMMEN', bereichId: null }).success).toBe(true);
+    expect(entscheidungSchema.safeParse({ status: 'ANGENOMMEN' }).success).toBe(true);
+  });
+
+  it('weist einen unbrauchbaren Bereich zurück', () => {
+    expect(entscheidungSchema.safeParse({ status: 'ANGENOMMEN', bereichId: 0 }).success).toBe(false);
+    expect(entscheidungSchema.safeParse({ status: 'ANGENOMMEN', bereichId: -1 }).success).toBe(false);
+  });
 });

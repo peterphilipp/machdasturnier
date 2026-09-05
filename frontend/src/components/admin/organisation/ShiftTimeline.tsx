@@ -16,6 +16,22 @@ export interface TimelineShift {
   arbeitsbereich?: { name: string; icon: string; color: string; order?: number } | null;
 }
 
+/**
+ * Ein angenommenes Zeitangebot, dem der Organisator einen Bereich zugeordnet
+ * hat - fuer den "Geist"-Balken in der Zeile dieses Bereichs, siehe unten bei
+ * `geisterZeilen`.
+ */
+export interface TimelineAngebotGeist {
+  id: number;
+  startMin: number;
+  endMin: number;
+  status: string;
+  /** Vom Server abgeleitet: es gibt bereits eine echte Einplanung dazu. */
+  umgesetzt?: boolean;
+  entschiedenerBereich?: { id: number; name: string; icon: string; color?: string } | null;
+  user?: { name: string } | null;
+}
+
 export default function ShiftTimeline({
   title,
   subtitle,
@@ -28,8 +44,10 @@ export default function ShiftTimeline({
   timeEditMode = false,
   overrides,
   gruppierung = 'bereich',
+  angebote,
   onShiftClick,
-  onStageShiftTime
+  onStageShiftTime,
+  onAngebotClick
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -43,8 +61,16 @@ export default function ShiftTimeline({
   overrides?: Record<number, { startMin: number; endMin: number }>;
   /** 'bereich' = eine Zeile je Arbeitsbereich, 'person' = eine Zeile je Helfer. */
   gruppierung?: 'bereich' | 'person';
+  /**
+   * Zeitangebote dieses Tages - nur fuer die angenommenen mit zugeordnetem
+   * Bereich entsteht daraus ein "Geist"-Balken in der Bereichs-Sicht, siehe
+   * `geisterZeilen`. Alle anderen (offen, abgelehnt, ohne Bereich) bleiben
+   * unberuehrt im separaten Angebots-Diagramm darunter.
+   */
+  angebote?: TimelineAngebotGeist[];
   onShiftClick?: (s: TimelineShift) => void;
   onStageShiftTime?: (shiftId: number, startMin: number, endMin: number) => void;
+  onAngebotClick?: (angebotId: number) => void;
 }) {
   const shiftStart = (s: TimelineShift) => s.startMin ?? s.daySlot?.startMin ?? globalStartMin;
   const shiftEnd = (s: TimelineShift) => s.endMin ?? s.daySlot?.endMin ?? globalEndMin;
@@ -138,6 +164,46 @@ export default function ShiftTimeline({
   }));
 
   /**
+   * "Geist"-Balken: angenommene Zeitangebote mit zugeordnetem Bereich, denen
+   * noch keine echte Einplanung entspricht.
+   *
+   * Vorher stand eine Zusage ausschliesslich im getrennten Angebots-Diagramm
+   * unter dem Dienstplan - wer den Bereich im Blick hatte, sah sie nicht.
+   * Negative IDs trennen sie von echten Schicht-IDs im selben Klick-Handler.
+   *
+   * Bewusst kein Balken, der eine Besetzung behauptet: er zaehlt nirgends mit
+   * (weder in `count/max` der echten Schicht noch in eigenen Kennzahlen) -
+   * das waere eine Zusage als bereits geleistete Arbeit ausgeben, und genau
+   * das ist sie nicht.
+   */
+  const geister = (angebote ?? []).filter(a =>
+    a.status === 'ANGENOMMEN' && a.entschiedenerBereich != null && !a.umgesetzt);
+
+  for (const a of geister) {
+    const bereich = a.entschiedenerBereich!;
+    let zeile = bereichsRows.find(r => r.id === bereich.id);
+    if (!zeile) {
+      // Der Bereich hat an diesem Tag keine einzige echte Schicht - selten,
+      // aber die Zusage soll trotzdem irgendwo auftauchen statt zu verschwinden.
+      zeile = { id: bereich.id, label: bereich.name, icon: bereich.icon, color: bereich.color || '#3b98f8', items: [] };
+      bereichsRows.push(zeile);
+    }
+    zeile.items.push({
+      id: -a.id,
+      startMin: a.startMin,
+      endMin: a.endMin,
+      label: `🙋 ${a.user?.name ?? 'Zusage'}`,
+      tooltip: `${a.user?.name ?? 'Jemand'} hat für ${minToTime(a.startMin)}–${minToTime(a.endMin)} zugesagt `
+        + `– noch nicht als Schicht eingetragen. Klicken für Details.`,
+      background: '#d1e7dd',
+      border: '2px dashed #198754',
+      // Keine echte Schicht dahinter - im Bearbeitungsmodus ziehen liesse
+      // hier nichts nach.
+      gesperrt: true
+    });
+  }
+
+  /**
    * Alternative Sicht: eine Zeile je Helfer statt je Arbeitsbereich.
    *
    * Beantwortet eine andere Frage als der Bereichs-Blick. Dort geht es um "wo
@@ -195,6 +261,10 @@ export default function ShiftTimeline({
   const rows = personenSicht ? personenRows : bereichsRows;
 
   const handleItemClick = (itemId: number) => {
+    // Geist-Balken tragen die negative Angebots-ID (siehe oben) - so lassen
+    // sie sich von echten Schicht-IDs unterscheiden, ohne dass beide je
+    // kollidieren koennten.
+    if (itemId < 0) { onAngebotClick?.(-itemId); return; }
     const s = shifts.find(x => x.id === itemId);
     if (s) onShiftClick?.(s);
   };
@@ -260,6 +330,12 @@ export default function ShiftTimeline({
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ display: 'inline-block', width: 4, height: 12, borderRadius: 2, background: '#94a3b8' }} />
           = Farbe des Arbeitsbereichs
+        </span>
+        )}
+        {!personenSicht && geister.length > 0 && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 20, height: 12, border: '2px dashed #198754', borderRadius: 3, background: '#d1e7dd' }} />
+          = 🙋 Zusage, noch nicht eingetragen
         </span>
         )}
       </div>

@@ -31,7 +31,9 @@ export interface TimelineAngebot {
   verfallen?: boolean;
   user?: { id: number; name: string } | null;
   shift?: { workArea?: { name?: string; icon?: string } | null } | null;
-  workAreas?: { name?: string; icon?: string }[];
+  workAreas?: { id?: number; name?: string; icon?: string }[];
+  /** Bereich, dem der Organisator diese Zusage beim Annehmen zugeordnet hat. */
+  entschiedenerBereich?: { id: number; name: string; icon: string; color?: string } | null;
 }
 
 /** Farbe des Balkens nach Status - hier drueckt die Flaeche keine Besetzung aus. */

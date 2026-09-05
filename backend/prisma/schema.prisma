@@ -439,6 +439,7 @@ model TournamentWorkArea {
   dayWorkAreas      TournamentDayWorkArea[]
   shiftOffers       ShiftOffer[]
   offerWishes       ShiftOffer[]            @relation("ShiftOfferWorkAreas")
+  offerEntscheidungen ShiftOffer[]          @relation("ShiftOfferEntschiedenerBereich")
   tournament        Tournament              @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
 
   @@index([tournamentId])
@@ -822,11 +823,22 @@ model ShiftOffer {
   decidedAt    DateTime? @map("decided_at")
   decisionNote String?   @map("decision_note")
   createdAt    DateTime  @default(now()) @map("created_at")
+  /// Bereich, dem der Organisator diese Zusage beim Annehmen zugeordnet hat -
+  /// unabhaengig von den Wunschbereichen des Helfers (workAreas) oben, die nur
+  /// seine Vorstellung sind, nicht die Entscheidung.
+  ///
+  /// Plant weiterhin NIEMANDEN ein - siehe Kopf der Datei. Erlaubt aber, die
+  /// Zusage direkt in der Dienstplan-Zeile dieses Bereichs anzuzeigen (als
+  /// Balken, der noch keine echte Schicht ist), statt nur im getrennten
+  /// Angebots-Diagramm. Nur waehrend status=ANGENOMMEN gesetzt; beim
+  /// Zuruecknehmen oder Ablehnen wird sie wieder geleert.
+  entschiedenerBereichId Int? @map("entschiedener_bereich_id")
 
   tournament Tournament           @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   shift      Shift?               @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   workArea   TournamentWorkArea?  @relation(fields: [workAreaId], references: [id], onDelete: SetNull)
+  entschiedenerBereich TournamentWorkArea? @relation("ShiftOfferEntschiedenerBereich", fields: [entschiedenerBereichId], references: [id], onDelete: SetNull)
   /// Wunsch-Arbeitsbereiche, mehrere moeglich: wer Zeit anbietet, kann sich
   /// oft mehr als eine Aufgabe vorstellen - das erhoeht die Chance, dass
   /// etwas Passendes dabei ist.

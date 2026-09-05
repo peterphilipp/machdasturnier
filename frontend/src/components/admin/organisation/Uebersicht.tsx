@@ -608,7 +608,12 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
             {!timeEditMode ? (
               <div style={{ display: 'flex', gap: 8, width: isMobile ? '100%' : 'auto' }}>
                 {/* Sicht-Umschalter. Im Zeiten-Modus ausgeblendet: dort wird
-                    gezogen, und das geht nur in der Bereichs-Sicht. */}
+                    gezogen, und das geht nur in der Bereichs-Sicht.
+                    Auf dem Handy ebenfalls ausgeblendet: dort steht statt des
+                    Gantt-Diagramms eine aufklappbare Kartenliste (weiter
+                    unten, `if (isMobile)`), die keine Bereichs-/Personen-
+                    Unterscheidung kennt - der Schalter wirkte dort auf nichts. */}
+                {!isMobile && (
                 <div style={{ display: 'flex' }}>
                   {([['bereich', '🏪 Bereiche'], ['person', '👤 Personen']] as const).map(([wert, text], i) => (
                     <button
@@ -628,6 +633,7 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
                     </button>
                   ))}
                 </div>
+                )}
                 <button
                   onClick={() => setShowPrintModal(true)}
                   style={{
@@ -959,8 +965,13 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
                   timeEditMode={timeEditMode}
                   overrides={pendingTimeChanges}
                   gruppierung={ganttSicht}
+                  angebote={angeboteDesTages}
                   onShiftClick={s => setSelectedShift(s as unknown as Shift)}
                   onStageShiftTime={handleStageShiftTime}
+                  onAngebotClick={id => {
+                    const a = angeboteDesTages.find(x => x.id === id);
+                    if (a) setGewaehltesAngebot(a);
+                  }}
                 />
 
                 <AngeboteTimeline
@@ -987,6 +998,7 @@ export default function Uebersicht({ selectedTournament }: { selectedTournament:
         <AngebotDialog
           angebot={gewaehltesAngebot}
           tournamentId={tid}
+          areas={areas.filter(a => a.active)}
           onClose={() => setGewaehltesAngebot(null)}
         />
       )}

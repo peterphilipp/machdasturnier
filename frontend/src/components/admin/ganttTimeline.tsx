@@ -38,6 +38,14 @@ export interface GanttItem {
    * dessen Zeitraum vorbei ist).
    */
   opacity?: number;
+  /**
+   * Nicht ziehbar, auch wenn die Zeile insgesamt im Bearbeitungsmodus ist -
+   * fuer Balken, die keine echte Schicht sind (etwa ein angenommenes
+   * Zeitangebot). Ihre Zeit an dieser Stelle zu verschieben haette nichts zu
+   * verschieben: es gibt keine Schicht dahinter, die die neue Zeit uebernehmen
+   * koennte. Klicken bleibt moeglich, nur das Ziehen ist gesperrt.
+   */
+  gesperrt?: boolean;
 }
 
 export interface GanttRow {
@@ -195,7 +203,7 @@ export function GanttTimeline({
   }, [globalStartMin, globalEndMin]);
 
   const handlePointerDown = (e: React.PointerEvent, item: GanttItem, type: 'start' | 'end' | 'move') => {
-    if (!editable || !timeEditMode) return;
+    if (!editable || !timeEditMode || item.gesperrt) return;
     e.stopPropagation();
     e.preventDefault();
     setDrag({
@@ -386,7 +394,7 @@ export function GanttTimeline({
                     const en = isDragging(item.id) ? drag!.curEnd : item.endMin;
                     const left = ((st - dStart) / (dEnd - dStart)) * 100;
                     const width = ((en - st) / (dEnd - dStart)) * 100;
-                    const canDrag = editable && timeEditMode;
+                    const canDrag = editable && timeEditMode && !item.gesperrt;
 
                     // Die Flaeche traegt die Besetzung, nicht den Arbeitsbereich:
                     // welcher Bereich gemeint ist, steht links als Name und Symbol,

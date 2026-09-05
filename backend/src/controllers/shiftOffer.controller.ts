@@ -41,7 +41,11 @@ export const shiftOfferSchema = z.object({
 
 export const entscheidungSchema = z.object({
   status: z.enum(['ANGENOMMEN', 'ABGELEHNT']),
-  decisionNote: z.string().max(500).nullable().optional()
+  decisionNote: z.string().max(500).nullable().optional(),
+  /// Bereich, dem der Organisator diese Zusage zuordnet - nur bei ANGENOMMEN
+  /// von Bedeutung, siehe entscheideShiftOffer(). Ohne Angabe bleibt es beim
+  /// bisherigen Verhalten: eine Zusage ohne Bereichsbezug.
+  bereichId: z.number().int().positive().nullable().optional()
 });
 
 const zeitraum = (startMin: number, endMin: number) => `${minToTime(startMin)}-${minToTime(endMin)}`;
@@ -184,7 +188,8 @@ export const getShiftOffers = async (req: AuthRequest, res: Response) => {
     include: {
       user: { select: { id: true, name: true, email: true } },
       shift: { include: { workArea: true, day: true } },
-      workAreas: true
+      workAreas: true,
+      entschiedenerBereich: { select: { id: true, name: true, icon: true, color: true } }
     }
   });
 
@@ -230,7 +235,11 @@ export const getMyShiftOffers = async (req: AuthRequest, res: Response) => {
   const angebote = await prisma.shiftOffer.findMany({
     where: { userId },
     orderBy: { date: 'asc' },
-    include: { shift: { include: { workArea: true } }, workAreas: true }
+    include: {
+      shift: { include: { workArea: true } },
+      workAreas: true,
+      entschiedenerBereich: { select: { id: true, name: true, icon: true, color: true } }
+    }
   });
   return res.json(angebote);
 };
@@ -244,7 +253,9 @@ export const getMyShiftOffers = async (req: AuthRequest, res: Response) => {
  */
 export const entscheideShiftOffer = async (req: AuthRequest, res: Response) => {
   const id = parseInt(req.params.id as string, 10);
-  const { status, decisionNote } = req.body as { status: 'ANGENOMMEN' | 'ABGELEHNT'; decisionNote?: string | null };
+  const { status, decisionNote, bereichId } = req.body as {
+    status: 'ANGENOMMEN' | 'ABGELEHNT'; decisionNote?: string | null; bereichId?: number | null;
+  };
 
   const vorher = await prisma.shiftOffer.findUnique({
     where: { id },
@@ -255,28 +266,50 @@ export const entscheideShiftOffer = async (req: AuthRequest, res: Response) => {
     return res.status(409).json({ error: 'Über dieses Angebot wurde bereits entschieden.' });
   }
 
+  // Der Bereich ist nur bei einer Zusage sinnvoll, und nur, wenn er wirklich
+  // zu diesem Turnier gehoert - sonst liesse sich eine Zusage versehentlich
+  // (oder ueber eine manipulierte Anfrage) einem fremden Turnier zuordnen.
+  let entschiedenerBereichId: number | null = null;
+  if (status === 'ANGENOMMEN' && bereichId != null) {
+    const bereich = await prisma.tournamentWorkArea.findUnique({ where: { id: bereichId } });
+    if (!bereich || bereich.tournamentId !== vorher.tournamentId) {
+      return res.status(400).json({ error: 'Dieser Bereich gehört nicht zu diesem Turnier.' });
+    }
+    entschiedenerBereichId = bereichId;
+  }
+
   const angebot = await prisma.shiftOffer.update({
     where: { id },
     data: {
       status,
       decidedById: req.userId ?? null,
       decidedAt: new Date(),
-      decisionNote: decisionNote?.trim() || null
+      decisionNote: decisionNote?.trim() || null,
+      entschiedenerBereichId
     },
-    include: { user: { select: { id: true, name: true } }, shift: { include: { workArea: true } } }
+    include: {
+      user: { select: { id: true, name: true } },
+      shift: { include: { workArea: true } },
+      entschiedenerBereich: { select: { id: true, name: true, icon: true } }
+    }
   });
 
   const zeit = zeitraum(angebot.startMin, angebot.endMin);
   const wann = `${datumKurz(angebot.date)} ${zeit}`;
   const zusatz = angebot.decisionNote ? ` (${angebot.decisionNote})` : '';
+  // Steht ein Bereich fest, erfaehrt der Helfer gleich, wofuer - statt nur
+  // "die Schicht wird eingetragen" zu lesen und rätseln zu muessen, welche.
+  const bereichHinweis = angebot.entschiedenerBereich
+    ? ` für ${angebot.entschiedenerBereich.icon ?? ''} ${angebot.entschiedenerBereich.name}`.trim() + '.'
+    : '.';
 
   await notifyUser(
     angebot.userId,
     status === 'ANGENOMMEN' ? '👍 Dein Angebot passt' : 'Dein Angebot',
     ({ vertretend, name }) => status === 'ANGENOMMEN'
       ? (vertretend
-        ? `Das Angebot von ${name} für ${wann} passt uns. Die Schicht wird eingetragen.${zusatz}`
-        : `Danke! Dein Angebot für ${wann} passt uns. Wir tragen die Schicht ein.${zusatz}`)
+        ? `Das Angebot von ${name} für ${wann} passt uns. Die Schicht wird eingetragen${bereichHinweis}${zusatz}`
+        : `Danke! Dein Angebot für ${wann} passt uns. Wir tragen die Schicht ein${bereichHinweis}${zusatz}`)
       : (vertretend
         ? `Für ${wann} brauchen wir ${name} nicht – danke fürs Anbieten!${zusatz}`
         : `Für ${wann} brauchen wir dich nicht – danke fürs Anbieten!${zusatz}`),
@@ -394,7 +427,10 @@ export const oeffneShiftOffer = async (req: AuthRequest, res: Response) => {
 
   const angebot = await prisma.shiftOffer.update({
     where: { id },
-    data: { status: 'OFFEN', decidedById: null, decidedAt: null, decisionNote: null },
+    // entschiedenerBereichId mit zuruecksetzen: sie war nur waehrend
+    // ANGENOMMEN gueltig und stuende sonst als stille, nicht mehr erklaerte
+    // Zuordnung an einem wieder offenen Angebot.
+    data: { status: 'OFFEN', decidedById: null, decidedAt: null, decisionNote: null, entschiedenerBereichId: null },
     include: { user: { select: { id: true, name: true } }, workAreas: true }
   });
 
