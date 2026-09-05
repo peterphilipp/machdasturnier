@@ -1,6 +1,32 @@
 import { useState } from 'react';
 import { modal } from '../Modal';
 
+/**
+ * Die Begründung des Servers lesen, nicht nur seinen Statuscode.
+ *
+ * Vorher warf der Export bei einem Fehler schlicht `HTTP 500` - der Server
+ * hatte den Grund mitgeschickt ("Der Pfad zur Datenbank liess sich nicht
+ * ermitteln"), die Oberfläche warf ihn weg. Eine Fehlermeldung, die nur die
+ * Nummer nennt, macht aus einem Zweiminutenfehler eine Suche.
+ *
+ * Robust gegen Antworten ohne JSON-Körper: Bei einer zu grossen Datei
+ * antwortet Express mit 413 und einer HTML-Seite, und ein `response.json()`
+ * darauf würde selbst werfen und den eigentlichen Grund verdecken.
+ */
+async function fehlerText(response: Response): Promise<string> {
+  try {
+    const daten = await response.json();
+    if (daten?.error) return String(daten.error);
+  } catch {
+    // Kein JSON - dann bleibt es beim Statuscode unten.
+  }
+  if (response.status === 413) {
+    return 'Die Datei ist zu gross für den Upload (Grenze: 10 MB inklusive Kodierung, '
+      + 'also rund 7 MB Datenbank).';
+  }
+  return `HTTP ${response.status} ${response.statusText}`.trim();
+}
+
 interface DumpResponse {
   success: boolean;
   databaseSize: number;
@@ -22,7 +48,7 @@ export default function DbManagement() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(await fehlerText(response));
       }
 
       const data: DumpResponse = await response.json();
@@ -89,8 +115,7 @@ export default function DbManagement() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || `HTTP ${response.status}`);
+        throw new Error(await fehlerText(response));
       }
 
       const result = await response.json();
