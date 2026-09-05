@@ -15,6 +15,7 @@
 
 export interface NutzungsKonto {
   id: number;
+  name: string;
   createdAt: Date | string;
   lastLoginAt: Date | string | null;
   lastActivityAt: Date | string | null;
@@ -39,6 +40,8 @@ export interface NutzungsTag {
   /** Neu entstandene Konten. */
   registrierungen: number;
   registrierungenKumuliert: number;
+  /** Wer an diesem Tag ein Konto angelegt hat - fuer die Nachfrage "wer genau". */
+  neueNamen: string[];
 }
 
 export interface NutzungsStatistik {
@@ -126,9 +129,12 @@ export function berechneNutzungsStatistik(
 
   // --- Tagesreihe ---
   const registrierungenProTag = new Map<string, number>();
+  const neueNamenProTag = new Map<string, string[]>();
   for (const k of konten) {
     const t = tagVon(k.createdAt);
     registrierungenProTag.set(t, (registrierungenProTag.get(t) ?? 0) + 1);
+    if (!neueNamenProTag.has(t)) neueNamenProTag.set(t, []);
+    neueNamenProTag.get(t)!.push(k.name);
   }
 
   const aktiveProTag = new Map<string, Set<number>>();
@@ -152,7 +158,8 @@ export function berechneNutzungsStatistik(
         aktive: aktiveProTag.get(datum)?.size ?? 0,
         anmeldungen: anmeldungenProTag.get(datum) ?? 0,
         registrierungen: r,
-        registrierungenKumuliert: summe
+        registrierungenKumuliert: summe,
+        neueNamen: (neueNamenProTag.get(datum) ?? []).sort((a, b) => a.localeCompare(b, 'de'))
       };
     });
 

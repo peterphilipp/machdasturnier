@@ -507,13 +507,70 @@
 /* ---- Zeitlicher Verlauf ------------------------------------------------
    Gestapelte Tagessäulen aus reinem CSS. Bei einem Turnier mit ein paar
    Wochen Vorlauf sind das dreissig Balken - dafür lohnt keine Bibliothek. */
+
+/* Rahmen um Zahlenachse und Plotfläche. Die Achse bekommt eine feste Breite,
+   die Fläche den Rest - so bleibt die Nullinie unabhängig von der Länge der
+   längsten Achsenzahl an derselben Stelle. */
+.verlauf-plot-huelle {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+}
+
+/* Steht links neben der Plotfläche, exakt so hoch wie die Balken (nicht die
+   x-Achse darunter) - jede Marke sitzt an der Stelle, an der ihre Gitterlinie
+   auf gleicher Höhe verläuft. */
+.verlauf-y-achse {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 140px;
+}
+.verlauf-y-marke {
+  position: absolute;
+  right: 4px;
+  transform: translateY(50%);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.verlauf-plot {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Horizontale Gitterlinien, unabhängig vom horizontalen Scrollen der Balken -
+   sie markieren nur die y-Position, nicht einen bestimmten Tag. */
+.verlauf-gitter {
+  position: absolute;
+  inset: 0;
+  height: 140px;
+  pointer-events: none;
+}
+.verlauf-gitterlinie {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+  opacity: 0.6;
+}
+
+/* Balken und x-Achse scrollen gemeinsam, damit ein Datum immer unter seinem
+   eigenen Balken steht, auch wenn beide Reihen horizontal verschoben sind. */
+.verlauf-scroll {
+  overflow-x: auto;
+}
+
 .verlauf-diagramm {
   display: flex;
   align-items: flex-end;
   gap: 2px;
   height: 140px;
-  padding: var(--spacing-3) 0 0;
-  overflow-x: auto;
+  position: relative;
+  z-index: 1;
 }
 .verlauf-tag {
   flex: 1 1 8px;
@@ -533,6 +590,19 @@
   justify-content: flex-end;
   gap: 1px;
 }
+/* Zwei unabhängige Zahlen nebeneinander statt übereinander gestapelt - anders
+   als bei Zusagen/Spenden ist "aktive Personen" nicht der Rest von "neue
+   Konten". Gestapelt hätte ein Tag mit beidem die Balkenhöhe beider Werte
+   zusammen gezeigt, obwohl keiner der beiden so hoch reicht. */
+.verlauf-saeule--gruppe {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 1px;
+}
+.verlauf-saeule--gruppe .verlauf-teil {
+  width: auto;
+  flex: 1 1 0;
+}
 .verlauf-teil {
   width: 100%;
   border-radius: 2px 2px 0 0;
@@ -544,17 +614,42 @@
    flache Grundlinie statt gar nichts. */
 .verlauf-teil--leer { height: 2px; background: var(--border-color); }
 
+.verlauf-marker-reihe {
+  display: flex;
+  gap: 2px;
+}
+/* Ein echter Button statt eines stummen Symbols: antippen springt zur
+   passenden Zeile in der Tabelle darunter - vorher stand nirgends, wohin ein
+   Aufruf überhaupt "gehört". */
 .verlauf-marker {
+  border: none;
+  background: none;
+  padding: 0;
   font-size: 10px;
   line-height: 1;
+  cursor: pointer;
+}
+.verlauf-marker:hover,
+.verlauf-marker:focus-visible {
+  transform: scale(1.3);
 }
 
-.verlauf-achse {
+/* x-Achse als zweite Reihe mit derselben Flex-Aufteilung wie die Balken
+   darüber - dadurch steht ein beschrifteter Tag exakt unter seinem Balken,
+   ohne dass Positionen einzeln berechnet werden müssen. */
+.verlauf-x-achse {
   display: flex;
-  justify-content: space-between;
+  gap: 2px;
+  margin-top: var(--spacing-1);
+}
+.verlauf-x-marke {
+  flex: 1 1 8px;
+  min-width: 6px;
+  text-align: center;
   font-size: var(--font-size-xs);
   color: var(--text-muted);
-  margin-top: var(--spacing-1);
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .verlauf-legende {
@@ -633,4 +728,15 @@
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   color: #64748b;
+}
+
+/* Kurzes Aufblitzen, nachdem eine 📣-Markierung im Diagramm hierher
+   gesprungen ist - sonst bleibt unklar, welche der (oft mehreren) Zeilen
+   gemeint war. */
+.stat-zeile--angesprungen {
+  animation: stat-zeile-blitz 2s ease-out;
+}
+@keyframes stat-zeile-blitz {
+  from { background: #fef3c7; }
+  to { background: transparent; }
 }

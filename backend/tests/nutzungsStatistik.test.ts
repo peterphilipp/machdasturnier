@@ -4,6 +4,7 @@ import { berechneNutzungsStatistik, NutzungsKonto } from '../src/utils/nutzungsS
 const JETZT = new Date('2026-09-05T12:00:00.000Z');
 
 const konto = (p: Partial<NutzungsKonto> & { id: number }): NutzungsKonto => ({
+  name: `Person ${p.id}`,
   createdAt: '2026-08-01T10:00:00.000Z',
   lastLoginAt: '2026-09-01T10:00:00.000Z',
   lastActivityAt: '2026-09-04T10:00:00.000Z',
@@ -94,6 +95,19 @@ describe('berechneNutzungsStatistik – Tagesreihe', () => {
       ['2026-08-02', 0, 2],
       ['2026-08-03', 1, 3]
     ]);
+  });
+
+  it('nennt die Namen der an diesem Tag Registrierten', () => {
+    const { tage } = berechneNutzungsStatistik([
+      konto({ id: 1, name: 'Ralf', createdAt: '2026-08-01T09:00:00.000Z' }),
+      konto({ id: 2, name: 'Anna', createdAt: '2026-08-01T20:00:00.000Z' }),
+      konto({ id: 3, name: 'Jens', createdAt: '2026-08-03T09:00:00.000Z' })
+    ], [], JETZT);
+    // Alphabetisch, nicht nach Uhrzeit - Ralf hat sich zuerst registriert,
+    // Anna steht trotzdem zuerst in der Liste.
+    expect(tage[0].neueNamen).toEqual(['Anna', 'Ralf']);
+    expect(tage[2].neueNamen).toEqual(['Jens']);
+    expect(tage[1].neueNamen).toEqual([]);
   });
 
   it('zählt aktive Personen je Tag, jede nur einmal', () => {

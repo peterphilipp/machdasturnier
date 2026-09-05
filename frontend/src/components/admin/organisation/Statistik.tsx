@@ -58,7 +58,7 @@ interface Nutzung {
   anmeldeart: { mitPasskey: number; nurPasswort: number; nieAngemeldet: number };
   tage: {
     datum: string; aktive: number; anmeldungen: number;
-    registrierungen: number; registrierungenKumuliert: number;
+    registrierungen: number; registrierungenKumuliert: number; neueNamen: string[];
   }[];
   aufzeichnungAb: string | null;
 }
@@ -98,6 +98,68 @@ const datumKurz = (iso: string | null) =>
 /** Zahl mit deutschem Dezimalkomma - "3,5 h" statt "3.5 h". */
 const zahl = (n: number) => n.toLocaleString('de-DE');
 
+/** „05.09.“ - kurz genug für eine Achsenbeschriftung. */
+const kurzDatum = (iso: string) =>
+  new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+
+/**
+ * Eine "schöne" Schrittweite für eine Zahlenachse: die nächstgrössere Zahl aus
+ * der Folge 1/2/5 mal einer Zehnerpotenz. Los geht es von der Schrittweite,
+ * nicht vom Maximum - nur so lassen sich Maximum UND Gitterwerte aus derselben
+ * Zahl ableiten. Getrennt berechnet (erst ein rundes Maximum suchen, das dann
+ * durch die Anzahl Stufen teilen) entstehen krumme Schritte wie 1,25 und beim
+ * Runden Luecken wie 0, 1, 3, 4, 5 - eine Zahl fehlt, ohne dass ein Fehler
+ * beim Testen auffiele, wenn man nicht gezielt danach sucht.
+ */
+function schoenerSchritt(roh: number, zielAnzahl = 4): number {
+  const rohSchritt = Math.max(roh, 1) / zielAnzahl;
+  const zehnerpotenz = Math.floor(Math.log10(rohSchritt));
+  const basis = rohSchritt / Math.pow(10, zehnerpotenz);
+  const stufe = basis <= 1 ? 1 : basis <= 2 ? 2 : basis <= 5 ? 5 : 10;
+  // Alle Werte hier sind Personen oder Ereignisse, also ganze Zahlen - eine
+  // Schrittweite unter 1 zeigte eine halbe Person auf der Achse.
+  return Math.max(1, stufe * Math.pow(10, zehnerpotenz));
+}
+
+/**
+ * Die Obergrenze der Achse: ein ganzzahliges Vielfaches des schönen Schritts,
+ * mindestens so groß wie der höchste Balken - mit etwas Kopfraum, sonst läge
+ * die höchste Gitterlinie exakt auf dem höchsten Balken und der wirkte
+ * größer, als er ist.
+ */
+function schoenesMaximum(roh: number, zielAnzahl = 4): number {
+  const schritt = schoenerSchritt(roh, zielAnzahl);
+  return Math.ceil(Math.max(roh, 1) / schritt) * schritt;
+}
+
+/** Gitterwerte von 0 bis zur schönen Obergrenze, in gleichen, runden Schritten. */
+function achsenWerte(roh: number, zielAnzahl = 4): number[] {
+  const schritt = schoenerSchritt(roh, zielAnzahl);
+  const max = schoenesMaximum(roh, zielAnzahl);
+  const anzahlSchritte = Math.round(max / schritt);
+  return Array.from({ length: anzahlSchritte + 1 }, (_, i) => Math.round(i * schritt * 100) / 100);
+}
+
+/**
+ * Welche Tage auf der x-Achse eine Beschriftung bekommen.
+ *
+ * Vorher stand nur der erste und der letzte Tag da - bei dreissig Balken
+ * dazwischen liess sich keiner davon einem Datum zuordnen. Jetzt werden
+ * gleichmässig verteilte Tage beschriftet, Anfang und Ende immer dabei.
+ */
+function achsenTage(anzahl: number, ziel = 7): Set<number> {
+  if (anzahl <= ziel) return new Set(Array.from({ length: anzahl }, (_, i) => i));
+  const schritt = (anzahl - 1) / (ziel - 1);
+  return new Set(Array.from({ length: ziel }, (_, i) => Math.round(i * schritt)));
+}
+
+/** Bis zu `limit` Namen, mit "und N weitere" statt einer ellenlangen Liste. */
+function namensListe(namen: string[], limit = 6): string {
+  if (namen.length === 0) return '';
+  if (namen.length <= limit) return namen.join(', ');
+  return `${namen.slice(0, limit).join(', ')} und ${namen.length - limit} weitere`;
+}
+
 function Kachel({ wert, einheit, label, ton }: {
   wert: string | number; einheit?: string; label: string; ton?: 'warnung' | 'gut';
 }) {
@@ -108,6 +170,35 @@ function Kachel({ wert, einheit, label, ton }: {
       </div>
       <div className="stat-kachel-label">{label}</div>
     </div>
+  );
+}
+
+/**
+ * y-Achse und Gitterlinien für die Tagesdiagramme weiter unten.
+ *
+ * Als eine Komponente statt zwei getrennter, weil Beschriftung und Linien
+ * dieselben Werte und denselben Massstab teilen müssen - getrennt auseinander
+ * gerissen wäre das eine Fehlerquelle, sobald sich an einer Stelle etwas
+ * ändert und an der anderen nicht.
+ */
+function Zahlenachse({ rohMax, zielAnzahl = 4 }: { rohMax: number; zielAnzahl?: number }) {
+  const werte = achsenWerte(rohMax, zielAnzahl);
+  const skalaMax = werte[werte.length - 1];
+  return (
+    <>
+      <div className="verlauf-y-achse" aria-hidden="true">
+        {werte.map(w => (
+          <span key={w} className="verlauf-y-marke" style={{ bottom: `${(w / skalaMax) * 100}%` }}>
+            {zahl(w)}
+          </span>
+        ))}
+      </div>
+      <div className="verlauf-gitter" aria-hidden="true">
+        {werte.map(w => (
+          <div key={w} className="verlauf-gitterlinie" style={{ bottom: `${(w / skalaMax) * 100}%` }} />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -135,6 +226,15 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   // Die Chronik nennt Namen. Zugeklappt zeigt der Verlauf nur Zahlen - wer
   // wissen will, wer wann zugesagt hat, klappt sie bewusst auf.
   const [chronikOffen, setChronikOffen] = useState(false);
+  // Welcher Aufruf gerade per Klick auf die 📣-Markierung angesprungen wurde -
+  // kurzzeitig hervorgehoben, damit sichtbar ist, wohin der Klick führte.
+  const [angesprungenerAufruf, setAngesprungenerAufruf] = useState<number | null>(null);
+
+  const springeZuAufruf = (id: number) => {
+    document.getElementById(`stat-aufruf-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setAngesprungenerAufruf(id);
+    setTimeout(() => setAngesprungenerAufruf(cur => (cur === id ? null : cur)), 2000);
+  };
 
   useEffect(() => {
     if (!selectedTournament) { setDaten(null); setLaedt(false); return; }
@@ -473,6 +573,18 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
         // Höchster Tageswert bestimmt die Balkenhöhe. Beide Reihen teilen sich
         // die Skala, sonst wären fünf Spenden so hoch wie fünfzig Zusagen.
         const tagesMax = Math.max(1, ...verlauf.tage.map(t => t.zusagen + t.spenden));
+        const skalaMax = schoenesMaximum(tagesMax);
+        const ticks = achsenTage(verlauf.tage.length);
+
+        // Für die Tages-Tooltips: wer genau hinter "3 Zusagen" steckt. Die
+        // Kurve sagt "wann kam etwas zusammen", der Tooltip jetzt auch "wer".
+        const chronikProTag = new Map<string, typeof verlauf.chronik>();
+        for (const e of verlauf.chronik ?? []) {
+          const tag = e.zeitpunkt.slice(0, 10);
+          if (!chronikProTag.has(tag)) chronikProTag.set(tag, []);
+          chronikProTag.get(tag)!.push(e);
+        }
+
         return (
         <section>
           <h3 className="feedback-section-title">📈 Wann kam die Hilfe zusammen</h3>
@@ -486,44 +598,70 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
             )}
           </p>
 
-          <div className="verlauf-diagramm">
-            {verlauf.tage.map(t => {
-              const gesamt = t.zusagen + t.spenden;
-              return (
-                <div key={t.datum} className="verlauf-tag" title={
-                  `${new Date(t.datum).toLocaleDateString('de-DE')}: `
-                  + `${t.zusagen} Zusagen, ${t.spenden} Spenden`
-                  + (t.aufrufe.length ? ` · Aufruf: ${t.aufrufe.map(a => a.titel).join(', ')}` : '')
-                }>
-                  <div className="verlauf-saeule">
-                    {t.spenden > 0 && (
-                      <div
-                        className="verlauf-teil verlauf-teil--spenden"
-                        style={{ height: `${(t.spenden / tagesMax) * 100}%` }}
-                      />
-                    )}
-                    {t.zusagen > 0 && (
-                      <div
-                        className="verlauf-teil verlauf-teil--zusagen"
-                        style={{ height: `${(t.zusagen / tagesMax) * 100}%` }}
-                      />
-                    )}
-                    {gesamt === 0 && <div className="verlauf-teil verlauf-teil--leer" />}
-                  </div>
-                  {t.aufrufe.length > 0 && <div className="verlauf-marker" aria-hidden="true">📣</div>}
+          <div className="verlauf-plot-huelle">
+            <Zahlenachse rohMax={tagesMax} />
+            <div className="verlauf-plot">
+              <div className="verlauf-scroll">
+                <div className="verlauf-diagramm">
+                  {verlauf.tage.map(t => {
+                    const gesamt = t.zusagen + t.spenden;
+                    const einzeltage = chronikProTag.get(t.datum) ?? [];
+                    const namen = namensListe(einzeltage.map(e => `${e.name} (${e.was})`));
+                    const titel = `${new Date(t.datum).toLocaleDateString('de-DE')}: `
+                      + `${t.zusagen} Zusagen, ${t.spenden} Spenden`
+                      + (namen ? ` · ${namen}` : '');
+
+                    return (
+                      <div key={t.datum} className="verlauf-tag" title={titel}>
+                        <div className="verlauf-saeule">
+                          {t.spenden > 0 && (
+                            <div
+                              className="verlauf-teil verlauf-teil--spenden"
+                              style={{ height: `${(t.spenden / skalaMax) * 100}%` }}
+                            />
+                          )}
+                          {t.zusagen > 0 && (
+                            <div
+                              className="verlauf-teil verlauf-teil--zusagen"
+                              style={{ height: `${(t.zusagen / skalaMax) * 100}%` }}
+                            />
+                          )}
+                          {gesamt === 0 && <div className="verlauf-teil verlauf-teil--leer" />}
+                        </div>
+                        {t.aufrufe.length > 0 && (
+                          <div className="verlauf-marker-reihe">
+                            {t.aufrufe.map(a => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                className="verlauf-marker"
+                                title={`Aufruf „${a.titel}“ · ${a.erreicht} erreicht – Details in der Tabelle darunter`}
+                                onClick={() => springeZuAufruf(a.id)}
+                              >
+                                📣
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
-          <div className="verlauf-achse">
-            <span>{new Date(verlauf.tage[0].datum).toLocaleDateString('de-DE')}</span>
-            <span>{new Date(verlauf.tage[verlauf.tage.length - 1].datum).toLocaleDateString('de-DE')}</span>
+                <div className="verlauf-x-achse">
+                  {verlauf.tage.map((t, i) => (
+                    <div key={t.datum} className="verlauf-x-marke">
+                      {ticks.has(i) ? kurzDatum(t.datum) : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="verlauf-legende">
             <span><i className="verlauf-punkt verlauf-punkt--zusagen" /> Zusagen</span>
             <span><i className="verlauf-punkt verlauf-punkt--spenden" /> Spenden</span>
-            <span>📣 Aufruf verschickt</span>
+            <span>📣 Aufruf verschickt – antippen springt zur Tabelle</span>
           </div>
 
           {verlauf.aufrufe.length > 0 && (
@@ -538,7 +676,11 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
                   </thead>
                   <tbody>
                     {verlauf.aufrufe.map(a => (
-                      <tr key={a.id}>
+                      <tr
+                        key={a.id}
+                        id={`stat-aufruf-${a.id}`}
+                        className={angesprungenerAufruf === a.id ? 'stat-zeile--angesprungen' : undefined}
+                      >
                         <td>{new Date(a.createdAt).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</td>
                         <td>{a.titel}</td>
                         <td className="stat-zahl">{a.erreicht}</td>
@@ -724,7 +866,13 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
           </div>
 
           {nutzung.tage.length > 0 && (() => {
-            const max = Math.max(1, ...nutzung.tage.map(t => Math.max(t.aktive, t.registrierungen)));
+            // Roh-Maximum ueber beide Reihen - sie werden nebeneinander
+            // gezeichnet (nicht gestapelt: es sind zwei unabhaengige Zahlen,
+            // kein Ganzes und sein Teil), teilen sich aber eine Skala, sonst
+            // waeren fuenf Anmeldungen so hoch wie fuenfzig aktive Personen.
+            const rohMax = Math.max(1, ...nutzung.tage.map(t => Math.max(t.aktive, t.registrierungen)));
+            const skalaMax = schoenesMaximum(rohMax);
+            const ticks = achsenTage(nutzung.tage.length);
             const abIdx = nutzung.aufzeichnungAb
               ? nutzung.tage.findIndex(t => t.datum >= nutzung.aufzeichnungAb!)
               : -1;
@@ -744,39 +892,49 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
                   )}
                 </p>
 
-                <div className="verlauf-diagramm">
-                  {nutzung.tage.map((t, i) => (
-                    <div
-                      key={t.datum}
-                      className="verlauf-tag"
-                      title={`${new Date(t.datum).toLocaleDateString('de-DE')}: `
-                        + `${t.aktive} aktiv, ${t.anmeldungen} Anmeldungen, ${t.registrierungen} neue Konten`}
-                    >
-                      <div className="verlauf-saeule">
-                        {t.aktive > 0 && (
-                          <div
-                            className="verlauf-teil verlauf-teil--aktive"
-                            style={{ height: `${(t.aktive / max) * 100}%` }}
-                          />
-                        )}
-                        {t.registrierungen > 0 && (
-                          <div
-                            className="verlauf-teil verlauf-teil--neu"
-                            style={{ height: `${(t.registrierungen / max) * 100}%` }}
-                          />
-                        )}
-                        {t.aktive === 0 && t.registrierungen === 0 && (
-                          <div className={`verlauf-teil verlauf-teil--leer${
-                            abIdx >= 0 && i < abIdx ? ' verlauf-teil--unerfasst' : ''}`} />
-                        )}
+                <div className="verlauf-plot-huelle">
+                  <Zahlenachse rohMax={rohMax} />
+                  <div className="verlauf-plot">
+                    <div className="verlauf-scroll">
+                      <div className="verlauf-diagramm">
+                        {nutzung.tage.map((t, i) => {
+                          const namen = namensListe(t.neueNamen);
+                          const titel = `${new Date(t.datum).toLocaleDateString('de-DE')}: `
+                            + `${t.aktive} aktiv, ${t.anmeldungen} Anmeldungen, ${t.registrierungen} neue Konten`
+                            + (namen ? ` (${namen})` : '');
+                          return (
+                            <div key={t.datum} className="verlauf-tag" title={titel}>
+                              <div className="verlauf-saeule verlauf-saeule--gruppe">
+                                {t.aktive > 0 && (
+                                  <div
+                                    className="verlauf-teil verlauf-teil--aktive"
+                                    style={{ height: `${(t.aktive / skalaMax) * 100}%` }}
+                                  />
+                                )}
+                                {t.registrierungen > 0 && (
+                                  <div
+                                    className="verlauf-teil verlauf-teil--neu"
+                                    style={{ height: `${(t.registrierungen / skalaMax) * 100}%` }}
+                                  />
+                                )}
+                                {t.aktive === 0 && t.registrierungen === 0 && (
+                                  <div className={`verlauf-teil verlauf-teil--leer${
+                                    abIdx >= 0 && i < abIdx ? ' verlauf-teil--unerfasst' : ''}`} />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="verlauf-x-achse">
+                        {nutzung.tage.map((t, i) => (
+                          <div key={t.datum} className="verlauf-x-marke">
+                            {ticks.has(i) ? kurzDatum(t.datum) : ''}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                <div className="verlauf-achse">
-                  <span>{new Date(nutzung.tage[0].datum).toLocaleDateString('de-DE')}</span>
-                  <span>{new Date(nutzung.tage[nutzung.tage.length - 1].datum).toLocaleDateString('de-DE')}</span>
+                  </div>
                 </div>
 
                 <div className="verlauf-legende">
