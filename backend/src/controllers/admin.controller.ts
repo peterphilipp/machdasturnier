@@ -1,9 +1,11 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth.js';
 import prisma from '../config/prisma.js';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { anonymisiereDatenbank } from '../utils/anonymisierung.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +51,7 @@ async function ermittleDbPfad(): Promise<string | null> {
  * Exportiert die SQLite-Datenbank als Base64-encoded string.
  * Der Client kann dies herunterladen oder in eine neue DB importieren.
  */
-export const dumpDatabase = async (req: Request, res: Response) => {
+export const dumpDatabase = async (req: AuthRequest, res: Response) => {
   try {
     const dbPath = await ermittleDbPfad();
 
@@ -83,11 +85,27 @@ export const dumpDatabase = async (req: Request, res: Response) => {
     try {
       await prisma.$executeRawUnsafe(`VACUUM INTO '${tempZiel.replace(/'/g, "''")}'`);
 
+      /**
+       * Anonymisieren, wenn gewuenscht - und zwar HIER, nicht beim Import.
+       *
+       * Beim Import waere es zu spaet: Die Datei mit den echten Namen,
+       * Mailadressen und Telefonnummern laege dann schon im Download-Ordner
+       * von irgendjemandem. Was die Produktion verlaesst, soll bereits sauber
+       * sein.
+       */
+      const anonym = req.query.anonymisieren === '1';
+      const ergebnis = anonym
+        ? await anonymisiereDatenbank(tempZiel, req.userId ?? null, dbPath)
+        : null;
+
       const dbBuffer = fs.readFileSync(tempZiel);
       res.json({
         success: true,
         databaseSize: dbBuffer.length,
         timestamp: new Date().toISOString(),
+        anonymisiert: anonym,
+        eingriffe: ergebnis?.eingriffe ?? [],
+        anmeldung: ergebnis?.anmeldung ?? null,
         // Base64-encoded SQLite DB - kann vom Client gespeichert werden
         database: dbBuffer.toString('base64')
       });

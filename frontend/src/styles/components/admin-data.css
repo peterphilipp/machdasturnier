@@ -107,6 +107,89 @@
   color: #004085;
 }
 
+/* ---- Export: anonymisiert oder vollständig ----
+   Zwei gleichwertig dargestellte Optionen, keine Einstellung an einer Sache:
+   Was hier gewählt wird, entscheidet, ob personenbezogene Daten das System
+   verlassen. */
+.db-management-wahl {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.db-management-wahl-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.db-management-wahl-option:has(input:checked) {
+  border-color: #2563eb;
+  background: #f5f9ff;
+}
+
+.db-management-wahl-option input {
+  margin-top: 3px;
+  accent-color: #2563eb;
+  flex-shrink: 0;
+}
+
+.db-management-wahl-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.db-management-wahl-text code {
+  background: #eef2f7;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+/* Erscheint nur beim vollständigen Export - deshalb deutlich und nicht
+   dauerhaft, damit die Warnung nicht zur Tapete wird. */
+.db-management-warnung {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #7c5a00;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ---- Import: was sich danach ändert ---- */
+.db-management-hinweis {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #eef2f7;
+  border: 1px solid #d7dee8;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #334155;
+}
+
+.db-management-hinweis ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* GlobalDayTemplates Styles */
 .day-templates-container {
   background: #fff;
