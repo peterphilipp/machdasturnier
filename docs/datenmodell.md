@@ -4,7 +4,7 @@
 > Quelle ist [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 > Neu erzeugen mit `npm run docs:datamodel` im Ordner `backend`.
 
-Das Schema umfasst **39 Modelle**.
+Das Schema umfasst **40 Modelle**.
 
 ## Überblick
 
@@ -24,6 +24,7 @@ Das Schema umfasst **39 Modelle**.
 | [KnockoutBracket](#knockoutbracket) | `knockout_brackets` | 9 |
 | [Match](#match) | `matches` | 29 |
 | [MaterialItem](#materialitem) | `material_items` | 8 |
+| [NutzungTag](#nutzungtag) | `nutzung_tage` | 7 |
 | [PasswordResetToken](#passwordresettoken) | `password_reset_tokens` | 7 |
 | [PushSubscription](#pushsubscription) | `push_subscriptions` | 8 |
 | [Shift](#shift) | `shifts` | 16 |
@@ -40,7 +41,7 @@ Das Schema umfasst **39 Modelle**.
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 17 |
-| [User](#user) | `users` | 32 |
+| [User](#user) | `users` | 33 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
@@ -308,6 +309,24 @@ Tabelle: `material_items`
 | `done` | `Boolean` | Standard: `false` |
 | `createdAt` | `DateTime` | Standard: `now()` |
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
+
+## NutzungTag
+
+/ Ein Kalendertag, an dem ein Nutzer die App benutzt hat. / / `users.last_login_at` und `last_activity_at` werden bei jedem Mal / ueberschrieben. Sie beantworten "wann zuletzt", nie "an welchen Tagen" - / eine Anmeldekurve laesst sich daraus nicht rekonstruieren, auch nicht / rueckwirkend. Dafuer braucht es eine Zeile je Nutzer und Tag. / / Bewusst ein Tag je Zeile und kein Ereignisprotokoll: Fuer die Frage, wie / die App in den Wochen vor einem Turnier angenommen wird, zaehlen Menschen / und Tage, nicht Klicks. Eine Zeile je Nutzer und Tag ist ausserdem eine / Schreiboperation pro Person und Tag statt einer pro Request - bei SQLite / mit seinem einzelnen Schreiber ein Unterschied, der zaehlt.
+
+Tabelle: `nutzung_tage`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `userId` | `Int` |  |
+| `tag` | `String` |  |
+| `ersteAktion` | `DateTime` |  |
+| `letzteAktion` | `DateTime` |  |
+| `anmeldungen` | `Int` | Standard: `0` |
+| `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |
+
+Eindeutigkeit: `@@unique([userId, tag])`
 
 ## PasswordResetToken
 
@@ -678,6 +697,7 @@ Tabelle: `users`
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `aufrufe` | `Aufruf[]` | Gegenstück einer Beziehung (Liste) |
 | `webAuthnCredentials` | `WebAuthnCredential[]` | Gegenstück einer Beziehung (Liste) |
+| `nutzungTage` | `NutzungTag[]` | Gegenstück einer Beziehung (Liste) |
 | `trainedYearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 | `userRoles` | `UserRole[]` | Gegenstück einer Beziehung (Liste) |
 
