@@ -72,8 +72,8 @@ export default function StationPrintModal({
    */
   useEffect(() => {
     if (!isOpen) return;
-    document.body.classList.add('stationsdruck-offen');
-    return () => document.body.classList.remove('stationsdruck-offen');
+    document.body.classList.add('druckdialog-offen');
+    return () => document.body.classList.remove('druckdialog-offen');
   }, [isOpen]);
 
   // Render filter logic

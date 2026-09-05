@@ -753,3 +753,50 @@
   from { background: #fef3c7; }
   to { background: transparent; }
 }
+
+/* ===== Einstieg in den Turnierabschluss =====
+   Steht oberhalb der Eckdaten und sieht bewusst nicht wie eine Kachel aus:
+   Es ist keine Zahl, sondern eine Handlung. */
+.stat-abschluss-leiste {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+  padding: var(--spacing-4);
+  margin-bottom: var(--spacing-5);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+}
+
+.stat-abschluss-titel {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-strong);
+}
+
+.stat-abschluss-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: 2px;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.stat-abschluss-knopf {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--club-primary);
+  color: #ffffff;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stat-abschluss-knopf:hover {
+  filter: brightness(0.94);
+}

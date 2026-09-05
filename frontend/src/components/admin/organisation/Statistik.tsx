@@ -1,6 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import { apiFetch } from '../../../api';
 import { Ladefehler } from '../../Verbindung';
+import TurnierabschlussModal from './TurnierabschlussModal';
 import '../../../styles/components/statistik.css';
 
 /**
@@ -229,6 +230,7 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   // Welcher Aufruf gerade per Klick auf die 📣-Markierung angesprungen wurde -
   // kurzzeitig hervorgehoben, damit sichtbar ist, wohin der Klick führte.
   const [angesprungenerAufruf, setAngesprungenerAufruf] = useState<number | null>(null);
+  const [abschlussOffen, setAbschlussOffen] = useState(false);
 
   const springeZuAufruf = (id: number) => {
     document.getElementById(`stat-aufruf-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -287,6 +289,28 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
 
   return (
     <div className="stat-seite">
+
+      {/* Der Turnierabschluss steht ganz oben, weil er das ist, wonach man
+          nach dem Turnier sucht: alles auf einmal, zum Weitergeben. Die
+          Ansicht darunter bleibt der Ort fürs Nachschauen im Detail. */}
+      <div className="stat-abschluss-leiste">
+        <div>
+          <div className="stat-abschluss-titel">🏁 Turnierabschluss</div>
+          <div className="stat-abschluss-text">
+            Deckblatt, Beteiligung, Jahrgänge, Rückmeldungen, Lücken – und optional die
+            Dienstpläne, wie sie gelaufen sind. Als PDF zum Weitergeben.
+          </div>
+        </div>
+        <button className="stat-abschluss-knopf" onClick={() => setAbschlussOffen(true)}>
+          Turnierabschluss erstellen
+        </button>
+      </div>
+
+      <TurnierabschlussModal
+        isOpen={abschlussOffen}
+        tournamentId={selectedTournament}
+        onClose={() => setAbschlussOffen(false)}
+      />
 
       {/* ---- Eckdaten ---- */}
       <section>

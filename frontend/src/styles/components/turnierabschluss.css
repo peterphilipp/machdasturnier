@@ -1,0 +1,240 @@
+/* ==========================================
+   Turnierabschluss - eigene Bausteine
+   ==========================================
+   Das Seitengeruest (Blatt, Kopf, Fuss, Tabellen, Druckregeln) kommt aus
+   station-print.css und wird hier nur ergaenzt. Zwei Stylesheets fuer
+   dieselben A4-Regeln waeren zwei Orte, an denen dieselbe muehsam gefundene
+   Druckmechanik gepflegt werden muesste. */
+
+.abschluss-laden {
+  padding: 40px;
+  text-align: center;
+  color: #475569;
+  font-size: 14px;
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+/* Steht im Dialog, nicht auf dem Blatt: eine Warnung gehoert an die Stelle,
+   an der man die Entscheidung trifft, nicht in den Ausdruck. */
+.abschluss-warnung {
+  margin: 0 24px 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #7c5a00;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---- Deckblatt ---- */
+
+.abschluss-deckblatt-kopf {
+  text-align: center;
+  margin: 6mm 0 8mm;
+}
+
+.abschluss-deckblatt-zeitraum {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.abschluss-deckblatt-unter {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.abschluss-kacheln {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6mm;
+  margin-bottom: 8mm;
+}
+
+.abschluss-kachel {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 6mm 4mm;
+  text-align: center;
+}
+
+.abschluss-kachel-wert {
+  font-size: 34px;
+  font-weight: 800;
+  color: #2563eb;
+  line-height: 1.1;
+}
+
+.abschluss-kachel-einheit {
+  font-size: 18px;
+  margin-left: 2px;
+}
+
+.abschluss-kachel-label {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.abschluss-verteilung {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5mm;
+  font-size: 13px;
+  color: #334155;
+  align-items: baseline;
+}
+
+.abschluss-verteilung strong {
+  font-size: 17px;
+  color: #0f172a;
+}
+
+.abschluss-verteilung-schnitt {
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* Das Dankeswort ist der einzige Teil des Dokuments, der nicht aus Daten
+   entsteht - deshalb sieht es anders aus als alles andere. */
+.abschluss-dank {
+  margin-top: 8mm;
+  padding: 5mm;
+  border-left: 4px solid #2563eb;
+  background: #f8fafc;
+  border-radius: 0 8px 8px 0;
+  font-size: 14px;
+  font-style: italic;
+  color: #0f172a;
+  line-height: 1.6;
+}
+
+/* ---- Abschnitte auf den Inhaltsseiten ---- */
+
+.abschluss-abschnitt {
+  margin-top: 6mm;
+}
+
+.abschluss-h2 {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 6mm 0 3mm;
+  padding-bottom: 2mm;
+  border-bottom: 2px solid #e2e8f0;
+  /* Eine Ueberschrift allein am Seitenende verspricht eine Tabelle, die erst
+     auf der naechsten Seite kommt. */
+  break-after: avoid;
+  page-break-after: avoid;
+}
+
+.abschluss-hinweis {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0 0 3mm;
+}
+
+.abschluss-duenn {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.abschluss-unbesetzt {
+  color: #b91c1c;
+  font-style: italic;
+}
+
+/* ---- Empfehlungen ---- */
+
+.abschluss-empfehlungen {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+}
+
+.abschluss-empfehlung {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  padding: 3mm 4mm;
+  border-radius: 8px;
+  border-left: 4px solid #94a3b8;
+  background: #f8fafc;
+  font-size: 12px;
+  line-height: 1.5;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.abschluss-empfehlung-kopf {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.abschluss-empfehlung--warnung { border-left-color: #f59e0b; background: #fffbeb; }
+.abschluss-empfehlung--chance  { border-left-color: #2563eb; background: #eff6ff; }
+.abschluss-empfehlung--lob     { border-left-color: #16a34a; background: #f0fdf4; }
+
+/* ---- Kommentare ---- */
+
+.abschluss-kommentare {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+}
+
+.abschluss-kommentar {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  padding: 3mm 4mm;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.abschluss-kommentar-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #0f172a;
+}
+
+.abschluss-kommentar-quelle {
+  font-size: 10px;
+  color: #64748b;
+}
+
+/* ---- Druck ---- */
+
+@media print {
+  /* Die Warnung im Dialog gehoert nicht auf das Papier. */
+  .abschluss-warnung,
+  .abschluss-laden {
+    display: none !important;
+  }
+
+  /* Eine Tabelle, die ueber die Seite laeuft, wiederholt ihren Kopf und
+     zerschneidet keine Zeile. */
+  .station-print-table thead {
+    display: table-header-group;
+  }
+
+  .station-print-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

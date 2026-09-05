@@ -459,7 +459,7 @@
 
      Nur bei offenem Dialog: sonst druckte jedes andere Strg+P im Adminbereich
      ein leeres Blatt. Die Klasse setzt das Modal, solange es offen ist. */
-  body.stationsdruck-offen #root {
+  body.druckdialog-offen #root {
     display: none !important;
   }
 
