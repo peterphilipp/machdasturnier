@@ -6,6 +6,7 @@ import {
   getShifts, getVolunteerShifts
 } from '../../../api';
 import { Tournament, TournamentDay, TournamentWorkArea, VolunteerShift } from '../shared';
+import ShiftTimeline, { TimelineShift } from './ShiftTimeline';
 import '../../../styles/components/station-print.css';
 import '../../../styles/components/turnierabschluss.css';
 
@@ -75,6 +76,18 @@ interface Statistik {
   };
   jahrgaenge: { liste: Jahrgang[]; mehrfachzaehlung: boolean };
   verlauf?: { aufrufe: VerlaufAufruf[]; fensterStunden: number; ohneZeitstempel: number };
+  nutzung?: {
+    eckdaten: {
+      konten: number; mitZugang: number; ohneZugang: number; unerreichbar: number;
+      nieAngemeldet: number; aktivLetzte7Tage: number; aktivLetzte30Tage: number;
+    };
+    erreichbarkeit: {
+      perPush: number; pushGeraete: number; nurInDerApp: number;
+      ueberKontaktperson: number; garNicht: number;
+    };
+    anmeldeart: { mitPasskey: number; nurPasswort: number; nieAngemeldet: number };
+    aufzeichnungAb: string | null;
+  };
   luecken: {
     jeAbschnitt: { abschnitt: string; label: string; plaetze: number; besetzt: number; offen: number; besetzungsgrad: number | null }[];
     groessteLuecken: Luecke[];
@@ -196,21 +209,37 @@ export default function TurnierabschlussModal({
     [tournaments, tournamentId]
   );
 
-  /** Dienstplan-Anhang: je Bereich die Tage, je Tag die Schichten. */
-  const dienstplaene = useMemo(() => {
+  /**
+   * Der Dienstplan als Diagramm, ein Blatt je Turniertag.
+   *
+   * Vorher standen hier Namenslisten je Station: wer wann wo eingeteilt war.
+   * Rueckblickend ist das die uninteressantere Haelfte - wer genau an einem
+   * Grillstand stand, spielt fuer die naechste Planung keine Rolle mehr. Das
+   * Diagramm dagegen zeigt die Form des Tages: wo Schichten dicht lagen, wo
+   * Luecken klafften, wie lang die Bereiche besetzt waren. Es ist ausserdem
+   * dasselbe Bild, das die Organisatoren aus dem Dienstplan kennen.
+   */
+  const gemeinsameAchse = useMemo(() => {
+    let start = 1440;
+    let ende = 0;
+    for (const s of jobSlots) {
+      start = Math.min(start, s.startMin ?? s.daySlot?.startMin ?? 480);
+      ende = Math.max(ende, s.endMin ?? s.daySlot?.endMin ?? 1080);
+    }
+    // Alle Tage teilen eine Achse - nur so sind zwei Blaetter nebeneinander
+    // vergleichbar. Ohne Schichten ein plausibler Vormittag bis Abend.
+    return start > ende ? { start: 480, ende: 1080 } : { start, ende };
+  }, [jobSlots]);
+
+  const tagesplaene = useMemo(() => {
     if (!zeigeDienstplaene) return [];
-    return areas.filter(a => a.active).map(area => ({
-      area,
-      tage: days.map(day => ({
+    return days
+      .map(day => ({
         day,
-        shifts: jobSlots
-          .filter(s =>
-            s.tournamentDayId === day.id
-            && (s.tournamentWorkAreaId === area.id || s.arbeitsbereichId === area.id || s.workArea?.id === area.id))
-          .sort((a, b) => (a.startMin ?? a.daySlot?.startMin ?? 0) - (b.startMin ?? b.daySlot?.startMin ?? 0))
-      })).filter(t => t.shifts.length > 0)
-    })).filter(a => a.tage.length > 0);
-  }, [zeigeDienstplaene, areas, days, jobSlots]);
+        shifts: jobSlots.filter(s => s.tournamentDayId === day.id)
+      }))
+      .filter(t => t.shifts.length > 0);
+  }, [zeigeDienstplaene, days, jobSlots]);
 
   if (!isOpen) return null;
 
@@ -315,13 +344,13 @@ export default function TurnierabschlussModal({
             </select>
           </div>
           <div className="station-print-field">
-            <label>📋 Dienstpläne anhängen</label>
+            <label>📋 Dienstplan anhängen</label>
             <select
               className="station-print-select"
               value={zeigeDienstplaene ? 'ja' : 'nein'}
               onChange={e => setZeigeDienstplaene(e.target.value === 'ja')}
             >
-              <option value="ja">Ja, wer wann wo war</option>
+              <option value="ja">Ja, als Diagramm je Turniertag</option>
               <option value="nein">Nein, nur die Auswertung</option>
             </select>
           </div>
@@ -711,49 +740,132 @@ export default function TurnierabschlussModal({
                 <Fuss seite="Lücken" />
               </div>
 
-              {/* --------------------------------------- Dienstpläne (Anhang) */}
-              {dienstplaene.map(({ area, tage }) => (
-                <div key={area.id} className="station-print-page">
+              {/* ------------------------------------------- App-Nutzung ----- */}
+              {statistik.nutzung && (
+                <div className="station-print-page">
                   <div>
-                    <Kopf titel={`${area.icon} ${area.name}`} />
-                    <div className="station-print-meta-bar">
-                      <div>📋 <strong>Anhang:</strong> Dienstplan wie gelaufen</div>
-                      <div>📅 {tage.map(t => tagKurz(t.day.date)).join(' · ')}</div>
+                    <Kopf titel="📱 App-Nutzung" />
+                    <p className="abschluss-hinweis">
+                      Kennzahlen zum Werkzeug, nicht zum Turnier. Die wichtigste steht in der
+                      zweiten Tabelle: wie viele Menschen eine Nachricht überhaupt erreicht.
+                    </p>
+
+                    <div className="abschluss-kacheln abschluss-kacheln--vier">
+                      <div className="abschluss-kachel">
+                        <div className="abschluss-kachel-wert">{zahl(statistik.nutzung.eckdaten.konten)}</div>
+                        <div className="abschluss-kachel-label">Teilnehmer insgesamt</div>
+                      </div>
+                      <div className="abschluss-kachel">
+                        <div className="abschluss-kachel-wert">{zahl(statistik.nutzung.eckdaten.aktivLetzte7Tage)}</div>
+                        <div className="abschluss-kachel-label">in den letzten 7 Tagen aktiv</div>
+                      </div>
+                      <div className="abschluss-kachel">
+                        <div className="abschluss-kachel-wert">{zahl(statistik.nutzung.eckdaten.aktivLetzte30Tage)}</div>
+                        <div className="abschluss-kachel-label">in den letzten 30 Tagen aktiv</div>
+                      </div>
+                      <div className="abschluss-kachel">
+                        <div className="abschluss-kachel-wert">{zahl(statistik.nutzung.eckdaten.nieAngemeldet)}</div>
+                        <div className="abschluss-kachel-label">noch nie angemeldet</div>
+                      </div>
                     </div>
 
-                    {tage.map(({ day, shifts }) => (
-                      <div key={day.id} className="station-print-tag">
-                        <div className="station-print-tag-titel">📅 {tagLang(day.date)}</div>
-                        <table className="station-print-table">
-                          <thead>
-                            <tr><th style={{ width: '25%' }}>Uhrzeit</th><th>Wer war da</th><th style={{ width: '15%' }}>Besetzung</th></tr>
-                          </thead>
-                          <tbody>
-                            {shifts.map(s => {
-                              const startMin = s.startMin ?? s.daySlot?.startMin;
-                              const endMin = s.endMin ?? s.daySlot?.endMin;
-                              const eingeplant = volunteerShifts.filter(vs => vs.shiftId === s.id);
-                              const max = s.maxVolunteers || 1;
-                              return (
-                                <tr key={s.id}>
-                                  <td><span className="station-print-time-badge">{hhmm(startMin)} – {hhmm(endMin)}</span></td>
-                                  <td>
-                                    {eingeplant.length === 0
-                                      ? <span className="abschluss-unbesetzt">unbesetzt geblieben</span>
-                                      : eingeplant.map(vs => vs.user?.name ? name(vs.user.name) : 'Helfer').join(', ')}
-                                  </td>
-                                  <td>
-                                    <strong>{eingeplant.length} / {max}</strong>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    ))}
+                    <h2 className="abschluss-h2">Wen eine Nachricht erreicht</h2>
+                    <p className="abschluss-hinweis">
+                      Die vier Gruppen überschneiden sich nicht und ergeben zusammen alle Teilnehmer.
+                    </p>
+                    <table className="station-print-table">
+                      <thead>
+                        <tr><th>Weg</th><th>Personen</th><th>Was das heisst</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>🔔 Push aufs Gerät</td>
+                          <td><strong>{statistik.nutzung.erreichbarkeit.perPush}</strong></td>
+                          <td>
+                            Merkt es sofort – auf {zahl(statistik.nutzung.erreichbarkeit.pushGeraete)} Gerät
+                            {statistik.nutzung.erreichbarkeit.pushGeraete === 1 ? '' : 'en'}.
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>📥 nur in der App</td>
+                          <td><strong>{statistik.nutzung.erreichbarkeit.nurInDerApp}</strong></td>
+                          <td>Sieht die Nachricht beim nächsten Öffnen.</td>
+                        </tr>
+                        <tr>
+                          <td>👪 über die Kontaktperson</td>
+                          <td><strong>{statistik.nutzung.erreichbarkeit.ueberKontaktperson}</strong></td>
+                          <td>Helfer ohne eigenen Zugang – die Nachricht geht an die Eltern.</td>
+                        </tr>
+                        <tr>
+                          <td>🚫 gar nicht</td>
+                          <td><strong>{statistik.nutzung.erreichbarkeit.garNicht}</strong></td>
+                          <td>
+                            Kein Zugang und keine Kontaktperson. Eine verschobene Schicht erfährt
+                            diese Person nur, wenn jemand sie anruft.
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <h2 className="abschluss-h2">Wie sich angemeldet wird</h2>
+                    <table className="station-print-table">
+                      <thead>
+                        <tr><th>Weg</th><th>Personen</th></tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>🔐 Face ID / Fingerabdruck</td>
+                          <td><strong>{statistik.nutzung.anmeldeart.mitPasskey}</strong></td>
+                        </tr>
+                        <tr>
+                          <td>🔑 Passwort</td>
+                          <td><strong>{statistik.nutzung.anmeldeart.nurPasswort}</strong></td>
+                        </tr>
+                        <tr>
+                          <td>– noch nie angemeldet</td>
+                          <td><strong>{statistik.nutzung.anmeldeart.nieAngemeldet}</strong></td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {statistik.nutzung.aufzeichnungAb && (
+                      <p className="abschluss-hinweis">
+                        Die tägliche Nutzung wird seit dem{' '}
+                        {new Date(statistik.nutzung.aufzeichnungAb).toLocaleDateString('de-DE')} erfasst;
+                        der Verlauf dazu steht in der Statistikansicht.
+                      </p>
+                    )}
                   </div>
-                  <Fuss seite={`Dienstplan ${area.name}`} />
+                  <Fuss seite="App-Nutzung" />
+                </div>
+              )}
+
+              {/* ------------------------------- Dienstplan als Diagramm ----- */}
+              {tagesplaene.map(({ day, shifts }) => (
+                <div key={day.id} className="station-print-page">
+                  <div>
+                    <Kopf titel={`📋 Dienstplan ${tagKurz(day.date)}`} />
+                    <div className="station-print-meta-bar">
+                      <div>📅 <strong>{tagLang(day.date)}</strong></div>
+                      <div>⏱️ {shifts.length} Schichten</div>
+                      <div>🕐 {hhmm(gemeinsameAchse.start)} – {hhmm(gemeinsameAchse.ende)}</div>
+                    </div>
+
+                    {/* Dieselbe Komponente wie im Dienstplan, nur nicht
+                        bearbeitbar - so sieht das Blatt aus wie das, was die
+                        Organisatoren kennen, statt wie eine zweite Wahrheit. */}
+                    <div className="abschluss-gantt">
+                      <ShiftTimeline
+                        title=""
+                        shifts={shifts as unknown as TimelineShift[]}
+                        volunteerShifts={volunteerShifts}
+                        globalStartMin={gemeinsameAchse.start}
+                        globalEndMin={gemeinsameAchse.ende}
+                        gruppierung="bereich"
+                      />
+                    </div>
+                  </div>
+                  <Fuss seite={`Dienstplan ${tagKurz(day.date)}`} />
                 </div>
               ))}
             </>

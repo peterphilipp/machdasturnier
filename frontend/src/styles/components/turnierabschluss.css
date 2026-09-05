@@ -54,6 +54,30 @@
   margin-bottom: 8mm;
 }
 
+/* Vier schmale Kacheln in einer Reihe - auf der Kennzahlenseite stehen sie
+   ueber Tabellen und duerfen nicht das halbe Blatt einnehmen wie auf dem
+   Deckblatt. */
+.abschluss-kacheln--vier {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 3mm;
+  margin-bottom: 5mm;
+}
+
+.abschluss-kacheln--vier .abschluss-kachel {
+  padding: 4mm 2mm;
+}
+
+.abschluss-kacheln--vier .abschluss-kachel-wert {
+  font-size: 24px;
+}
+
+/* Das Dienstplan-Diagramm auf dem Blatt.
+   Die Komponente bringt ihren eigenen Abstand fuer die Bildschirmansicht mit;
+   auf Papier steht darueber schon die Kopfleiste. */
+.abschluss-gantt > div {
+  margin-bottom: 0 !important;
+}
+
 .abschluss-kachel {
   border: 1px solid #e2e8f0;
   border-radius: 10px;
@@ -143,11 +167,6 @@
 .abschluss-duenn {
   color: #b91c1c;
   font-weight: 600;
-}
-
-.abschluss-unbesetzt {
-  color: #b91c1c;
-  font-style: italic;
 }
 
 /* ---- Empfehlungen ---- */
