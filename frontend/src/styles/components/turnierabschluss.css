@@ -78,6 +78,35 @@
   margin-bottom: 0 !important;
 }
 
+/* ---- Querformat fuer die Diagrammblaetter ----
+   Die Aussage des Gantt liegt auf der Zeitachse, also in der Breite. Mit
+   echten Turnierdaten gemessen: hochkant bleiben 11,6mm je Stunde, quer sind
+   es 22,1mm. Der Unterschied ist nicht kosmetisch - hochkant schneidet die
+   Beschriftung paralleler Schichten mitten im Wort ab ("2 (07:45-09:3"), und
+   das trifft ausgerechnet die Stellen, an denen zwei Staende gleichzeitig
+   laufen.
+
+   Nur diese Blaetter drehen sich; Deckblatt, Tabellen und Rueckmeldungen
+   bleiben hochkant. Moeglich macht das eine benannte Seite: `page: quer`
+   weist einzelnen Elementen ein eigenes @page-Format zu. */
+.station-print-page--quer {
+  width: 297mm;
+  min-height: 210mm;
+}
+
+@media print {
+  @page quer {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  .station-print-page--quer {
+    page: quer;
+    /* 210mm Blatthoehe minus 2x12mm Rand, mit etwas Luft nach unten. */
+    min-height: 165mm !important;
+  }
+}
+
 .abschluss-kachel {
   border: 1px solid #e2e8f0;
   border-radius: 10px;

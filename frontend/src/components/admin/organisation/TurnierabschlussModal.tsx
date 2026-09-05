@@ -841,8 +841,11 @@ export default function TurnierabschlussModal({
               )}
 
               {/* ------------------------------- Dienstplan als Diagramm ----- */}
+              {/* Querformat: siehe turnierabschluss.css - die Aussage des Gantt
+                  liegt in der Breite, hochkant schneidet die Beschriftung
+                  paralleler Schichten ab. */}
               {tagesplaene.map(({ day, shifts }) => (
-                <div key={day.id} className="station-print-page">
+                <div key={day.id} className="station-print-page station-print-page--quer">
                   <div>
                     <Kopf titel={`📋 Dienstplan ${tagKurz(day.date)}`} />
                     <div className="station-print-meta-bar">
