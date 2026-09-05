@@ -559,9 +559,22 @@
 }
 
 /* Balken und x-Achse scrollen gemeinsam, damit ein Datum immer unter seinem
-   eigenen Balken steht, auch wenn beide Reihen horizontal verschoben sind. */
+   eigenen Balken steht, auch wenn beide Reihen horizontal verschoben sind.
+   overflow-x bleibt auto, damit sich bei sehr vielen Tagen (mehr, als die
+   Mindestbreite je Balken zulaesst) noch scrollen laesst - nur die
+   Scrollleiste selbst wird ausgeblendet.
+   Der Grund: Schon eine einzelne Achsenbeschriftung ganz rechts, die ein,
+   zwei Pixel breiter ist als ihre eigene Spalte (Flex-Item ohne festes
+   width - eine Chromium-Eigenheit laesst text-align dagegen nichts
+   ausrichten), reicht als Overflow, um dauerhaft eine leere, funktionslose
+   Leiste einzublenden. Die paar Pixel Text-"Tinte" sind ohnehin unsichtbar
+   abgeschnitten - nur die Leiste war das sichtbare Problem. */
 .verlauf-scroll {
   overflow-x: auto;
+  scrollbar-width: none;
+}
+.verlauf-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .verlauf-diagramm {
