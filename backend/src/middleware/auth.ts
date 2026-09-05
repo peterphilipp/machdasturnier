@@ -4,6 +4,7 @@ import prisma from '../config/prisma.js';
 import JWT_SECRET from '../config/jwt.js';
 import { Role, hasAdminAccess, isAdmin, highestRole } from '../utils/roles.js';
 import { getUserRoles } from '../utils/userRoles.js';
+import { merkeNutzung } from '../utils/nutzung.js';
 
 export interface AuthRequest extends Request {
   userId?: number;
@@ -25,6 +26,11 @@ const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 const lastActivityWrite = new Map<number, number>();
 
 function touchActivity(userId: number): void {
+  // Der Tagesvermerk hat seine eigene, taegliche Sparsamkeit und darf deshalb
+  // nicht hinter dieser 5-Minuten-Drosselung stehen: Wer genau einmal am Tag
+  // kurz hereinschaut, wuerde sonst je nach Zufall gezaehlt oder nicht.
+  merkeNutzung(userId);
+
   const now = Date.now();
   const last = lastActivityWrite.get(userId);
   if (last && now - last < ACTIVITY_THROTTLE_MS) return;

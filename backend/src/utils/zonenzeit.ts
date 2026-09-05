@@ -60,3 +60,17 @@ export function zeitpunktOrtszeit(datum: Date | string, minuten: number): Date {
   const ersteSchaetzung = naiv - versatzMs(new Date(naiv));
   return new Date(naiv - versatzMs(new Date(ersteSchaetzung)));
 }
+
+/**
+ * Der Kalendertag eines Zeitpunkts als "YYYY-MM-DD", in Ortszeit.
+ *
+ * In UTC gerechnet faellt alles nach 22:00 Ortszeit (Sommer) bereits auf den
+ * naechsten Tag - jemand, der abends um halb zwoelf den Dienstplan oeffnet,
+ * erschiene in der Statistik am Folgetag.
+ */
+export function tagOrtszeit(zeitpunkt: Date | string = new Date()): string {
+  const teile = Object.fromEntries(
+    FORMAT.formatToParts(new Date(zeitpunkt)).map(p => [p.type, p.value])
+  ) as Record<string, string>;
+  return `${teile.year}-${teile.month}-${teile.day}`;
+}

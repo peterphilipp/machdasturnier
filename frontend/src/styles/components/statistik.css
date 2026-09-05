@@ -576,3 +576,61 @@
 }
 .verlauf-punkt--zusagen { background: var(--club-primary); }
 .verlauf-punkt--spenden { background: #ffc107; }
+
+/* ===== App-Nutzung ===== */
+
+/* Andere Farben als im Hilfe-Verlauf darueber: Es ist dieselbe Darstellungs-
+   form, aber eine andere Sache. Gleiche Farben wuerden nahelegen, dass sich
+   die beiden Diagramme vergleichen lassen. */
+.verlauf-teil--aktive { background: #0d9488; }
+.verlauf-teil--neu { background: #8b5cf6; }
+.verlauf-punkt--aktive { background: #0d9488; }
+.verlauf-punkt--neu { background: #8b5cf6; }
+
+/* Ein Tag vor Beginn der Aufzeichnung ist etwas anderes als ein Tag, an dem
+   niemand da war. Deshalb gestrichelt statt durchgezogen - der Unterschied
+   muss sichtbar sein, sonst liest man eine Aussage, die die Daten nicht
+   hergeben. */
+.verlauf-teil--unerfasst {
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg, var(--border-color) 0 3px, transparent 3px 6px
+  );
+}
+.verlauf-punkt--unerfasst {
+  background: repeating-linear-gradient(
+    90deg, var(--border-color) 0 3px, transparent 3px 6px
+  );
+}
+
+/* ===== Chronik: wer wann zugesagt hat ===== */
+
+.stat-chronik-schalter {
+  margin-top: 18px;
+  padding: 8px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stat-chronik-schalter:hover {
+  border-color: var(--club-primary);
+  color: var(--club-primary);
+}
+
+/* Lange Liste - sie soll den Abschnitt nicht auseinanderziehen. */
+.stat-chronik {
+  margin-top: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.stat-chronik-zeit {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}

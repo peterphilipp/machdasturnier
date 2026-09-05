@@ -42,6 +42,27 @@ interface VerlaufAufruf {
   reaktion: { zusagen: number; spenden: number };
 }
 
+interface ChronikEintrag {
+  zeitpunkt: string; art: 'schicht' | 'spende'; name: string; was: string;
+}
+
+interface Nutzung {
+  eckdaten: {
+    konten: number; mitZugang: number; ohneZugang: number; unerreichbar: number;
+    nieAngemeldet: number; aktivLetzte7Tage: number; aktivLetzte30Tage: number;
+  };
+  erreichbarkeit: {
+    perPush: number; pushGeraete: number; nurInDerApp: number;
+    ueberKontaktperson: number; garNicht: number;
+  };
+  anmeldeart: { mitPasskey: number; nurPasswort: number; nieAngemeldet: number };
+  tage: {
+    datum: string; aktive: number; anmeldungen: number;
+    registrierungen: number; registrierungenKumuliert: number;
+  }[];
+  aufzeichnungAb: string | null;
+}
+
 interface Statistik {
   eckdaten: { helfer: number; beteiligte: number; spenden: number; spender: number; schichten: number; stunden: number } & Kennzahl;
   jeBereich: Bereich[];
@@ -59,7 +80,9 @@ interface Statistik {
     ohneZeitstempel: number;
     aufrufe: VerlaufAufruf[];
     fensterStunden: number;
+    chronik?: ChronikEintrag[];
   };
+  nutzung?: Nutzung;
   luecken: {
     jeAbschnitt: { abschnitt: string; label: string; plaetze: number; besetzt: number; offen: number; besetzungsgrad: number | null }[];
     groessteLuecken: Luecke[];
@@ -109,6 +132,9 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
   // Welche Jahrgänge sind aufgeschlüsselt? Zugeklappt bleibt die Tabelle
   // überschaubar, aufgeklappt beantwortet sie "wer genau".
   const [offeneJahrgaenge, setOffeneJahrgaenge] = useState<Set<number>>(new Set());
+  // Die Chronik nennt Namen. Zugeklappt zeigt der Verlauf nur Zahlen - wer
+  // wissen will, wer wann zugesagt hat, klappt sie bewusst auf.
+  const [chronikOffen, setChronikOffen] = useState(false);
 
   useEffect(() => {
     if (!selectedTournament) { setDaten(null); setLaedt(false); return; }
@@ -147,7 +173,7 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
     );
   }
 
-  const { eckdaten, jeBereich, jeTag, werHatGetragen, jahrgaenge, luecken, verlauf } = daten;
+  const { eckdaten, jeBereich, jeTag, werHatGetragen, jahrgaenge, luecken, verlauf, nutzung } = daten;
   const top = topModus === 'stunden' ? werHatGetragen.nachStunden
     : topModus === 'schichten' ? werHatGetragen.nachSchichten
     : werHatGetragen.nachSpenden;
@@ -529,6 +555,56 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
               </p>
             </>
           )}
+
+          {/* Die Einzeleintraege hinter der Kurve. Die Kurve sagt "wann kam
+              etwas zusammen", diese Liste sagt "wer". Bewusst chronologisch
+              und nicht nach "wer war am spaetesten" sortiert: Das waere eine
+              Liste der Saeumigen, und spaet eingetragen heisst oft nur, spaet
+              gefragt worden zu sein. */}
+          {verlauf.chronik && verlauf.chronik.length > 0 && (
+            <>
+              <button
+                className="stat-chronik-schalter"
+                onClick={() => setChronikOffen(o => !o)}
+                aria-expanded={chronikOffen}
+              >
+                {chronikOffen ? '▾' : '▸'} Wer hat wann zugesagt? ({verlauf.chronik.length} Einträge)
+              </button>
+
+              {chronikOffen && (
+                <>
+                  <div className="stat-tabelle-huelle stat-chronik">
+                    <table className="stat-tabelle">
+                      <thead>
+                        <tr><th>Wann</th><th>Wer</th><th>Was</th></tr>
+                      </thead>
+                      <tbody>
+                        {verlauf.chronik.map((e, i) => (
+                          <tr key={`${e.zeitpunkt}-${i}`}>
+                            <td className="stat-chronik-zeit">
+                              {new Date(e.zeitpunkt).toLocaleString('de-DE', {
+                                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </td>
+                            <td>{e.name}</td>
+                            <td>
+                              <span aria-hidden="true">{e.art === 'spende' ? '🍰' : '🧑‍🍳'}</span> {e.was}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {verlauf.ohneZeitstempel > 0 && (
+                    <p className="stat-hinweis">
+                      {verlauf.ohneZeitstempel} ältere Zusagen fehlen hier – sie stammen aus der
+                      Zeit vor der Zeiterfassung und liessen sich nur raten.
+                    </p>
+                  )}
+                </>
+              )}
+            </>
+          )}
         </section>
         );
       })()}
@@ -577,6 +653,142 @@ export default function Statistik({ selectedTournament }: { selectedTournament: 
           </>
         )}
       </section>
+
+      {/* ---- App-Nutzung ----
+          Ganz unten und als eigener Abschnitt: Diese Zahlen sagen nichts über
+          das Turnier, sondern über das Werkzeug. Sie beantworten die Frage,
+          die vor jedem Aufruf steht - wie viele Menschen erreiche ich damit
+          überhaupt. */}
+      {nutzung && (
+        <section>
+          <h3 className="feedback-section-title">📱 App-Nutzung</h3>
+
+          <div className="stat-kacheln">
+            <Kachel wert={nutzung.eckdaten.konten} label="Teilnehmer insgesamt" />
+            <Kachel wert={nutzung.eckdaten.aktivLetzte7Tage} label="in den letzten 7 Tagen aktiv" />
+            <Kachel wert={nutzung.eckdaten.aktivLetzte30Tage} label="in den letzten 30 Tagen aktiv" />
+            <Kachel
+              wert={nutzung.eckdaten.nieAngemeldet}
+              label="noch nie angemeldet"
+              ton={nutzung.eckdaten.nieAngemeldet > 0 ? 'warnung' : undefined}
+            />
+          </div>
+
+          <h4 className="stat-untertitel">Wen eine Nachricht erreicht</h4>
+          <p className="stat-hinweis">
+            Die vier Gruppen überschneiden sich nicht und ergeben zusammen alle Teilnehmer.
+          </p>
+          <div className="stat-tabelle-huelle">
+            <table className="stat-tabelle">
+              <thead>
+                <tr><th>Weg</th><th>Personen</th><th>Was das heisst</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>🔔 Push aufs Gerät</td>
+                  <td className="stat-zahl">{nutzung.erreichbarkeit.perPush}</td>
+                  <td>
+                    Merkt es sofort – auf {zahl(nutzung.erreichbarkeit.pushGeraete)} Gerät
+                    {nutzung.erreichbarkeit.pushGeraete === 1 ? '' : 'en'}.
+                  </td>
+                </tr>
+                <tr>
+                  <td>📥 nur in der App</td>
+                  <td className="stat-zahl">{nutzung.erreichbarkeit.nurInDerApp}</td>
+                  <td>Sieht die Nachricht beim nächsten Öffnen.</td>
+                </tr>
+                <tr>
+                  <td>👪 über die Kontaktperson</td>
+                  <td className="stat-zahl">{nutzung.erreichbarkeit.ueberKontaktperson}</td>
+                  <td>Helfer ohne eigenen Zugang – die Nachricht geht an die Eltern.</td>
+                </tr>
+                <tr>
+                  <td>🚫 gar nicht</td>
+                  <td className={`stat-zahl${nutzung.erreichbarkeit.garNicht > 0 ? ' stat-zahl--warnung' : ''}`}>
+                    {nutzung.erreichbarkeit.garNicht}
+                  </td>
+                  <td>
+                    Kein Zugang und keine Kontaktperson hinterlegt. Eine verschobene Schicht
+                    erfährt diese Person nur, wenn jemand sie anruft.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4 className="stat-untertitel">Wie sich angemeldet wird</h4>
+          <div className="stat-kacheln">
+            <Kachel wert={nutzung.anmeldeart.mitPasskey} label="mit Face ID / Fingerabdruck" />
+            <Kachel wert={nutzung.anmeldeart.nurPasswort} label="mit Passwort" />
+            <Kachel wert={nutzung.anmeldeart.nieAngemeldet} label="noch nie angemeldet" />
+          </div>
+
+          {nutzung.tage.length > 0 && (() => {
+            const max = Math.max(1, ...nutzung.tage.map(t => Math.max(t.aktive, t.registrierungen)));
+            const abIdx = nutzung.aufzeichnungAb
+              ? nutzung.tage.findIndex(t => t.datum >= nutzung.aufzeichnungAb!)
+              : -1;
+            return (
+              <>
+                <h4 className="stat-untertitel">Registrierungen und tägliche Nutzung</h4>
+                <p className="stat-hinweis">
+                  Registrierungen gibt es rückwirkend – sie stehen als Datum am Konto.
+                  {nutzung.aufzeichnungAb ? (
+                    <> Wer an welchem Tag <em>da war</em>, wird erst seit dem{' '}
+                      <strong>{new Date(nutzung.aufzeichnungAb).toLocaleDateString('de-DE')}</strong>{' '}
+                      festgehalten; davor steht dort null, weil nichts erfasst wurde – nicht,
+                      weil niemand da war.</>
+                  ) : (
+                    <> Die tägliche Nutzung wird ab jetzt erfasst; bisher gibt es dazu nichts,
+                      weil die Anmeldespalte am Konto bei jedem Mal überschrieben wird.</>
+                  )}
+                </p>
+
+                <div className="verlauf-diagramm">
+                  {nutzung.tage.map((t, i) => (
+                    <div
+                      key={t.datum}
+                      className="verlauf-tag"
+                      title={`${new Date(t.datum).toLocaleDateString('de-DE')}: `
+                        + `${t.aktive} aktiv, ${t.anmeldungen} Anmeldungen, ${t.registrierungen} neue Konten`}
+                    >
+                      <div className="verlauf-saeule">
+                        {t.aktive > 0 && (
+                          <div
+                            className="verlauf-teil verlauf-teil--aktive"
+                            style={{ height: `${(t.aktive / max) * 100}%` }}
+                          />
+                        )}
+                        {t.registrierungen > 0 && (
+                          <div
+                            className="verlauf-teil verlauf-teil--neu"
+                            style={{ height: `${(t.registrierungen / max) * 100}%` }}
+                          />
+                        )}
+                        {t.aktive === 0 && t.registrierungen === 0 && (
+                          <div className={`verlauf-teil verlauf-teil--leer${
+                            abIdx >= 0 && i < abIdx ? ' verlauf-teil--unerfasst' : ''}`} />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="verlauf-achse">
+                  <span>{new Date(nutzung.tage[0].datum).toLocaleDateString('de-DE')}</span>
+                  <span>{new Date(nutzung.tage[nutzung.tage.length - 1].datum).toLocaleDateString('de-DE')}</span>
+                </div>
+
+                <div className="verlauf-legende">
+                  <span><i className="verlauf-punkt verlauf-punkt--aktive" /> aktive Personen</span>
+                  <span><i className="verlauf-punkt verlauf-punkt--neu" /> neue Konten</span>
+                  <span><i className="verlauf-punkt verlauf-punkt--unerfasst" /> nicht erfasst</span>
+                </div>
+              </>
+            );
+          })()}
+        </section>
+      )}
     </div>
   );
 }

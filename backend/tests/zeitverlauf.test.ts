@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { berechneZeitverlauf, reaktionAufAufruf, VerlaufAufruf } from '../src/utils/zeitverlauf.js';
+import { berechneZeitverlauf, reaktionAufAufruf, chronik, VerlaufAufruf } from '../src/utils/zeitverlauf.js';
 
 const e = (iso: string | null) => ({ createdAt: iso });
 const aufruf = (id: number, iso: string, titel = 'Bitte helft mit'): VerlaufAufruf =>
@@ -102,5 +102,34 @@ describe('reaktionAufAufruf', () => {
 
   it('ignoriert Einträge ohne Zeitstempel', () => {
     expect(reaktionAufAufruf(a, [e(null)], []).zusagen).toBe(0);
+  });
+});
+
+describe('chronik', () => {
+  it('mischt Schichten und Spenden in zeitlicher Reihenfolge', () => {
+    const eintraege = chronik(
+      [
+        { createdAt: '2026-08-03T10:00:00Z', name: 'Jens Kroening', was: 'Grillstand 10:30-14:00' },
+        { createdAt: '2026-08-01T09:00:00Z', name: 'Anna Krischkowski', was: 'Verkaufsstand 09:30-12:00' }
+      ],
+      [{ createdAt: '2026-08-02T15:00:00Z', name: 'Maria Winter', was: '3 Kuchen' }]
+    );
+
+    expect(eintraege.map(e => [e.name, e.art])).toEqual([
+      ['Anna Krischkowski', 'schicht'],
+      ['Maria Winter', 'spende'],
+      ['Jens Kroening', 'schicht']
+    ]);
+  });
+
+  // Der Altbestand hat keinen Zeitstempel. Ihn mit einem geratenen Datum
+  // einzureihen waere schlimmer als ihn wegzulassen.
+  it('lässt Einträge ohne Zeitstempel weg', () => {
+    expect(chronik([{ createdAt: null, name: 'Ralf' }], [])).toEqual([]);
+  });
+
+  it('fällt auf verständliche Bezeichnungen zurück', () => {
+    const [e] = chronik([{ createdAt: '2026-08-01T09:00:00Z' }], []);
+    expect(e).toMatchObject({ name: 'Unbekannt', was: 'Schicht' });
   });
 });

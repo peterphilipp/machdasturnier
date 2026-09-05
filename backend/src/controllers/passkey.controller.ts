@@ -9,6 +9,7 @@ import {
 import prisma from '../config/prisma.js';
 import JWT_SECRET from '../config/jwt.js';
 import { AuthRequest } from '../middleware/auth.js';
+import { merkeAnmeldung } from '../utils/nutzung.js';
 import { getRpID, getOrigin, rpName } from '../config/webauthn.js';
 import { resolveRolesAndForceAdmin, signSessionToken } from '../utils/authSession.js';
 import { logLoginSuccess, logLoginFailed } from '../utils/logger.js';
@@ -273,6 +274,7 @@ export const verifyAuthentication = async (req: AuthRequest, res: Response) => {
 
   logLoginSuccess(user.email || user.name, getClientIp(req));
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastActivityAt: new Date() } });
+  merkeAnmeldung(user.id);
 
   const userRoles = await resolveRolesAndForceAdmin(user);
   const token = signSessionToken(user.id, userRoles);

@@ -112,6 +112,49 @@ export function berechneZeitverlauf(
   return { tage, ohneZeitstempel };
 }
 
+/** Ein einzelner Eintrag in der Chronik: wer, wann, was. */
+export interface ChronikEintrag {
+  zeitpunkt: string;
+  art: 'schicht' | 'spende';
+  name: string;
+  was: string;
+}
+
+/**
+ * Wer wann was zugesagt hat - die Einzeleintraege hinter der Tageskurve.
+ *
+ * Die Kurve beantwortet "wann kam etwas zusammen", nicht "wer war frueh dran
+ * und wer spaet". Fuer das Gespraech im Orgateam ist die zweite Frage oft die
+ * eigentliche: Wer traegt sich sofort ein, wen muss man erinnern.
+ *
+ * Bewusst chronologisch und nicht als Rangliste. Eine Sortierung nach "wer war
+ * am spaetesten" waere eine Liste der Saeumigen, und die entsteht hier nicht -
+ * spaet eingetragen heisst oft nur, spaet gefragt worden zu sein.
+ *
+ * Eintraege ohne Zeitstempel fehlen; sie stammen aus der Zeit vor der
+ * Erfassung und liessen sich nur raten.
+ */
+export function chronik(
+  zusagen: (VerlaufEreignis & { name?: string | null; was?: string | null })[],
+  spenden: (VerlaufEreignis & { name?: string | null; was?: string | null })[]
+): ChronikEintrag[] {
+  const bauen = (
+    liste: (VerlaufEreignis & { name?: string | null; was?: string | null })[],
+    art: ChronikEintrag['art']
+  ): ChronikEintrag[] =>
+    liste
+      .filter(e => e.createdAt != null)
+      .map(e => ({
+        zeitpunkt: new Date(e.createdAt as Date | string).toISOString(),
+        art,
+        name: e.name || 'Unbekannt',
+        was: e.was || (art === 'schicht' ? 'Schicht' : 'Spende')
+      }));
+
+  return [...bauen(zusagen, 'schicht'), ...bauen(spenden, 'spende')]
+    .sort((a, b) => a.zeitpunkt.localeCompare(b.zeitpunkt));
+}
+
 /**
  * Was ein Aufruf bewirkt hat: die Reaktionen im Zeitfenster danach.
  *

@@ -205,6 +205,7 @@ model User {
   shiftOffers           ShiftOffer[]
   aufrufe               Aufruf[]
   webAuthnCredentials   WebAuthnCredential[]
+  nutzungTage           NutzungTag[]
   trainedYearGroups     YearGroup[]            @relation("TrainerYearGroups")
   userRoles             UserRole[]
 
@@ -258,6 +259,36 @@ model UserNotification {
 
   @@index([userId, readAt])
   @@map("user_notifications")
+}
+
+/// Ein Kalendertag, an dem ein Nutzer die App benutzt hat.
+///
+/// `users.last_login_at` und `last_activity_at` werden bei jedem Mal
+/// ueberschrieben. Sie beantworten "wann zuletzt", nie "an welchen Tagen" -
+/// eine Anmeldekurve laesst sich daraus nicht rekonstruieren, auch nicht
+/// rueckwirkend. Dafuer braucht es eine Zeile je Nutzer und Tag.
+///
+/// Bewusst ein Tag je Zeile und kein Ereignisprotokoll: Fuer die Frage, wie
+/// die App in den Wochen vor einem Turnier angenommen wird, zaehlen Menschen
+/// und Tage, nicht Klicks. Eine Zeile je Nutzer und Tag ist ausserdem eine
+/// Schreiboperation pro Person und Tag statt einer pro Request - bei SQLite
+/// mit seinem einzelnen Schreiber ein Unterschied, der zaehlt.
+model NutzungTag {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @map("user_id")
+  /// Kalendertag als YYYY-MM-DD in Ortszeit. Ortszeit, weil ein Abend um
+  /// 23:30 zu diesem Tag gehoert und nicht zum naechsten.
+  tag          String
+  ersteAktion  DateTime @map("erste_aktion")
+  letzteAktion DateTime @map("letzte_aktion")
+  /// Echte Anmeldungen an diesem Tag. Null heisst: war schon angemeldet und
+  /// hat die App nur benutzt - der Normalfall bei 90 Tage langen Sitzungen.
+  anmeldungen  Int      @default(0)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tag])
+  @@index([tag])
+  @@map("nutzung_tage")
 }
 
 model PushSubscription {

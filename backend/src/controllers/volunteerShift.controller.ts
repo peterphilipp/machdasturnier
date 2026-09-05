@@ -6,7 +6,8 @@ import { AuthRequest } from '../middleware/auth.js';
 import { protokolliere, datumKurz } from '../utils/protokoll.js';
 import { aggregateFeedbackByWorkArea } from '../utils/ratingUtils.js';
 import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
-import { berechneZeitverlauf, reaktionAufAufruf } from '../utils/zeitverlauf.js';
+import { berechneZeitverlauf, reaktionAufAufruf, chronik } from '../utils/zeitverlauf.js';
+import { berechneNutzungsStatistik } from '../utils/nutzungsStatistik.js';
 
 export const volunteerShiftSchema = z.object({
   userId: z.union([z.number(), z.string()]).transform(Number),
@@ -244,7 +245,15 @@ export const getStatistik = async (req: Request, res: Response) => {
         id: true,
         name: true,
         children: { select: { childYear: true } },
-        trainedYearGroups: { select: { id: true } }
+        trainedYearGroups: { select: { id: true } },
+        // Fuer die App-Nutzung: wer ist erreichbar, wer war je da.
+        createdAt: true,
+        lastLoginAt: true,
+        lastActivityAt: true,
+        ohneZugang: true,
+        kontaktpersonId: true,
+        pushSubscriptions: { select: { id: true } },
+        webAuthnCredentials: { select: { id: true } }
       }
     }),
     // Verpflegungsspenden zaehlen als Beteiligung - wer Kuchen beisteuert,
@@ -254,9 +263,12 @@ export const getStatistik = async (req: Request, res: Response) => {
       select: {
         userId: true,
         createdAt: true,
+        quantity: true,
+        foodItem: { select: { name: true, unit: true } },
         user: {
           select: {
             id: true,
+            name: true,
             children: { select: { childYear: true } },
             trainedYearGroups: { select: { id: true } }
           }
@@ -280,10 +292,33 @@ export const getStatistik = async (req: Request, res: Response) => {
   // Zeitlicher Verlauf: wann kam was zusammen, und was ging an Aufrufen raus.
   const verlauf = berechneZeitverlauf(einplanungen, spenden, aufrufe);
 
+  // App-Nutzung: nur fuer die Teilnehmer dieses Turniers, wie ueberall in
+  // dieser Auswertung. Die Tagesreihe gibt es erst ab Einfuehrung der
+  // Erfassung - lastLoginAt wird ueberschrieben und trug nie eine Historie.
+  const nutzung = await prisma.nutzungTag.findMany({
+    where: { userId: { in: mitglieder.map(m => m.id) } },
+    select: { userId: true, tag: true, anmeldungen: true }
+  });
+
   return res.json({
     ...statistik,
+    nutzung: berechneNutzungsStatistik(mitglieder, nutzung),
     verlauf: {
       ...verlauf,
+      // Wer wann was zugesagt hat - im Frontend hinter einem Schalter, weil es
+      // Namen sind und nicht jeder Blick auf die Kurve sie braucht.
+      chronik: chronik(
+        einplanungen.map(e => ({
+          createdAt: e.createdAt,
+          name: e.user?.name,
+          was: `${e.role}${e.slot ? ` ${e.slot}` : ''}`
+        })),
+        spenden.map(s => ({
+          createdAt: s.createdAt,
+          name: s.user?.name,
+          was: s.foodItem ? `${s.quantity} ${s.foodItem.unit} ${s.foodItem.name}`.trim() : 'Spende'
+        }))
+      ),
       // Je Aufruf, was im Fenster danach passierte. Ein Anhaltspunkt, kein
       // Beweis - deshalb steht das Fenster als Zahl dabei.
       aufrufe: aufrufe.map(a => ({

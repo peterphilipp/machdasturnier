@@ -12,6 +12,7 @@ import { sendPushToUser } from '../utils/push.js';
 import { formatPhoneNumber } from '../utils/phone.js';
 import validate from '../middleware/validate.js';
 import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
+import { merkeAnmeldung } from '../utils/nutzung.js';
 import { resolveRolesAndForceAdmin, signSessionToken } from '../utils/authSession.js';
 import { ROLES, highestRole, normalizeRoles } from '../utils/roles.js';
 import { setUserRoles } from '../utils/userRoles.js';
@@ -384,6 +385,7 @@ router.post('/login', authLimiter, validate(loginSchema), async (req, res, next)
 
       logLoginSuccess(user.email || identifier, getClientIp(req));
       await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastActivityAt: new Date() } });
+      merkeAnmeldung(user.id);
 
       const userRoles = await resolveRolesAndForceAdmin(user);
       const token = signSessionToken(user.id, userRoles);
@@ -726,6 +728,8 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res,
       include: { children: true }
     });
     await ensureTournamentMembership(user.id, activeTournament?.id);
+    // Die Registrierung zaehlt als erste Anmeldung - wie bei lastLoginAt oben.
+    merkeAnmeldung(user.id);
 
     // Rollen in die Zuordnungstabelle schreiben; setUserRoles spiegelt die
     // hoechste Stufe zurueck in users.role.
