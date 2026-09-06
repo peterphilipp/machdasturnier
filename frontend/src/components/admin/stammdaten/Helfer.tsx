@@ -81,6 +81,30 @@ function OhneZugangFeld({ form, setForm, volunteers, editingVol }: {
   );
 }
 
+/** Ob Zusagen, Absagen und Verschiebungen zusaetzlich per Mail gehen - Default an. */
+function MailBenachrichtigungenFeld({ form, setForm }: {
+  form: { mailBenachrichtigungen: boolean };
+  setForm: (aendern: (f: any) => any) => void;
+}) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', background: '#f8f9fa', borderRadius: 8, padding: '10px 12px' }}>
+      <input
+        type="checkbox"
+        checked={form.mailBenachrichtigungen}
+        onChange={e => setForm((f: any) => ({ ...f, mailBenachrichtigungen: e.target.checked }))}
+        style={{ marginTop: 3, width: 18, height: 18, flexShrink: 0 }}
+      />
+      <span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: '#212529' }}>Benachrichtigungen per Mail</span>
+        <span style={{ display: 'block', fontSize: 12, color: '#6c757d', lineHeight: 1.5 }}>
+          Zusagen, Absagen und Verschiebungen zusätzlich per Mail - nicht nur als Push (den kaum
+          jemand erlaubt hat).
+        </span>
+      </span>
+    </label>
+  );
+}
+
 export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: string, tournamentId: number | null }) {
   const queryClient = useQueryClient();
   /**
@@ -101,7 +125,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
   const { data: volunteers = [] } = useQuery<Volunteer[]>({ queryKey: ['volunteers'], queryFn: () => getVolunteers() });
   const { data: yearGroups = [] } = useQuery<YearGroup[]>({ queryKey: ['yearGroups'], queryFn: getYearGroups });
 
-  const [volForm, setVolForm] = useState<{ name: string; email: string; phone: string; roles: string[]; children: { childName: string; childYear: string }[]; trainedYearGroupIds: number[]; ohneZugang: boolean; kontaktpersonId: string }>({ name: '', email: '', phone: '', roles: ['HELPER'], children: [], trainedYearGroupIds: [], ohneZugang: false, kontaktpersonId: '' });
+  const [volForm, setVolForm] = useState<{ name: string; email: string; phone: string; roles: string[]; children: { childName: string; childYear: string }[]; trainedYearGroupIds: number[]; ohneZugang: boolean; kontaktpersonId: string; mailBenachrichtigungen: boolean }>({ name: '', email: '', phone: '', roles: ['HELPER'], children: [], trainedYearGroupIds: [], ohneZugang: false, kontaktpersonId: '', mailBenachrichtigungen: true });
   const [editingVol, setEditingVol] = useState<number | null>(null);
   // Aufklappbare Geräte-Detailansicht pro User (welche Geräte haben Push
   // aktiviert) - hilft bei der Fehlersuche, wenn ein Helfer mehrere Geräte
@@ -147,7 +171,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
   
   const { items: sortedVolunteers, requestSort, getSortIndicator } = useSortableData(filtered, { key: 'name', direction: 'asc' });
 
-  const EMPTY_FORM = { name: '', email: '', phone: '', roles: ['HELPER'] as string[], children: [] as { childName: string; childYear: string }[], trainedYearGroupIds: [] as number[], ohneZugang: false, kontaktpersonId: '' as string };
+  const EMPTY_FORM = { name: '', email: '', phone: '', roles: ['HELPER'] as string[], children: [] as { childName: string; childYear: string }[], trainedYearGroupIds: [] as number[], ohneZugang: false, kontaktpersonId: '' as string, mailBenachrichtigungen: true };
 
   /** Rolle an-/abwählen; ohne Auswahl bleibt HELPER als Grundstufe. */
   const toggleRole = (wert: string) => setVolForm(f => {
@@ -208,7 +232,8 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
       children: (v.children || []).map(c => ({ childName: c.childName, childYear: String(c.childYear) })),
       trainedYearGroupIds: (v.trainedYearGroups || []).map(yg => yg.id),
       ohneZugang: !!v.ohneZugang,
-      kontaktpersonId: v.kontaktpersonId ? String(v.kontaktpersonId) : ''
+      kontaktpersonId: v.kontaktpersonId ? String(v.kontaktpersonId) : '',
+      mailBenachrichtigungen: v.mailBenachrichtigungen ?? true
     });
   };
   const closeEdit = () => { setEditingVol(null); setVolForm(EMPTY_FORM); };
@@ -433,6 +458,11 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
           </div>
         </div>
         <div className="helfer-form-row">
+          <div style={{ flex: 1 }}>
+            <MailBenachrichtigungenFeld form={volForm} setForm={setVolForm} />
+          </div>
+        </div>
+        <div className="helfer-form-row">
           <div className="helfer-form-col-fixed">
             <label className="helfer-label">📞 Telefon</label>
             <input value={volForm.phone} onChange={e => setVolForm({ ...volForm, phone: e.target.value })} onBlur={() => setVolForm({ ...volForm, phone: formatPhoneNumber(volForm.phone) || volForm.phone })} placeholder="+49 123 456789" className="helfer-input" />
@@ -509,6 +539,7 @@ export default function Helfer({ adminPrimary, tournamentId }: { adminPrimary: s
                 </div>
 
                 <OhneZugangFeld form={volForm} setForm={setVolForm} volunteers={volunteers} editingVol={editingVol} />
+                <MailBenachrichtigungenFeld form={volForm} setForm={setVolForm} />
             
             <div><label className="helfer-label">🎭 Rolle</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

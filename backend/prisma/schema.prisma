@@ -186,6 +186,12 @@ model User {
   // eine Parallelwelt muesste all das doppelt fuehren. Was ihnen fehlt, ist
   // kein anderer Datentyp, sondern ein Zugang.
   ohneZugang            Boolean                @default(false) @map("ohne_zugang")
+  // Zusagen, Absagen und Verschiebungen zusaetzlich per Mail - nicht nur als
+  // Push (den kaum jemand erlaubt) und In-App-Meldung (die nur sieht, wer die
+  // App gerade oeffnet). Default AN: Es geht um betriebliche Infos zur
+  // eigenen Schicht, nicht um Werbung - wer es nicht will, schaltet es im
+  // Profil ab.
+  mailBenachrichtigungen Boolean               @default(true) @map("mail_benachrichtigungen")
   // An wen gehen Benachrichtigungen zu ihren Schichten - in der Regel ein
   // Elternteil. Ohne das verpuffte jede Verschiebung ins Leere: Das Konto hat
   // weder E-Mail noch Push und meldet sich nie an.

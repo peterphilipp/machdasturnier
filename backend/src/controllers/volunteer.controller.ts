@@ -83,6 +83,8 @@ export const volunteerSchema = z.object({
   ohneZugang: z.boolean().optional(),
   /** An wen gehen Benachrichtigungen zu seinen Schichten - in der Regel ein Elternteil. */
   kontaktpersonId: z.number().int().positive().nullable().optional(),
+  /** Zusagen/Absagen/Verschiebungen zusaetzlich per Mail - Default an. */
+  mailBenachrichtigungen: z.boolean().optional(),
   tournamentId: z.number().int().nullable().optional(),
   children: z.array(childSchema).max(20).optional(),
   trainedYearGroupIds: z.array(z.number().int()).optional()

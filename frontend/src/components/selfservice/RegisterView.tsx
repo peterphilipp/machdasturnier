@@ -37,6 +37,11 @@ export default function RegisterView({ clubPrimary: propClubPrimary, clubSeconda
   const [regPasswordConfirm, setRegPasswordConfirm] = useState('');
   const [regChildren, setRegChildren] = useState<{ childName: string; childYear: string }[]>([{ childName: '', childYear: '' }]);
   const [consentGiven, setConsentGiven] = useState(false);
+  // Voreingestellt an: Es geht um Zusagen, Absagen und Verschiebungen zur
+  // eigenen Schicht - betriebliche Info, keine Werbung. Push allein erreicht
+  // die wenigsten, weil kaum jemand die App installiert und Benachrichtigungen
+  // erlaubt; abschalten geht jederzeit im Profil.
+  const [mailBenachrichtigungen, setMailBenachrichtigungen] = useState(true);
 
   const years = Array.from({ length: 30 }, (_, i) => (new Date().getFullYear() - 4) - i);
 
@@ -72,7 +77,7 @@ export default function RegisterView({ clubPrimary: propClubPrimary, clubSeconda
     try {
       const payload = {
         name: regName, email: regEmail, phone: regPhone, password: regPassword,
-        consentGiven,
+        consentGiven, mailBenachrichtigungen,
         children: regChildren
           .filter(c => c.childName.trim() !== '' || c.childYear !== '')
           .map(c => ({
@@ -106,7 +111,15 @@ export default function RegisterView({ clubPrimary: propClubPrimary, clubSeconda
             <input type="text" placeholder="Vor- und Nachname" value={regName} onChange={e => setRegName(e.target.value)} className="input-base" />
             <input type="email" placeholder="Email-Adresse (optional)" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="input-base" />
             <input type="tel" placeholder="Handynummer (optional)" value={regPhone} onChange={e => setRegPhone(e.target.value)} onBlur={() => setRegPhone(formatPhoneNumber(regPhone) || regPhone)} className="input-base" />
-            
+
+            <label style={{ display: 'flex', alignItems: 'start', gap: 8, padding: '10px 12px', background: 'var(--bg-surface)', border: '2px solid var(--border-color)', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontSize: 13, color: 'var(--text-main)', lineHeight: 1.4 }}>
+              <input type="checkbox" checked={mailBenachrichtigungen} onChange={e => setMailBenachrichtigungen(e.target.checked)} style={{ marginTop: 2, flexShrink: 0, width: 18, height: 18, cursor: 'pointer' }} />
+              <span>
+                Benachrichtige mich per Mail, wenn eine Schicht bestätigt, abgesagt oder verschoben wird.
+                {' '}Das lässt sich jederzeit im Profil ändern.
+              </span>
+            </label>
+
             <div style={{ marginTop: 8 }}>
               <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 2 }}>Kinder (optional)</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, lineHeight: 1.4 }}>

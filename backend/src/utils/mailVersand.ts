@@ -4,7 +4,7 @@ import { resolveEmailFrom, resolveFrontendUrl } from './mailAbsender.js';
 import { ermittleUmgebung } from './umgebung.js';
 import {
   baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht, AufrufSchicht,
-  AufrufVerpflegungsPosten
+  AufrufVerpflegungsPosten, Mailinhalt
 } from './mailVorlagen.js';
 import { baueBewertungsToken } from './bewertungsLink.js';
 import { ermittleOffeneSchichten } from './offeneSchichten.js';
@@ -230,6 +230,51 @@ async function ladeSicher<T>(
   }
 }
 
+/**
+ * Verschickt EINE fertig gebaute Mail an EINE Adresse.
+ *
+ * Der gemeinsame letzte Schritt fuer beide Versandwege: den Rundschreiben aus
+ * dem Nachrichten-Tab (versendeMails, unten) und die einzelne Benachrichtigung
+ * bei einer Zusage/Absage/Verschiebung (notify.ts). Eine einzige Stelle, die
+ * pruefen kann, ob RESEND_API_KEY fehlt, und die Fehler einheitlich loggt -
+ * zwei Kopien dieser Logik wuerden bei der naechsten Aenderung garantiert
+ * auseinanderlaufen.
+ */
+export async function sendeEinzelmail(
+  empfaenger: { id: number; email: string },
+  mail: Mailinhalt
+): Promise<boolean> {
+  const schluessel = process.env.RESEND_API_KEY;
+  if (!schluessel) {
+    console.warn('[mail] RESEND_API_KEY fehlt - es wird nichts versendet.');
+    return false;
+  }
+
+  try {
+    const resend = new Resend(schluessel);
+    const antwort = await resend.emails.send({
+      from: resolveEmailFrom(),
+      to: empfaenger.email,
+      subject: mail.betreff,
+      html: mail.html,
+      text: mail.text
+    });
+    if (antwort.error) throw new Error(antwort.error.message);
+    return true;
+  } catch (err) {
+    // Die Adresse mitloggen, nicht den Inhalt: Beim Nachsehen will man
+    // wissen, WER nicht erreicht wurde.
+    console.error(JSON.stringify({
+      event: 'MAIL_SEND_FAILED',
+      to: empfaenger.email,
+      userId: empfaenger.id,
+      error: (err as Error).message,
+      timestamp: new Date().toISOString()
+    }));
+    return false;
+  }
+}
+
 export interface VersandErgebnis {
   gesendet: number;
   fehlgeschlagen: number;
@@ -322,8 +367,6 @@ export async function versendeMails(
     'ermittleVerpflegungListen'
   );
 
-  const resend = new Resend(schluessel);
-  const from = resolveEmailFrom();
   let gesendet = 0;
   let fehlgeschlagen = 0;
   let ohneOffeneBewertung = 0;
@@ -372,21 +415,14 @@ export async function versendeMails(
         offeneVerpflegung: verpflegungListen.get(e.id) ?? []
       }, marke);
 
-      const antwort = await resend.emails.send({
-        from,
-        to: e.email,
-        subject: mail.betreff,
-        html: mail.html,
-        text: mail.text
-      });
-      if (antwort.error) throw new Error(antwort.error.message);
-      gesendet++;
+      if (await sendeEinzelmail(e, mail)) gesendet++; else fehlgeschlagen++;
     } catch (err) {
+      // Der Mailbau selbst ist gescheitert (sendeEinzelmail loggt einen
+      // Sendefehlschlag bereits selbst - das hier ist der seltenere Fall
+      // davor).
       fehlgeschlagen++;
-      // Die Adresse mitloggen, nicht den Inhalt: Beim Nachsehen will man
-      // wissen, WER nicht erreicht wurde.
       console.error(JSON.stringify({
-        event: 'MAIL_SEND_FAILED',
+        event: 'MAIL_BUILD_FAILED',
         to: e.email,
         userId: e.id,
         error: (err as Error).message,

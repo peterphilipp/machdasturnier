@@ -155,7 +155,8 @@ const profileSchema = z.object({
   email: emailInput,
   phone: phoneInput,
   children: z.array(childInputSchema).max(20),
-  consentGiven: z.boolean()
+  consentGiven: z.boolean(),
+  mailBenachrichtigungen: z.boolean()
 }).partial();
 
 const registerSchema = z.object({
@@ -164,7 +165,8 @@ const registerSchema = z.object({
   phone: phoneInput.optional(),
   password: z.string().min(6, 'Passwort muss mindestens 6 Zeichen haben').max(200),
   children: z.array(childInputSchema).max(20).optional(),
-  consentGiven: z.boolean().optional()
+  consentGiven: z.boolean().optional(),
+  mailBenachrichtigungen: z.boolean().optional()
 });
 
 // POST /api/auth/forgot-password
@@ -513,7 +515,7 @@ router.patch('/profile', validate(profileSchema), async (req, res, next) => {
       return res.status(401).json({ error: 'Ungültiger Token' });
     }
 
-    const { name, email, phone, children, consentGiven } = req.body;
+    const { name, email, phone, children, consentGiven, mailBenachrichtigungen } = req.body;
 
     const current = await prisma.user.findUnique({ where: { id: decoded.userId } });
     if (!current) return res.status(404).json({ error: 'Nicht gefunden' });
@@ -569,6 +571,10 @@ router.patch('/profile', validate(profileSchema), async (req, res, next) => {
       updateData.consentDate = consentGiven ? new Date() : null;
     }
 
+    if (mailBenachrichtigungen !== undefined) {
+      updateData.mailBenachrichtigungen = mailBenachrichtigungen;
+    }
+
     // Kinder aktualisieren
     if (children && Array.isArray(children)) {
       // Alte Kinder löschen
@@ -605,7 +611,7 @@ router.patch('/profile', validate(profileSchema), async (req, res, next) => {
 // POST /api/auth/register
 router.post('/register', authLimiter, validate(registerSchema), async (req, res, next) => {
   try {
-    const { name: rawName, email: rawEmail, phone, password, children, consentGiven } = req.body;
+    const { name: rawName, email: rawEmail, phone, password, children, consentGiven, mailBenachrichtigungen } = req.body;
     if (!rawName || !password) return res.status(400).json({ error: 'Fehlende Pflichtfelder (Name & Passwort)' });
     if (consentGiven !== true) return res.status(400).json({ error: 'Datenschutzerklrung muss akzeptiert werden' });
     // Serverseitige Passwort-Policy (das Frontend prüfte bisher als Einziges)
@@ -662,6 +668,10 @@ router.post('/register', authLimiter, validate(registerSchema), async (req, res,
       tournamentId: activeTournament?.id || null,
       consentGiven: true,
       consentDate: new Date(),
+      // Explizit statt dem Schema-Default ueberlassen: Wer bei der
+      // Registrierung abwaehlt, soll das auch bekommen, nicht nur, wenn das
+      // Feld zufaellig fehlt.
+      mailBenachrichtigungen: mailBenachrichtigungen ?? true,
       // Registrierung zählt als erster Login - sonst sähe ein frisch
       // registrierter, noch nie "erneut" eingeloggter User in der
       // Benutzerliste sofort wie "noch nie angemeldet" aus.

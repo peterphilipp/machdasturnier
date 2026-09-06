@@ -1,19 +1,25 @@
 import prisma from '../config/prisma.js';
 import { sendPushToUser } from './push.js';
+import { ermittleMarke, sendeEinzelmail } from './mailVersand.js';
+import { baueBenachrichtigungsMail } from './transaktionsMail.js';
 
 /**
- * Benachrichtigt einen Nutzer ueber ZWEI Kanaele gleichzeitig.
+ * Benachrichtigt einen Nutzer ueber DREI Kanaele gleichzeitig.
  *
  * Push allein reicht nicht: die App wird selten installiert und
  * Benachrichtigungen noch seltener erlaubt, eine Aenderung am Dienstplan
  * wuerde damit an den meisten Helfern vorbeigehen. Deshalb wird jede Meldung
  * zusaetzlich dauerhaft abgelegt und beim naechsten Oeffnen der App oben
- * angezeigt, bis sie bestaetigt wird.
+ * angezeigt, bis sie bestaetigt wird - und zusaetzlich per Mail verschickt,
+ * wenn der Nutzer das erlaubt hat (mailBenachrichtigungen, Default an) und
+ * eine Adresse hinterlegt ist. Mail ist der Kanal mit der weitaus groessten
+ * Reichweite - Push erreicht nur, wer die App installiert und
+ * Benachrichtigungen erlaubt hat.
  *
- * Bewusst fehlertolerant: schlaegt der Push fehl (abgelaufenes Abo, kein
- * Geraet), bleibt die gespeicherte Nachricht trotzdem bestehen. Und ein
- * Fehler beim Benachrichtigen darf nie die eigentliche Aenderung am
- * Dienstplan scheitern lassen.
+ * Bewusst fehlertolerant: schlaegt ein Kanal fehl (abgelaufenes Push-Abo,
+ * Mailversand nicht erreichbar), bleiben die anderen und die gespeicherte
+ * Nachricht trotzdem bestehen. Und ein Fehler beim Benachrichtigen darf nie
+ * die eigentliche Aenderung am Dienstplan scheitern lassen.
  */
 /** Wer die Nachricht liest und wie sie ihn betrifft - direkt oder stellvertretend. */
 export interface Empfaengerkontext {
@@ -32,7 +38,13 @@ export async function notifyUser(
   // Nachricht tatsaechlich bei der Kontaktperson landet - der Aufrufer muss
   // beide Faelle sprachlich auseinanderhalten, nicht nur einen Namen davorsetzen.
   formuliere: (kontext: Empfaengerkontext) => string,
-  url: string = '/'
+  url: string = '/',
+  /**
+   * Fuer die Mail-Gestaltung (Vereinslogo, -farbe) - sonst nichts. Ohne
+   * Turnierbezug faellt ermittleMarke() auf eine allgemeine Gestaltung
+   * zurueck; das ist kein Fehler, nur weniger persoenlich.
+   */
+  tournamentId: number | null = null
 ): Promise<void> {
   // Helfer ohne App-Zugang koennen die Nachricht nicht empfangen: kein Konto
   // zum Anmelden, keine E-Mail, kein Push. Sie an ihr eigenes Konto zu
@@ -51,15 +63,46 @@ export async function notifyUser(
   } catch (err) {
     console.error('[Notify] In-App-Nachricht konnte nicht gespeichert werden:', (err as Error).message);
   }
+  // Eine Betriebssystem-Benachrichtigung kann kein Badge einblenden, nur
+  // Text - deshalb bekommt hier der Titel den Namen vorangestellt. Der
+  // gespeicherte Titel (oben) bleibt sauber, weil die App das "fuer wen"
+  // separat und deutlicher als Badge zeigt. Die Mail hat dasselbe Problem wie
+  // Push: Der Betreff ist, was man in der Inbox-Liste sieht, BEVOR man
+  // oeffnet - er bekommt deshalb dieselbe Behandlung.
+  const titelMitVertretung = stellvertretendFuer ? `Für ${stellvertretendFuer}: ${title}` : title;
+
   try {
-    // Eine Betriebssystem-Benachrichtigung kann kein Badge einblenden, nur
-    // Text - deshalb bekommt hier (und nur hier) der Titel den Namen
-    // vorangestellt. Der gespeicherte Titel bleibt sauber, weil die App das
-    // "fuer wen" separat und deutlicher als Badge zeigt (stellvertretendFuer).
-    const pushTitle = stellvertretendFuer ? `Für ${stellvertretendFuer}: ${title}` : title;
-    await sendPushToUser(zielUserId, pushTitle, body, url);
+    await sendPushToUser(zielUserId, titelMitVertretung, body, url);
   } catch {
     // Push ist nur der Zusatzkanal - die gespeicherte Nachricht traegt.
+  }
+  await benachrichtigePerMail(zielUserId, titelMitVertretung, body, url, tournamentId);
+}
+
+/**
+ * Der Mailkanal derselben Benachrichtigung - eigene Funktion, damit ein
+ * Fehler hier (fehlende Adresse, RESEND_API_KEY nicht gesetzt, Resend nicht
+ * erreichbar) niemals durch bis zu notifyUser() durchschlaegt.
+ */
+async function benachrichtigePerMail(
+  userId: number,
+  title: string,
+  body: string,
+  url: string,
+  tournamentId: number | null
+): Promise<void> {
+  try {
+    const nutzer = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, mailBenachrichtigungen: true }
+    });
+    if (!nutzer?.mailBenachrichtigungen || !nutzer.email?.trim()) return;
+
+    const marke = await ermittleMarke(tournamentId);
+    const mail = baueBenachrichtigungsMail(title, body, url, marke);
+    await sendeEinzelmail({ id: userId, email: nutzer.email }, mail);
+  } catch (err) {
+    console.error('[Notify] Mail konnte nicht verschickt werden:', (err as Error).message);
   }
 }
 
@@ -68,10 +111,11 @@ export async function notifyUsers(
   userIds: number[],
   title: string,
   formuliere: (kontext: Empfaengerkontext) => string,
-  url: string = '/'
+  url: string = '/',
+  tournamentId: number | null = null
 ): Promise<void> {
   const eindeutig = Array.from(new Set(userIds.filter((id): id is number => id != null)));
-  await Promise.all(eindeutig.map(id => notifyUser(id, title, formuliere, url)));
+  await Promise.all(eindeutig.map(id => notifyUser(id, title, formuliere, url, tournamentId)));
 }
 
 /**

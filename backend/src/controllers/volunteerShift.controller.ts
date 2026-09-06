@@ -56,7 +56,8 @@ export const createVolunteerShift = async (req: AuthRequest, res: Response) => {
       ({ vertretend, name }) => vertretend
         ? `${name} wurde als ${s.role} (${s.slot}) eingeplant.`
         : `Du wurdest als ${s.role} (${s.slot}) eingeplant.`,
-      '/'
+      '/',
+      s.tournamentId
     );
   }
 
@@ -104,7 +105,8 @@ export const updateVolunteerShift = async (req: Request, res: Response) => {
         ({ vertretend, name }) => vertretend
           ? `Die Schicht von ${name} wurde geändert: jetzt ${updated.role} (${updated.slot}).`
           : `Deine Schicht wurde geändert: jetzt ${updated.role} (${updated.slot}).`,
-        '/'
+        '/',
+        updated.tournamentId
       );
     }
     // Auf eine andere Person umgetragen: die bisherige informieren.
@@ -115,7 +117,8 @@ export const updateVolunteerShift = async (req: Request, res: Response) => {
         ({ vertretend, name }) => vertretend
           ? `${name} ist für ${vorher.role} (${vorher.slot}) nicht mehr eingeplant.`
           : `Du bist für ${vorher.role} (${vorher.slot}) nicht mehr eingeplant.`,
-        '/'
+        '/',
+        vorher.tournamentId
       );
     }
   }
@@ -135,7 +138,8 @@ export const deleteVolunteerShift = async (req: AuthRequest, res: Response) => {
       ({ vertretend, name }) => vertretend
         ? `${name} wurde aus der Schicht ${existing.role} (${existing.slot}) ausgeplant.`
         : `Du wurdest aus der Schicht ${existing.role} (${existing.slot}) ausgeplant.`,
-      '/'
+      '/',
+      existing.tournamentId
     );
   }
   

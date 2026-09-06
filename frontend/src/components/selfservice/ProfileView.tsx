@@ -19,6 +19,7 @@ export default function ProfileView() {
   const [editEmail, setEditEmail] = useState(volunteer?.email || '');
   const [editPhone, setEditPhone] = useState(volunteer?.phone || '');
   const [editChildren, setEditChildren] = useState<{ childName: string; childYear: string }[]>([{ childName: '', childYear: '' }]);
+  const [editMailBenachrichtigungen, setEditMailBenachrichtigungen] = useState(volunteer?.mailBenachrichtigungen ?? true);
   const years = Array.from({ length: 30 }, (_, i) => (new Date().getFullYear() - 4) - i);
   
   const [currentPassword, setCurrentPassword] = useState('');
@@ -30,6 +31,7 @@ export default function ProfileView() {
       setEditName(volunteer.name || '');
       setEditEmail(volunteer.email || '');
       setEditPhone(volunteer.phone || '');
+      setEditMailBenachrichtigungen(volunteer.mailBenachrichtigungen ?? true);
       if (volunteer.children && volunteer.children.length > 0) {
         setEditChildren(volunteer.children.map(c => ({ childName: c.childName || '', childYear: String(c.childYear) })));
       } else {
@@ -48,6 +50,7 @@ export default function ProfileView() {
         name: editName,
         email: editEmail,
         phone: editPhone,
+        mailBenachrichtigungen: editMailBenachrichtigungen,
         children: editChildren
           .filter(c => c.childName.trim() !== '' || c.childYear !== '')
           .map(c => ({
@@ -120,6 +123,13 @@ export default function ProfileView() {
           <label style={{ display: 'block', marginBottom: 4, fontWeight: 'bold', fontSize: 13, color: '#666' }}>Handy (optional)</label>
           <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} onBlur={() => setEditPhone(formatPhoneNumber(editPhone) || editPhone)} style={inputStyle} />
         </div>
+
+        <label style={{ display: 'flex', alignItems: 'start', gap: 8, padding: '10px 12px', background: '#f8f9fa', border: '2px solid #e9ecef', borderRadius: 10, cursor: 'pointer', fontSize: 13, color: '#333', lineHeight: 1.4 }}>
+          <input type="checkbox" checked={editMailBenachrichtigungen} onChange={e => setEditMailBenachrichtigungen(e.target.checked)} style={{ marginTop: 2, flexShrink: 0, width: 18, height: 18, cursor: 'pointer' }} />
+          <span>
+            Benachrichtige mich per Mail, wenn eine Schicht bestätigt, abgesagt oder verschoben wird.
+          </span>
+        </label>
 
         <div style={{ background: '#f8f9fa', padding: 16, borderRadius: 10, marginTop: 8 }}>
           <div style={{ fontWeight: 'bold', fontSize: 14, marginBottom: 4, color: '#444' }}>Kinder für Turnierschichten</div>

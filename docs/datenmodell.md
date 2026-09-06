@@ -41,7 +41,7 @@ Das Schema umfasst **40 Modelle**.
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 18 |
-| [User](#user) | `users` | 33 |
+| [User](#user) | `users` | 34 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
@@ -686,6 +686,7 @@ Tabelle: `users`
 | `lastLoginAt` | `DateTime?` |  |
 | `lastActivityAt` | `DateTime?` |  |
 | `ohneZugang` | `Boolean` | Standard: `false` |
+| `mailBenachrichtigungen` | `Boolean` | Standard: `true` |
 | `kontaktpersonId` | `Int?` |  |
 | `kontaktperson` | `User?` | beim Löschen: SetNull, Gegenstück einer Beziehung |
 | `betreute` | `User[]` | Gegenstück einer Beziehung (Liste) |

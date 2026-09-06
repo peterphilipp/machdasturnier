@@ -38,6 +38,8 @@ export interface VolunteerData {
   consentGiven?: boolean;
   consentDate?: string;
   children?: { childName: string | null; childYear: number | null }[];
+  /** Zusagen/Absagen/Verschiebungen zusaetzlich per Mail - Default an. */
+  mailBenachrichtigungen?: boolean;
 }
 
 interface UserContextType {

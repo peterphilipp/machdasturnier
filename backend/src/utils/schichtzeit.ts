@@ -83,6 +83,8 @@ export async function benachrichtigeBeiZeitaenderung(
     day?: { date: Date } | null;
     workArea?: { name: string } | null;
     volunteerShifts: { userId: number | null }[];
+    /** Fuer die Mail-Gestaltung (Vereinslogo, -farbe) - siehe notifyUsers(). */
+    tournamentId?: number | null;
   },
   nachher: {
     startMin: number | null;
@@ -108,6 +110,7 @@ export async function benachrichtigeBeiZeitaenderung(
     ({ vertretend, name }) => vertretend
       ? `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neuText} (vorher ${altText}). Bitte prüfe, ob das für ${name} passt.`
       : `${bereich}${datum ? ` am ${datum}` : ''}: neue Zeit ${neuText} (vorher ${altText}). Bitte prüfe, ob das für dich passt.`,
-    '/'
+    '/',
+    vorher.tournamentId ?? null
   );
 }

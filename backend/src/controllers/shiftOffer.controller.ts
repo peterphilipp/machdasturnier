@@ -168,7 +168,8 @@ export const createShiftOffer = async (req: AuthRequest, res: Response) => {
       () => `${angebot.user?.name ?? 'Ein Helfer'} bietet ${datumKurz(angebot.date)} `
         + `${zeitraum(startMin, endMin)} an${bereich ? ` (${bereich})` : ''}. `
         + 'Unter Organisation → Dienstplan kannst du entscheiden.',
-      '/admin/organisation/uebersicht'
+      '/admin/organisation/uebersicht',
+      angebot.tournamentId
     );
   }
 
@@ -313,7 +314,8 @@ export const entscheideShiftOffer = async (req: AuthRequest, res: Response) => {
       : (vertretend
         ? `Für ${wann} brauchen wir ${name} nicht – danke fürs Anbieten!${zusatz}`
         : `Für ${wann} brauchen wir dich nicht – danke fürs Anbieten!${zusatz}`),
-    '/'
+    '/',
+    angebot.tournamentId
   );
 
   await protokolliere({
@@ -375,7 +377,8 @@ export const deleteShiftOffer = async (req: AuthRequest, res: Response) => {
       '⚠️ Zusage zurückgezogen',
       () => `${angebot.user?.name ?? 'Ein Helfer'} kann für ${wann} doch nicht. `
         + 'Falls dafür schon eine Schicht eingetragen ist, wird sie wieder frei.',
-      '/admin/organisation/uebersicht'
+      '/admin/organisation/uebersicht',
+      angebot.tournamentId
     );
   }
 
@@ -389,7 +392,8 @@ export const deleteShiftOffer = async (req: AuthRequest, res: Response) => {
       ({ vertretend, name }) => vertretend
         ? `Für ${wann} brauchen wir ${name} nicht – danke fürs Anbieten!`
         : `Für ${wann} brauchen wir dich nicht – danke fürs Anbieten!`,
-      '/'
+      '/',
+      angebot.tournamentId
     );
   }
 
