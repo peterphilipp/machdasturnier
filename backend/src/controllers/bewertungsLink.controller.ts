@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/prisma.js';
-import { pruefeBewertungsToken } from '../utils/bewertungsLink.js';
+import { pruefeBewertungsToken, baueBewertungsToken } from '../utils/bewertungsLink.js';
 
 /**
  * Bewerten ueber den Link aus der Mail - ohne Anmeldung.
@@ -54,6 +54,38 @@ export const getBewertungsKontext = async (req: Request, res: Response) => {
     return res.status(410).json({ error: 'Dieser Link ist nicht mehr gültig.' });
   }
 
+  /**
+   * Die anderen noch unbewerteten Schichten derselben Person.
+   *
+   * Damit die Seite nach dem Absenden weiterfuehren kann: Wer drei Schichten
+   * hatte, soll nicht in die Mail zurueckwechseln muessen, um die zweite zu
+   * finden. Jede bekommt ihr eigenes Token - ein Token gilt fuer genau eine
+   * Schicht, sonst waere die Bewertung auf der falschen gelandet.
+   *
+   * "Unbewertet" ist dieselbe Definition wie beim Versand und in der App:
+   * keine der drei Fragen beantwortet.
+   */
+  const weitere = await prisma.volunteerShift.findMany({
+    where: {
+      userId: anspruch.userId,
+      id: { not: vs.id },
+      ...(vs.tournamentId ? { tournamentId: vs.tournamentId } : {}),
+      ratingWorkload: null,
+      ratingOrganization: null,
+      ratingFun: null
+    },
+    select: {
+      id: true, date: true, slot: true, role: true,
+      shift: {
+        select: {
+          workArea: { select: { name: true, icon: true } },
+          day: { select: { date: true } }
+        }
+      }
+    },
+    orderBy: [{ date: 'asc' }, { slot: 'asc' }]
+  });
+
   return res.json({
     name: vs.user?.name?.trim().split(/\s+/)[0] ?? null,
     bereich: vs.shift?.workArea?.name ?? vs.role,
@@ -61,6 +93,13 @@ export const getBewertungsKontext = async (req: Request, res: Response) => {
     datum: vs.shift?.day?.date ?? vs.date,
     slot: vs.slot,
     farbe: vs.tournament?.club?.primaryColor ?? null,
+    weitere: weitere.map(w => ({
+      token: baueBewertungsToken({ volunteerShiftId: w.id, userId: anspruch.userId }),
+      bereich: w.shift?.workArea?.name ?? w.role,
+      icon: w.shift?.workArea?.icon ?? null,
+      datum: w.shift?.day?.date ?? w.date,
+      slot: w.slot
+    })),
     // Damit die Seite schon Abgegebenes anzeigt statt leerer Sterne.
     bereits: {
       ratingWorkload: vs.ratingWorkload,

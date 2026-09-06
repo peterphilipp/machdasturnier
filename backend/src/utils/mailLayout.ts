@@ -26,6 +26,14 @@ export interface LayoutOptionen {
   /** Ueberschrift im farbigen Kopf. */
   titel: string;
   /**
+   * Zeile unter der Ueberschrift - normalerweise der Turniername.
+   *
+   * Ohne Angabe steht dort der Vereinsname. Der Turniername ist der bessere
+   * Wert, weil die App an derselben Stelle auch ihn zeigt: Wer die Mail neben
+   * der App sieht, erkennt dieselbe Kopfzeile wieder.
+   */
+  unterzeile?: string | null;
+  /**
    * Kennzeichnung der Testumgebung, wenn diese Mail von dort kommt.
    *
    * Sitzt im Layout und nicht in den Vorlagen: So kann keine neue Vorlage sie
@@ -179,6 +187,79 @@ export function sterneReihe(o: {
     </table>`;
 }
 
+/**
+ * Eine Liste von Schichten mit je einem Knopf - fuer den Helferaufruf.
+ *
+ * Jede Zeile ist eine eigene Tabelle und kein `<li>`: Outlook setzt
+ * Listenabstaende unberechenbar, und ein Knopf in einem Listenpunkt rutscht
+ * dort unter den Text. Zeile fuer Zeile ist laenger geschrieben, sieht aber
+ * ueberall gleich aus.
+ */
+export function schichtListe(
+  zeilen: { icon: string; bereich: string; wann: string; hinweis?: string; url: string }[],
+  farbe: string,
+  knopf = 'Übernehmen'
+): string {
+  if (zeilen.length === 0) return '';
+  const inhalt = zeilen.map(z => `
+    <tr><td style="padding:0 0 8px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="background:#ffffff;border:1px solid #e2e8f0;border-radius:10px;">
+        <tr>
+          <td width="34" valign="top" style="padding:12px 0 12px 12px;font-size:19px;line-height:1.2;">
+            ${maskiere(z.icon)}
+          </td>
+          <td valign="top" style="padding:12px 8px;">
+            <div style="font-size:14px;font-weight:700;color:#0f172a;line-height:1.3;">
+              ${maskiere(z.bereich)}
+            </div>
+            <div style="font-size:12px;color:#475569;margin-top:2px;">${maskiere(z.wann)}</div>
+            ${z.hinweis
+              ? `<div style="font-size:12px;font-weight:700;color:${farbe};margin-top:2px;">
+                   ${maskiere(z.hinweis)}
+                 </div>`
+              : ''}
+          </td>
+          <td valign="middle" align="right" style="padding:12px 12px 12px 4px;white-space:nowrap;">
+            <a href="${maskiere(z.url)}"
+               style="display:inline-block;padding:9px 14px;font-size:13px;font-weight:700;
+                      color:#ffffff;background:${farbe};border-radius:8px;text-decoration:none;">
+              ${maskiere(knopf)}
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td></tr>`).join('');
+
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="margin:4px 0 14px;">${inhalt}</table>`;
+}
+
+/**
+ * Ein farbiger Streifen mit grossem Symbol - der Aufmacher der Dankesmail.
+ *
+ * Emoji und nicht ein Bild: Ein Bild braucht eine Datei, die ausgeliefert und
+ * mitgepflegt werden muss, und wird in Outlook und vielen Gmail-Konten
+ * standardmaessig blockiert. Dann waere der Aufmacher der Dankesmail genau
+ * das, was fehlt. Emoji sind Text und kommen immer an.
+ */
+export function jubelBand(o: { symbole: string; text: string; farbe: string }): string {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="margin:0 0 20px;border-radius:14px;
+                  background:${o.farbe};
+                  background-image:linear-gradient(135deg, ${o.farbe} 0%, ${dunkler(o.farbe, 0.3)} 100%);">
+      <tr><td align="center" bgcolor="${o.farbe}" style="padding:22px 18px;border-radius:14px;
+              background:${o.farbe};
+              background-image:linear-gradient(135deg, ${o.farbe} 0%, ${dunkler(o.farbe, 0.3)} 100%);">
+        <div style="font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</div>
+        <div style="font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;margin-top:8px;">
+          ${maskiere(o.text)}
+        </div>
+      </td></tr>
+    </table>`;
+}
+
 /** Ein abgesetzter Kasten - hebt einen Block vom Fliesstext ab. */
 export function kasten(inhalt: string, farbe: string): string {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
@@ -190,7 +271,9 @@ export function kasten(inhalt: string, farbe: string): string {
 
 /** Setzt Kopf, Inhalt und Fuss zu einer versandfertigen Mail zusammen. */
 export function baueMail(o: LayoutOptionen): string {
-  const akzent = dunkler(o.farbe);
+  // 30% dunkler - dieselbe Abstufung wie shadeColor(clubPrimary, -30) im
+  // App-Header, damit der Verlauf in Mail und App gleich aussieht.
+  const akzent = dunkler(o.farbe, 0.3);
 
   /**
    * Der Knopf - mit sichtbarer Ausweichadresse darunter.
@@ -223,22 +306,32 @@ export function baueMail(o: LayoutOptionen): string {
        </table>`
     : '';
 
-  // Das Logo auf weisser Flaeche: Vereinslogos sind fuer weissen Grund
-  // gemacht, und ein dunkles Logo auf dunkler Vereinsfarbe verschwindet.
+  /**
+   * Das Logo in einer weissen Kachel.
+   *
+   * Masse aus der App uebernommen (.selfservice-header-logo-wrapper: 56px,
+   * radius 8px, 4px Innenabstand). Das war der sichtbarste Unterschied
+   * zwischen App und Mail - und wo eine Mail nicht wie die App aussieht,
+   * wirkt sie wie von jemand anderem.
+   *
+   * Die weisse Flaeche ist kein Schmuck: Vereinslogos sind fuer weissen Grund
+   * gemacht, ein dunkles Logo auf dunkler Vereinsfarbe verschwindet.
+   */
   const logo = o.logoUrl
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"
-              style="background:#ffffff;border-radius:10px;">
-         <tr><td align="center" style="padding:6px;">
+              style="background:#ffffff;border-radius:8px;">
+         <tr><td align="center" width="56" height="56"
+                 style="width:56px;height:56px;padding:4px;">
            <img src="${maskiere(o.logoUrl)}" alt="${maskiere(o.vereinsname)}" width="48"
-                style="display:block;border:0;width:48px;height:auto;border-radius:6px;" />
+                style="display:block;border:0;width:48px;height:auto;" />
          </td></tr>
        </table>`
     // Ohne Logo bleibt der Kopf trotzdem erkennbar - eine leere Zelle sieht
     // nach Fehler aus.
     : `<table role="presentation" cellpadding="0" cellspacing="0" border="0"
-              style="background:#ffffff;border-radius:10px;">
-         <tr><td align="center" width="60" height="60"
-                 style="width:60px;height:60px;font-size:30px;line-height:60px;">🏆</td></tr>
+              style="background:#ffffff;border-radius:8px;">
+         <tr><td align="center" width="56" height="56"
+                 style="width:56px;height:56px;font-size:30px;line-height:56px;">🏆</td></tr>
        </table>`;
 
   /**
@@ -273,43 +366,56 @@ export function baueMail(o: LayoutOptionen): string {
 <tr><td align="center" style="padding:28px 12px;">
 
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
-         style="width:600px;max-width:100%;background:#ffffff;border-radius:16px;overflow:hidden;
+         style="width:600px;max-width:100%;background:#ffffff;border-radius:20px;overflow:hidden;
                 border:1px solid #dfe6f0;
                 font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
     ${testband}
 
-    <tr><td style="background:${o.farbe};padding:22px 26px 20px;">
+    <!--
+      Kopf wie in der App (.selfservice-header): Verlauf 135deg von der
+      Vereinsfarbe zu 30% dunkler, 16px/20px Innenabstand, Titel 20px/700,
+      Unterzeile 14px mit 85% Deckkraft.
+
+      Der Verlauf steht als background-image UND es gibt ein bgcolor mit der
+      einfachen Farbe: Gmail und Apple Mail zeigen den Verlauf, Outlook
+      (Word-Engine) ignoriert ihn und behaelt die Flaeche. Beides ist richtig -
+      falsch waere nur ein weisser Kopf.
+
+      In der App traegt der Titel den Turniernamen und die Unterzeile die
+      Begruessung. In der Mail ist es umgekehrt: Die Ueberschrift ist der
+      Betreff, weil der Empfaenger wissen muss, worum es in DIESER Mail geht;
+      das Turnier steht darunter.
+    -->
+    <tr><td bgcolor="${o.farbe}" style="background:${o.farbe};
+            background-image:linear-gradient(135deg, ${o.farbe} 0%, ${akzent} 100%);
+            padding:16px 20px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td width="72" valign="top" style="padding-right:14px;">${logo}</td>
+        <td width="72" valign="middle" style="padding-right:16px;">${logo}</td>
         <td valign="middle">
-          <div style="font-size:11px;font-weight:700;color:#ffffff;opacity:0.82;
-                      text-transform:uppercase;letter-spacing:1px;">${maskiere(o.vereinsname)}</div>
-          <div style="font-size:22px;font-weight:800;color:#ffffff;line-height:1.25;margin-top:4px;">
+          <div style="font-size:20px;font-weight:700;color:#ffffff;line-height:1.2;">
             ${maskiere(o.titel)}
+          </div>
+          <div style="font-size:14px;color:#ffffff;opacity:0.85;margin-top:4px;">
+            ${maskiere(o.unterzeile || o.vereinsname)}
           </div>
         </td>
       </tr></table>
     </td></tr>
 
-    <!-- Schmaler dunklerer Streifen: gibt dem Kopf eine Kante, ohne einen
-         Farbverlauf zu brauchen, den Outlook nicht darstellt. -->
-    <tr><td bgcolor="${akzent}" height="5" style="background:${akzent};height:5px;
-            font-size:0;line-height:5px;">&nbsp;</td></tr>
-
-    <tr><td style="padding:26px 26px 8px;">
+    <tr><td style="padding:24px 24px 8px;">
       ${o.inhalt}
       ${knopf}
     </td></tr>
 
-    <tr><td style="padding:0 26px;">
+    <tr><td style="padding:0 24px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr><td bgcolor="#e9eef5" height="1" style="background:#e9eef5;height:1px;
                 font-size:0;line-height:1px;">&nbsp;</td></tr>
       </table>
     </td></tr>
 
-    <tr><td style="padding:18px 26px 24px;">
+    <tr><td style="padding:18px 24px 22px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
         <td valign="top">
           <div style="font-size:12px;font-weight:700;color:#475569;">🏆 Mach das Turnier!</div>

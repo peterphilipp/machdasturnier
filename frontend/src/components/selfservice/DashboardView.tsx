@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { driver, type DriveStep } from 'driver.js';
 import 'driver.js/dist/driver.css';
@@ -478,6 +478,129 @@ export default function DashboardView() {
     setAngebotNotiz('');
     setAngebotOffen(true);
   };
+
+  /**
+   * Die beiden Wege aus der Helferaufruf-Mail heraus.
+   *
+   * `?schicht=<id>` zeigt genau die Schicht, die in der Mail stand;
+   * `?zeitangebot=1` oeffnet das Formular fuer ein eigenes Zeitfenster. Ohne
+   * das landet jeder Klick aus der Mail auf derselben Uebersicht, und die in
+   * der Mail genannte Schicht muss dort erst wiedergefunden werden - bei
+   * neunzig Schichten der Punkt, an dem man aufgibt.
+   *
+   * Die Filter werden dabei zurueckgesetzt: Ein Datumsfilter von letzter
+   * Woche wuerde die verlinkte Schicht ausblenden, und dann fuehrt ein Link
+   * aus der Mail auf eine leere Liste.
+   */
+  const [suchParameter, setzeSuchParameter] = useSearchParams();
+  const [hervorgehobeneSchicht, setHervorgehobeneSchicht] = useState<number | null>(null);
+  const [deepLinkHinweis, setDeepLinkHinweis] = useState<string | null>(null);
+  const [deepLinkZiel, setDeepLinkZiel] = useState<{ schichtId: number; turnierId: number | null } | null>(null);
+  const [zeitangebotAusLink, setZeitangebotAusLink] = useState(false);
+  const deepLinkGelesen = useRef(false);
+
+  // Schritt 1: Die Parameter einmal lesen und aus der Adresse entfernen.
+  useEffect(() => {
+    if (deepLinkGelesen.current) return;
+    const zeitangebot = suchParameter.get('zeitangebot');
+    const schichtParam = suchParameter.get('schicht');
+    if (!zeitangebot && !schichtParam) return;
+    deepLinkGelesen.current = true;
+
+    const turnierParam = Number(suchParameter.get('turnier'));
+    const turnierId = Number.isFinite(turnierParam) && turnierParam > 0 ? turnierParam : null;
+
+    /**
+     * Das Turnier aus dem Link umschalten.
+     *
+     * Ein Helfer kann in mehreren Turnieren stehen, und das Dashboard zeigt
+     * eines davon. Ohne dieses Umschalten fuehrt ein Link auf eine Schicht des
+     * einen Turniers in die Liste des anderen - dort fehlt sie, und die Seite
+     * behauptete, es gaebe sie nicht mehr.
+     */
+    if (turnierId && turnierId !== selectedTournamentId) {
+      setSelectedTournamentId(turnierId);
+    }
+
+    if (schichtParam) {
+      setDeepLinkZiel({ schichtId: Number(schichtParam), turnierId });
+      // Ein Datumsfilter von letzter Woche wuerde die verlinkte Schicht
+      // ausblenden - dann fuehrt ein Link aus der Mail auf eine leere Liste.
+      setFilterDate('');
+      setFilterTimesOfDay(new Set());
+    }
+    if (zeitangebot) setZeitangebotAusLink(true);
+
+    // Die Parameter wieder entfernen: Sonst springt ein spaeteres Neuladen der
+    // Seite erneut dorthin, und der Link bleibt in der Adressleiste stehen,
+    // obwohl er schon abgearbeitet ist.
+    setzeSuchParameter(new URLSearchParams(), { replace: true });
+  }, [suchParameter, setzeSuchParameter, selectedTournamentId, setSelectedTournamentId]);
+
+  /**
+   * Schritt 2: Springen, sobald die Daten des richtigen Turniers geladen sind.
+   *
+   * `tournament?.id` ist der Beweis dafuer: Es wird im selben Ladevorgang
+   * gesetzt wie `shifts`. Ohne diese Bedingung wuerde zwischen dem Umschalten
+   * und dem Nachladen kurz die alte Liste geprueft - und die enthaelt die
+   * gesuchte Schicht natuerlich nicht.
+   */
+  useEffect(() => {
+    if (!deepLinkZiel) return;
+    if (deepLinkZiel.turnierId && tournament?.id !== deepLinkZiel.turnierId) return;
+    if (shifts.length === 0 && volunteerShifts.length === 0) return;
+
+    const { schichtId } = deepLinkZiel;
+    setDeepLinkZiel(null);
+
+    if (volunteerShifts.some(vs => vs.shift?.id === schichtId)) {
+      // Die eigene Schicht steht oben unter "Deine Jobs" und nicht in der
+      // Liste der offenen - ohne diesen Hinweis sucht man unten vergeblich.
+      setDeepLinkHinweis('Diese Schicht hast du schon übernommen – sie steht oben bei „Deine Jobs".');
+      return;
+    }
+    if (!shifts.some(s => s.id === schichtId)) {
+      setDeepLinkHinweis('Diese Schicht ist nicht mehr offen. Vielleicht passt eine andere?');
+      return;
+    }
+
+    // Das Springen haengt an der Hervorhebung, nicht an diesem Effekt: Hier
+    // wird gleich `deepLinkZiel` geleert, der Effekt laeuft dadurch erneut,
+    // und ein Aufraeumen an dieser Stelle wuerde die eigenen Zeitgeber
+    // loeschen, bevor sie ausloesen.
+    setHervorgehobeneSchicht(schichtId);
+  }, [deepLinkZiel, tournament?.id, shifts, volunteerShifts]);
+
+  // Das Zeitangebot-Formular braucht die Turniertage - also erst, wenn die
+  // Schichten geladen sind, sonst steht im Datumsfeld nichts.
+  useEffect(() => {
+    if (!zeitangebotAusLink || turnierTage.length === 0) return;
+    setZeitangebotAusLink(false);
+    oeffneAngebot(null);
+  }, [zeitangebotAusLink, turnierTage, oeffneAngebot]);
+
+  /**
+   * Zur hervorgehobenen Schicht springen - und die Markierung wieder loeschen.
+   *
+   * Dreimal springen statt einmal weich: Waehrend die Seite fertig laedt,
+   * verschiebt sich alles darueber noch - Vereinslogo, Push-Banner,
+   * Schriften. Ein weicher Sprung wird davon unterbrochen und endet irgendwo;
+   * beobachtet: Die Seite blieb sichtbar oben stehen. Also hart springen und
+   * zweimal nachkorrigieren.
+   *
+   * Zehn Sekunden Markierung, weil der Sprung selbst bis zu zwei Sekunden
+   * dauern kann - eine Markierung, die vor dem Ankommen erlischt, hat niemand
+   * gesehen.
+   */
+  useEffect(() => {
+    if (hervorgehobeneSchicht == null) return;
+    const zeitgeber = [150, 700, 1500].map(ms => setTimeout(() => {
+      document.getElementById(`schicht-${hervorgehobeneSchicht}`)
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' });
+    }, ms));
+    zeitgeber.push(setTimeout(() => setHervorgehobeneSchicht(null), 10000));
+    return () => zeitgeber.forEach(clearTimeout);
+  }, [hervorgehobeneSchicht]);
 
   const sendeAngebot = async () => {
     if (!selectedTournamentId || busy) return;
@@ -988,6 +1111,20 @@ export default function DashboardView() {
 
             <h3 style={{ margin: '0 0 16px', fontSize: 16, color: clubPrimary }}>Offene Jobs</h3>
 
+            {/* Wenn der Link aus der Mail ins Leere fuehrt, muss das dastehen -
+                eine Liste ohne die erwartete Schicht sieht sonst nach Fehler aus. */}
+            {deepLinkHinweis && (
+              <div className="dashboard-deeplink-hinweis">
+                {deepLinkHinweis}
+                <button
+                  type="button"
+                  className="dashboard-deeplink-hinweis-schliessen"
+                  onClick={() => setDeepLinkHinweis(null)}
+                  aria-label="Hinweis schließen"
+                >✕</button>
+              </div>
+            )}
+
             {/* Available Shifts */}
             {filteredShifts.length > 0 ? (
               <div className="dashboard-dates-container">
@@ -1004,7 +1141,15 @@ export default function DashboardView() {
                         const isPast = isPastShift(s.date, s.endMin);
 
                         return (
-                          <div key={idx} className={`dashboard-shift-card ${isPast || isFull ? "dashboard-shift-card-past" : ""}`} style={{ borderLeft: `6px solid ${clubAccent}`, paddingBottom: 20 }}>
+                          <div
+                            key={idx}
+                            /* Die id traegt der Link aus der Helferaufruf-Mail an
+                               (?schicht=<id>) - siehe den Deep-Link-Effekt oben. */
+                            id={`schicht-${s.id}`}
+                            className={`dashboard-shift-card ${isPast || isFull ? "dashboard-shift-card-past" : ""}`
+                              + `${hervorgehobeneSchicht === s.id ? ' dashboard-shift-card--hervorgehoben' : ''}`}
+                            style={{ borderLeft: `6px solid ${clubAccent}`, paddingBottom: 20 }}
+                          >
                             <div className="dashboard-shift-card-inner">
                               <div className="dashboard-shift-title">{s.arbeitsbereich?.icon} <span>{s.arbeitsbereich?.name}</span></div>
                               <div className="dashboard-shift-time dashboard-shift-time-margin"><span>{s.startMin != null && s.endMin != null ? `${minToTime(s.startMin)}-${minToTime(s.endMin)}` : s.zeitslot?.name}</span></div>

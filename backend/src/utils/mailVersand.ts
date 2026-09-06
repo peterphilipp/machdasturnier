@@ -2,8 +2,11 @@ import { Resend } from 'resend';
 import prisma from '../config/prisma.js';
 import { resolveEmailFrom, resolveFrontendUrl } from './mailAbsender.js';
 import { ermittleUmgebung } from './umgebung.js';
-import { baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht } from './mailVorlagen.js';
+import {
+  baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht, AufrufSchicht
+} from './mailVorlagen.js';
 import { baueBewertungsToken } from './bewertungsLink.js';
+import { ermittleOffeneSchichten } from './offeneSchichten.js';
 
 /**
  * Der eigentliche Mailversand an eine Gruppe.
@@ -24,7 +27,10 @@ export async function ermittleMarke(tournamentId: number | null): Promise<Marke>
   const turnier = tournamentId
     ? await prisma.tournament.findUnique({
         where: { id: tournamentId },
-        select: { id: true, logo: true, club: { select: { id: true, name: true, primaryColor: true, logo: true } } }
+        select: {
+          id: true, name: true, logo: true,
+          club: { select: { id: true, name: true, primaryColor: true, logo: true } }
+        }
       })
     : null;
 
@@ -40,6 +46,8 @@ export async function ermittleMarke(tournamentId: number | null): Promise<Marke>
 
   return {
     vereinsname: club?.name || 'TSV Holm',
+    turniername: turnier?.name || null,
+    turnierId: turnier?.id ?? null,
     farbe: club?.primaryColor || '#0d6efd',
     logoUrl,
     appUrl,
@@ -58,23 +66,22 @@ const DATUM_LANG = new Intl.DateTimeFormat('de-DE', {
 });
 
 /**
- * Sucht je Empfaenger die Schicht, um die die Bewertungsmail bitten soll.
+ * Sucht je Empfaenger ALLE noch unbewerteten Schichten, frueheste zuerst.
  *
  * Eine Abfrage fuer alle statt eine je Person: Bei achtzig Empfaengern waeren
  * das sonst achtzig Abfragen fuer eine Mail.
  *
- * Genommen wird die frueheste noch unbewertete Schicht. "Unbewertet" heisst:
- * keine der drei Sternefragen beantwortet - wer schon etwas abgegeben hat,
- * soll nicht dieselbe Schicht noch einmal vorgelegt bekommen. Wer gar keine
- * offene Schicht mehr hat, bekommt in der Mail den Verweis in die App und
- * keine Sterne; ausgelassen wird niemand, weil der Organisator entscheidet,
- * wer die Mail bekommt, nicht diese Funktion.
+ * "Unbewertet" heisst: keine der drei Fragen beantwortet. Dieselbe Definition
+ * benutzt die App (`bereitsBewertet` in DashboardView) - eine zweite waere
+ * schlimmer als eine strenge: Dann stuende eine Schicht in der Mail als
+ * offen, die die App als bewertet fuehrt, und niemand koennte erklaeren,
+ * warum.
  */
 async function ermittleBewertungsSchichten(
   tournamentId: number | null,
   userIds: number[]
-): Promise<Map<number, BewertungsSchicht>> {
-  const treffer = new Map<number, BewertungsSchicht>();
+): Promise<Map<number, BewertungsSchicht[]>> {
+  const treffer = new Map<number, BewertungsSchicht[]>();
   if (userIds.length === 0) return treffer;
 
   const offene = await prisma.volunteerShift.findMany({
@@ -87,33 +94,51 @@ async function ermittleBewertungsSchichten(
     },
     select: {
       id: true, userId: true, date: true, slot: true, role: true,
-      shift: { select: { workArea: { select: { name: true } }, day: { select: { date: true } } } }
+      shift: {
+        select: {
+          workArea: { select: { name: true, icon: true } },
+          day: { select: { date: true } }
+        }
+      }
     },
     orderBy: [{ date: 'asc' }, { slot: 'asc' }]
   });
 
-  // Erst zaehlen, dann die erste je Person nehmen - die Anzahl steht in der
-  // Mail ("Du hattest 3 Schichten"), und die haengt an allen, nicht an der
-  // ausgewaehlten.
-  const anzahl = new Map<number, number>();
   for (const vs of offene) {
     if (vs.userId == null) continue;
-    anzahl.set(vs.userId, (anzahl.get(vs.userId) ?? 0) + 1);
-  }
-
-  for (const vs of offene) {
-    if (vs.userId == null || treffer.has(vs.userId)) continue;
     const datum = vs.shift?.day?.date ?? vs.date;
-    treffer.set(vs.userId, {
+    const liste = treffer.get(vs.userId) ?? [];
+    liste.push({
       token: baueBewertungsToken({ volunteerShiftId: vs.id, userId: vs.userId }),
       bereich: vs.shift?.workArea?.name || vs.role,
+      icon: vs.shift?.workArea?.icon || '📍',
       datum: DATUM_LANG.format(new Date(datum)),
-      slot: vs.slot,
-      offen: anzahl.get(vs.userId) ?? 1
+      slot: vs.slot
     });
+    treffer.set(vs.userId, liste);
   }
 
   return treffer;
+}
+
+const DATUM_KURZ = new Intl.DateTimeFormat('de-DE', {
+  weekday: 'short', day: 'numeric', month: 'long', timeZone: 'Europe/Berlin'
+});
+
+/** Die groessten Luecken, aufbereitet fuer den Helferaufruf. */
+async function ermittleAufrufSchichten(tournamentId: number | null): Promise<AufrufSchicht[]> {
+  if (!tournamentId) return [];
+  const offen = await ermittleOffeneSchichten(tournamentId);
+  return offen.map(s => ({
+    shiftId: s.shiftId,
+    bereich: s.bereich,
+    icon: s.icon,
+    wann: [s.datum ? DATUM_KURZ.format(s.datum) : null, s.zeit].filter(Boolean).join(', ')
+      || 'Zeit noch offen',
+    plaetze: s.plaetze,
+    besetzt: s.besetzt,
+    offen: s.offen
+  }));
 }
 
 export interface VersandErgebnis {
@@ -121,6 +146,14 @@ export interface VersandErgebnis {
   fehlgeschlagen: number;
   /** Nicht versucht, weil keine Adresse hinterlegt ist. */
   ohneAdresse: number;
+  /**
+   * Nicht versucht, weil es fuer diese Person nichts zu bewerten gibt.
+   *
+   * Wird gezaehlt und gemeldet, nicht verschwiegen: Der Organisator waehlt
+   * die Zielgruppe aus und muss sehen, dass sie kleiner war als gedacht -
+   * sonst wartet er auf Antworten von Leuten, die nie gefragt wurden.
+   */
+  ohneOffeneBewertung: number;
 }
 
 /**
@@ -143,21 +176,51 @@ export async function versendeMails(
   const schluessel = process.env.RESEND_API_KEY;
   if (!schluessel) {
     console.warn('[mail] RESEND_API_KEY fehlt - es wird nichts versendet.');
-    return { gesendet: 0, fehlgeschlagen: empfaenger.length, ohneAdresse: 0 };
+    return {
+      gesendet: 0, fehlgeschlagen: empfaenger.length, ohneAdresse: 0, ohneOffeneBewertung: 0
+    };
   }
 
-  // Nur fuer die Bewertungsmail: Jede andere Vorlage braucht keine Schichten,
-  // und eine Abfrage, die nichts beitraegt, soll nicht laufen.
-  const schichten = vorlage === 'bewertung'
+  /**
+   * Was diese Vorlage an Daten braucht - einmal fuer alle, nicht je Mail.
+   *
+   * Die Bewertungs- und die Dankesvorlage brauchen die unbewerteten Schichten
+   * je Person, der Aufruf die groessten Luecken des Turniers. Eine Abfrage,
+   * die eine Vorlage nicht braucht, laeuft nicht.
+   */
+  const schichten = vorlage === 'bewertung' || vorlage === 'danke'
     ? await ermittleBewertungsSchichten(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
-    : new Map<number, BewertungsSchicht>();
+    : new Map<number, BewertungsSchicht[]>();
+  const offeneSchichten = vorlage === 'appell'
+    ? await ermittleAufrufSchichten(eingabe.tournamentId ?? null)
+    : [];
 
   const resend = new Resend(schluessel);
   const from = resolveEmailFrom();
   let gesendet = 0;
   let fehlgeschlagen = 0;
+  let ohneOffeneBewertung = 0;
 
   for (const e of empfaenger) {
+    const unbewertet = schichten.get(e.id) ?? [];
+
+    /**
+     * Wer nichts zu bewerten hat, bekommt die Bewertungsmail nicht.
+     *
+     * Sonst kaeme eine Mail mit dem Betreff "Wie war deine Schicht?" bei
+     * jemandem an, der schon geantwortet hat - oder bei jemandem, der gar
+     * keine Schicht hatte. Beides kostet Glaubwuerdigkeit fuer den naechsten
+     * Aufruf, und der ist das eigentliche Kapital.
+     *
+     * Bei der Dankesmail ist es umgekehrt: Die geht an alle, denn gedankt
+     * wird auch dem, der schon bewertet hat. Dort entfaellt nur der
+     * Bewertungsteil.
+     */
+    if (vorlage === 'bewertung' && unbewertet.length === 0) {
+      ohneOffeneBewertung++;
+      continue;
+    }
+
     const mail = baueVorlage(vorlage, {
       betreff: eingabe.betreff,
       text: eingabe.text,
@@ -165,7 +228,8 @@ export async function versendeMails(
       // "Hallo Anja Petersen" wie von einem Serienbrief.
       anrede: e.name.trim().split(/\s+/)[0] || e.name,
       zahlen: eingabe.zahlen ?? null,
-      schicht: schichten.get(e.id) ?? null
+      schichten: unbewertet,
+      offeneSchichten
     }, marke);
 
     try {
@@ -192,5 +256,5 @@ export async function versendeMails(
     }
   }
 
-  return { gesendet, fehlgeschlagen, ohneAdresse: 0 };
+  return { gesendet, fehlgeschlagen, ohneAdresse: 0, ohneOffeneBewertung };
 }

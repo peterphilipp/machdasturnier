@@ -28,6 +28,12 @@ interface Kontext {
   slot: string;
   /** Vereinsfarbe - die Seite kann sie nicht selbst nachladen, siehe Controller. */
   farbe: string | null;
+  /**
+   * Die anderen noch unbewerteten Schichten derselben Person, je mit eigenem
+   * Token. Damit wer drei Schichten hatte nicht in die Mail zurueckwechseln
+   * muss, um die zweite zu finden.
+   */
+  weitere: { token: string; bereich: string; icon: string | null; datum: string; slot: string }[];
   bereits: {
     ratingWorkload: number | null;
     ratingOrganization: number | null;
@@ -244,9 +250,41 @@ export default function BewertungsLinkView() {
         {gespeichert && !fehler && (
           <p className="bewertung-bestaetigung">
             {alleBeantwortet
-              ? '✓ Alles gespeichert – das war’s. Danke!'
+              ? kontext.weitere.length > 0
+                ? '✓ Diese Schicht ist durch. Danke!'
+                : '✓ Alles gespeichert – das war’s. Danke!'
               : '✓ Gespeichert. Die restlichen Fragen kannst du noch beantworten.'}
           </p>
+        )}
+
+        {/* Der Weg zur naechsten Schicht steht immer da, nicht erst nach dem
+            Absenden: Wer sieht, dass es zwei weitere gibt, entscheidet selbst,
+            ob er sie gleich mitmacht - eine Kette, die sich erst nach dem
+            letzten Klick zeigt, wirkt wie ein Nachhaken. */}
+        {kontext.weitere.length > 0 && (
+          <div className="bewertung-weitere">
+            <div className="bewertung-weitere-titel">
+              {kontext.weitere.length === 1
+                ? 'Du hattest noch eine Schicht:'
+                : `Du hattest noch ${kontext.weitere.length} Schichten:`}
+            </div>
+            {kontext.weitere.map(w => (
+              // Ein echter Link und kein Zustandswechsel: Die Seite baut sich
+              // damit vollstaendig fuer die neue Schicht auf, ohne dass hier
+              // Reste der alten stehen bleiben koennen.
+              <a key={w.token} className="bewertung-weitere-zeile" href={`/bewerten?t=${encodeURIComponent(w.token)}`}>
+                <span className="bewertung-weitere-symbol">{w.icon || '📍'}</span>
+                <span className="bewertung-weitere-text">
+                  <strong>{w.bereich}</strong>
+                  <span>
+                    {new Date(w.datum).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' })}
+                    {w.slot ? ` · ${w.slot}` : ''}
+                  </span>
+                </span>
+                <span className="bewertung-weitere-pfeil">→</span>
+              </a>
+            ))}
+          </div>
         )}
 
         <p className="bewertung-fuss">

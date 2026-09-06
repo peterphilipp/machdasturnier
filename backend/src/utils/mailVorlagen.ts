@@ -1,5 +1,6 @@
 import {
-  baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, sterneReihe, kasten
+  baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, sterneReihe, kasten,
+  schichtListe, jubelBand
 } from './mailLayout.js';
 
 /**
@@ -16,10 +17,20 @@ import {
 
 export interface Marke {
   vereinsname: string;
+  /** Steht im Mailkopf unter der Ueberschrift - wie in der App. */
+  turniername: string | null;
   farbe: string;
   logoUrl: string | null;
   /** Basis-URL der App, fuer Links. */
   appUrl: string;
+  /**
+   * Turnier, um das es geht - steht in den Links mit drin.
+   *
+   * Ein Helfer kann in mehreren Turnieren stehen, und das Dashboard zeigt
+   * eines davon. Ohne diese Angabe fuehrt ein Link auf eine Schicht des einen
+   * Turniers in die Liste des anderen.
+   */
+  turnierId?: number | null;
   /**
    * Gesetzt, wenn diese Mail aus der Testumgebung kommt. Layout und Betreff
    * kennzeichnen sie dann - siehe mailLayout.ts.
@@ -48,14 +59,46 @@ export interface VorlagenBeschreibung {
 const FUSS_STANDARD = 'Du bekommst diese Mail, weil du beim TSV Holm als Helfer für dieses Turnier hinterlegt bist.';
 
 /**
- * Die Symbole der Spass-Skala, wie sie auch die App zeigt.
+ * Die drei Bewertungsfragen, wie sie auch die App stellt.
  *
  * Doppelt gepflegt (hier und in RATING_FRAGEN im Frontend), weil Backend und
  * Frontend keinen gemeinsamen Code teilen. Wenn sich die Skala aendert, muss
- * es an beiden Stellen passieren - sonst zeigt die Mail andere Gesichter als
- * die Seite, auf der man nach dem Klick landet.
+ * es an beiden Stellen passieren - sonst zeigt die Mail andere Gesichter und
+ * andere Worte als die Seite, auf der man nach dem Klick landet, und die
+ * Auswertung rechnet Antworten auf zwei verschiedene Fragen zusammen.
+ *
+ * `feld` ist der Kurzname im Link; die Bewertungsseite loest ihn auf
+ * (AUS_MAIL in BewertungsLinkView.tsx).
  */
-const SPASS_SYMBOLE = ['😞', '😐', '🙂', '😄', '🤩'];
+const FRAGEN: {
+  feld: 'w' | 'o' | 'f';
+  frage: string;
+  hinweis: string;
+  symbole: string[];
+  skala: [string, string];
+}[] = [
+  {
+    feld: 'w',
+    frage: '1. Stress & Auslastung',
+    hinweis: 'War genug zu tun – oder zu viel?',
+    symbole: ['😴', '🙂', '😊', '🥵', '🚨'],
+    skala: ['Viel zu ruhig', 'Überlastet']
+  },
+  {
+    feld: 'o',
+    frage: '2. Organisation & Einweisung',
+    hinweis: 'Wusstest du, was zu tun ist?',
+    symbole: ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'],
+    skala: ['Chaotisch', 'Perfekt']
+  },
+  {
+    feld: 'f',
+    frage: '3. Spaß & Stimmung',
+    hinweis: 'Ein Klick genügt – der Rest geht auf der Seite weiter.',
+    symbole: ['😞', '😐', '🙂', '😄', '🤩'],
+    skala: ['Kein Spaß', 'Super Stimmung!']
+  }
+];
 
 /**
  * Was im Auswahlfeld steht. Betreff und Text sind Vorbelegungen, die der
@@ -111,21 +154,104 @@ export interface DankeZahlen {
 }
 
 /**
- * Die Schicht, um die es in der Bewertungsmail geht - je Empfaenger anders.
+ * Eine noch unbewertete Schicht dieses Empfaengers.
  *
- * Ohne diese Angabe faellt die Vorlage auf einen Verweis in die App zurueck.
- * Das ist der Fall in der Vorschau: Dort gibt es keinen Empfaenger, und ein
- * echtes Token in einer Vorschau waere ein Token, das man nicht braucht.
+ * Ohne Angabe faellt die Vorlage auf einen Verweis in die App zurueck. Das ist
+ * der Fall in der Vorschau: Dort gibt es keinen Empfaenger, und ein echtes
+ * Token in einer Vorschau waere ein Token, das man nicht braucht.
  */
 export interface BewertungsSchicht {
   /** Signiertes Token aus bewertungsLink.ts - traegt die Berechtigung. */
   token: string;
   bereich: string;
+  icon: string;
   /** Schon lesbar formatiert, z.B. "Samstag, 5. September". */
   datum: string;
   slot: string;
-  /** Wie viele Schichten dieser Person noch unbewertet sind - inklusive dieser. */
+}
+
+/** Eine Schicht, fuer die noch Leute fehlen - fuer den Helferaufruf. */
+export interface AufrufSchicht {
+  shiftId: number;
+  bereich: string;
+  icon: string;
+  /** Schon lesbar formatiert, z.B. "Sa, 5. September". */
+  wann: string;
+  plaetze: number;
+  besetzt: number;
   offen: number;
+}
+
+/**
+ * Alle drei Fragen zur ersten unbewerteten Schicht, plus Links auf die
+ * weiteren.
+ *
+ * Warum alle drei in der Mail und nicht nur eine: Wer die Frage sieht, weiss,
+ * worauf er sich einlaesst - "drei Klicks" ist eine Zusage, die man mit einem
+ * Blick pruefen kann. Der erste Klick verlaesst die Mail und die Seite fuehrt
+ * den Rest zu Ende; die anderen beiden Reihen sind dort schon beantwortet,
+ * wenn man sie hier angeklickt hat.
+ *
+ * Mehrere Schichten bekommen NICHT je drei Reihen: Bei drei Schichten waeren
+ * das neun Sternereihen, und niemand liest eine Mail, die scrollt wie ein
+ * Formular. Die weiteren stehen als Zeile mit eigenem Link darunter - jede mit
+ * ihrem eigenen Token, sonst wuerde die Bewertung auf der falschen Schicht
+ * landen.
+ *
+ * `absaetze` wird ergaenzt (nicht ersetzt): Die Textfassung muss dieselben
+ * Links enthalten, sonst ist die Mail fuer jeden ohne HTML wertlos.
+ */
+function bewertungsBlock(
+  schichten: BewertungsSchicht[],
+  marke: Marke,
+  absaetze: string[]
+): string {
+  const erste = schichten[0];
+  const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(erste.token)}`;
+
+  const reihen = FRAGEN.map(f => sterneReihe({
+    frage: f.frage,
+    hinweis: f.hinweis,
+    basisUrl: basis,
+    feld: f.feld,
+    symbole: f.symbole,
+    skala: f.skala,
+    farbe: marke.farbe
+  })).join('');
+
+  let html = kasten(
+    `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
+    + `letter-spacing:0.6px;margin-bottom:2px;">Deine Schicht</div>`
+    + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
+    + `${maskiere(erste.icon)} ${maskiere(erste.bereich)}</div>`
+    + `<div style="font-size:13px;color:#475569;margin:2px 0 18px;">`
+    + `${maskiere(erste.datum)} · ${maskiere(erste.slot)}</div>`
+    + reihen,
+    marke.farbe
+  );
+
+  absaetze.push(`Deine Schicht: ${erste.bereich}, ${erste.datum}, ${erste.slot}.`);
+  absaetze.push(`Bewerten: ${basis}`);
+
+  const weitere = schichten.slice(1);
+  if (weitere.length > 0) {
+    html += `<div style="font-size:14px;font-weight:700;color:#0f172a;margin:6px 0 8px;">`
+      + `${weitere.length === 1 ? 'Du hattest noch eine Schicht:' : `Du hattest noch ${weitere.length} Schichten:`}`
+      + `</div>`;
+    html += schichtListe(weitere.map(s => ({
+      icon: s.icon,
+      bereich: s.bereich,
+      wann: `${s.datum} · ${s.slot}`,
+      url: `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`
+    })), marke.farbe, 'Bewerten');
+
+    for (const s of weitere) {
+      absaetze.push(`${s.bereich}, ${s.datum}, ${s.slot} bewerten: `
+        + `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`);
+    }
+  }
+
+  return html;
 }
 
 /**
@@ -143,7 +269,13 @@ export function baueVorlage(
     text: string;
     anrede: string;
     zahlen?: DankeZahlen | null;
-    schicht?: BewertungsSchicht | null;
+    /**
+     * Die noch unbewerteten Schichten dieses Empfaengers, frueheste zuerst.
+     * Die erste bekommt die Sternereihen, die weiteren je einen Link.
+     */
+    schichten?: BewertungsSchicht[] | null;
+    /** Die Schichten mit den groessten Luecken - fuer den Aufruf. */
+    offeneSchichten?: AufrufSchicht[] | null;
   },
   marke: Marke
 ): Mailinhalt {
@@ -159,74 +291,130 @@ export function baueVorlage(
   const absaetze = [anrede, ...eingabe.text.split(/\n{2,}/).map(a => a.trim()).filter(Boolean)];
 
   if (id === 'appell') {
-    aktion = { text: 'Offene Schichten ansehen', url: `${marke.appUrl}/` };
-  }
-
-  if (id === 'bewertung' && eingabe.schicht) {
     /**
-     * Die erste Frage steht in der Mail, die zwei anderen auf der Seite.
+     * Die groessten Luecken stehen in der Mail, nicht nur ein Verweis.
      *
-     * Nicht alle drei hier: Der erste Klick verlaesst die Mail ohnehin, mehr
-     * Sterne in der Mail brauchen also niemand - sie machen sie nur laenger.
-     * Und es ist bewusst die Spass-Frage: Sie ist die, die man ohne
-     * Nachdenken beantwortet, und genau das ist die Huerde, an der die letzte
-     * Runde gescheitert ist (eine einzige Bewertung im ganzen Turnier).
+     * Ein Aufruf ohne Inhalt verlangt den ersten Schritt vom Empfaenger. Steht
+     * dagegen "Grillstand, Sa 5. September 14-16, 2 von 5 besetzt" da, ist die
+     * Entscheidung gefallen, bevor die App offen ist. Jede Zeile verlinkt in
+     * die App auf genau diese Schicht (?schicht=<id>), damit niemand sie
+     * dort suchen muss.
      */
-    const s = eingabe.schicht;
-    const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`;
+    const offen = eingabe.offeneSchichten ?? [];
+    const turnier = marke.turnierId ? `&turnier=${marke.turnierId}` : '';
+    if (offen.length > 0) {
+      inhalt += `<div style="font-size:14px;font-weight:700;color:#0f172a;margin:4px 0 8px;">`
+        + `Hier fehlen gerade die meisten Leute:</div>`;
+      inhalt += schichtListe(offen.map(s => ({
+        icon: s.icon,
+        bereich: s.bereich,
+        wann: s.wann,
+        hinweis: s.offen === 1 ? 'noch 1 Platz frei' : `noch ${s.offen} Plätze frei`,
+        url: `${marke.appUrl}/?schicht=${s.shiftId}${turnier}`
+      })), marke.farbe);
 
-    inhalt += kasten(
-      `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
-      + `letter-spacing:0.6px;margin-bottom:2px;">Deine Schicht</div>`
-      + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
-      + `${maskiere(s.bereich)}</div>`
-      + `<div style="font-size:13px;color:#475569;margin:2px 0 16px;">`
-      + `${maskiere(s.datum)} · ${maskiere(s.slot)}</div>`
-      + sterneReihe({
-        frage: 'Spaß & Stimmung',
-        hinweis: 'Ein Klick genügt – die beiden anderen Fragen kommen danach.',
-        basisUrl: basis,
-        feld: 'f',
-        symbole: SPASS_SYMBOLE,
-        skala: ['Kein Spaß', 'Super Stimmung!'],
-        farbe: marke.farbe
-      }),
-      marke.farbe
-    );
-
-    if (s.offen > 1) {
-      inhalt += `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#64748b;">`
-        + `Du hattest ${s.offen} Schichten – die anderen kannst du direkt danach `
-        + `mitbewerten.</p>`;
+      for (const s of offen) {
+        absaetze.push(`${s.bereich}, ${s.wann} – ${s.besetzt} von ${s.plaetze} besetzt: `
+          + `${marke.appUrl}/?schicht=${s.shiftId}${turnier}`);
+      }
     }
 
-    aktion = { text: 'Alle drei Fragen beantworten', url: basis };
-    absaetze.push(`Deine Schicht: ${s.bereich}, ${s.datum}, ${s.slot}.`);
+    /**
+     * Der zweite Weg fuer die, denen keine dieser Schichten passt.
+     *
+     * Ohne ihn endet die Mail fuer jeden, der zu den genannten Zeiten nicht
+     * kann, in einer Sackgasse - und eine Stunde, die nicht ins Raster passt,
+     * ist immer noch eine Stunde mehr als gar keine. Derselbe Weg wie der
+     * Knopf "Zeit anbieten" im Dashboard.
+     */
+    inhalt += kasten(
+      `<div style="font-size:14px;font-weight:700;color:#0f172a;">Nichts dabei, das passt?</div>`
+      + `<div style="font-size:13px;line-height:1.6;color:#475569;margin:4px 0 12px;">`
+      + `Sag uns einfach, wann du Zeit hättest – wir schauen, ob wir daraus eine `
+      + `Schicht machen können. Auch eine einzelne Stunde hilft.</div>`
+      + `<a href="${maskiere(`${marke.appUrl}/?zeitangebot=1${turnier}`)}"`
+      + ` style="display:inline-block;padding:11px 18px;font-size:14px;font-weight:700;`
+      + `color:#ffffff;background:${marke.farbe};border-radius:8px;text-decoration:none;">`
+      + `🙋 Zeit anbieten</a>`,
+      marke.farbe
+    );
+    absaetze.push(`Keine passende Schicht? Zeit anbieten: ${marke.appUrl}/?zeitangebot=1${turnier}`);
+
+    aktion = { text: 'Alle offenen Schichten ansehen', url: `${marke.appUrl}/` };
+  }
+
+  const unbewertet = eingabe.schichten ?? [];
+
+  if (id === 'bewertung' && unbewertet.length > 0) {
+    inhalt += bewertungsBlock(unbewertet, marke, absaetze);
+    aktion = {
+      text: 'Bewertung im Browser öffnen',
+      url: `${marke.appUrl}/bewerten?t=${encodeURIComponent(unbewertet[0].token)}`
+    };
   } else if (id === 'bewertung') {
     // Ohne Schicht - also in der Vorschau - fuehrt der Knopf in die App.
     aktion = { text: 'Schicht bewerten', url: `${marke.appUrl}/` };
     inhalt += `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#64748b;">`
-      + `In der echten Mail stehen hier die Sterne zur eigenen Schicht.</p>`;
+      + `In der echten Mail stehen hier die Fragen zur eigenen Schicht.</p>`;
   }
 
-  if (id === 'danke' && eingabe.zahlen) {
-    const z = eingabe.zahlen;
-    inhalt += kennzahlen([
-      { wert: String(z.beteiligte), label: 'Menschen haben mitgeholfen' },
-      { wert: String(Math.round(z.stunden)), label: 'Stunden geleistet' },
-      { wert: String(z.schichten), label: 'übernommene Schichten' },
-      { wert: String(z.spenden), label: 'Verpflegungsspenden' }
-    ], marke.farbe);
-    absaetze.push(
-      `${z.beteiligte} Menschen haben mitgeholfen, ${Math.round(z.stunden)} Stunden geleistet, `
-      + `${z.schichten} Schichten übernommen und ${z.spenden} Verpflegungsspenden beigesteuert.`
-    );
+  if (id === 'danke') {
+    /**
+     * Der Aufmacher steht VOR dem Text, nicht dahinter.
+     *
+     * Eine Dankesmail, die mit einer Textwand beginnt, liest sich wie ein
+     * Rundschreiben. Das Band ist das Erste, was im Inhalt steht - danach
+     * kommt die Anrede.
+     */
+    inhalt = jubelBand({ symbole: '🎉 🏆 🙌', text: 'Danke fürs Mithelfen!', farbe: marke.farbe })
+      + inhalt;
+
+    if (eingabe.zahlen) {
+      const z = eingabe.zahlen;
+      inhalt += kennzahlen([
+        { wert: String(z.beteiligte), label: 'Menschen haben mitgeholfen' },
+        { wert: String(Math.round(z.stunden)), label: 'Stunden geleistet' },
+        { wert: String(z.schichten), label: 'übernommene Schichten' },
+        { wert: String(z.spenden), label: 'Verpflegungsspenden' }
+      ], marke.farbe);
+      absaetze.push(
+        `${z.beteiligte} Menschen haben mitgeholfen, ${Math.round(z.stunden)} Stunden geleistet, `
+        + `${z.schichten} Schichten übernommen und ${z.spenden} Verpflegungsspenden beigesteuert.`
+      );
+    }
+
+    /**
+     * Die Bitte um Bewertung haengt hier mit dran - aber nur fuer die, die
+     * noch nicht bewertet haben.
+     *
+     * Zwei Mails weniger fuer den Organisator, und fuer den Empfaenger die
+     * naheliegendste Gelegenheit: Er liest gerade, was zusammengekommen ist,
+     * und wird im selben Moment gefragt, wie es fuer ihn war. Wer schon
+     * bewertet hat, sieht diesen Teil nicht - eine Erinnerung an etwas
+     * Erledigtes ist der schnellste Weg, ueberlesen zu werden.
+     */
+    if (unbewertet.length > 0) {
+      // Eine Ueberleitung, sonst springt die Mail von den Zahlen ohne Wort in
+      // ein Formular - und ein Formular ohne Frage sieht nach Versehen aus.
+      const frage = 'Und wie war es für dich? Das haben wir von dir noch nicht gehört – '
+        + 'drei Klicks genügen, und es zählt in die Planung fürs nächste Mal.';
+      inhalt += `<p style="margin:6px 0 14px;font-size:15px;line-height:1.6;color:#334155;">`
+        + `${maskiere(frage)}</p>`;
+      absaetze.push(frage);
+
+      inhalt += bewertungsBlock(unbewertet, marke, absaetze);
+      aktion = {
+        text: 'Bewertung im Browser öffnen',
+        url: `${marke.appUrl}/bewerten?t=${encodeURIComponent(unbewertet[0].token)}`
+      };
+    }
   }
 
   return {
     betreff: baueBetreff(titel, marke.testumgebung),
     html: baueMail({
       titel,
+      unterzeile: marke.turniername,
       inhalt,
       aktion,
       logoUrl: marke.logoUrl,

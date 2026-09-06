@@ -178,12 +178,18 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
         nurAnMich
       }) as any;
 
-      const mail = res.mail || { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0 };
+      const mail = res.mail || { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0, ohneOffeneBewertung: 0 };
       const zeilen = [
         kanaele.includes('push') ? `Push: ${res.sentPushCount || 0} Geräte erreicht` : null,
         kanaele.includes('mail') ? `E-Mail: ${mail.gesendet} versendet` : null,
         mail.fehlgeschlagen > 0 ? `${mail.fehlgeschlagen} Mail(s) fehlgeschlagen – siehe Server-Log` : null,
-        mail.ohneAdresse > 0 ? `${mail.ohneAdresse} ohne hinterlegte Adresse übersprungen` : null
+        mail.ohneAdresse > 0 ? `${mail.ohneAdresse} ohne hinterlegte Adresse übersprungen` : null,
+        // Muss dastehen: Sonst wartet man auf Antworten von Leuten, die nie
+        // gefragt wurden - die Bewertungsmail geht nur an die, bei denen noch
+        // etwas offen ist.
+        mail.ohneOffeneBewertung > 0
+          ? `${mail.ohneOffeneBewertung} übersprungen – dort ist nichts mehr zu bewerten`
+          : null
       ].filter(Boolean);
 
       await modal.alert({

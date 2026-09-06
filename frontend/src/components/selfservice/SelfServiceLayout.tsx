@@ -125,9 +125,20 @@ export default function SelfServiceLayout() {
     if (isInitializing) return; // Warten bis Auth-Status bekannt ist
     const isAuthRoute = location.pathname === '/login' || location.pathname === '/register' || location.pathname === '/reset-password';
     if (!isLoggedIn && !isAuthRoute) {
-      navigate('/login');
+      /**
+       * Das Ziel mitnehmen, nicht wegwerfen.
+       *
+       * Die Links aus den Mails tragen ihr Ziel im Parameter (`/?schicht=12`,
+       * `/?zeitangebot=1`). Ohne diese Weitergabe fuehrt jeder solche Link bei
+       * jemandem, der gerade nicht angemeldet ist - auf dem Handy der
+       * Regelfall - nach der Anmeldung auf die nackte Uebersicht. Der Link hat
+       * dann etwas versprochen, das nicht eintritt, und niemand kann sagen,
+       * warum.
+       */
+      const ziel = `${location.pathname}${location.search}`;
+      navigate(ziel === '/' ? '/login' : `/login?next=${encodeURIComponent(ziel)}`, { replace: true });
     }
-  }, [isLoggedIn, isInitializing, location.pathname, navigate]);
+  }, [isLoggedIn, isInitializing, location.pathname, location.search, navigate]);
 
   const handleLogout = () => {
     logout();

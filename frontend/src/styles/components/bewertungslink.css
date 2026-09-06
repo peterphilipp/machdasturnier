@@ -123,6 +123,51 @@
   font-weight: 700;
 }
 
+.bewertung-weitere {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-color, #e9eef5);
+}
+.bewertung-weitere-titel {
+  font-size: 14px;
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--text-main, #0f172a);
+  margin-bottom: 10px;
+}
+.bewertung-weitere-zeile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  /* Touch-Ziel: die Seite wird fast nur auf dem Handy geoeffnet. */
+  min-height: 44px;
+}
+.bewertung-weitere-symbol {
+  font-size: 20px;
+  line-height: 1;
+}
+.bewertung-weitere-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #475569;
+}
+.bewertung-weitere-text strong {
+  font-size: 14px;
+  color: var(--text-main, #0f172a);
+}
+.bewertung-weitere-pfeil {
+  font-weight: 700;
+  color: var(--club-primary, #0d6efd);
+}
+
 .bewertung-fuss {
   margin: 20px 0 0;
   padding-top: 16px;

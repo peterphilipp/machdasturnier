@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUser } from '../../context/UserContext';
 import { tryConditionalPasskeyLogin, loginWithPasskey } from '../../utils/passkey';
 import { modal } from '../admin/Modal';
@@ -24,9 +24,26 @@ function shadeColor(color: string | undefined, percent: number) {
   return '#' + RR + GG + BB;
 }
 
+/**
+ * Wohin nach der Anmeldung - das gemerkte Ziel oder die Uebersicht.
+ *
+ * Nur seiteneigene Pfade werden akzeptiert. Ohne diese Pruefung koennte ein
+ * `?next=https://...` von aussen jemanden nach der Anmeldung auf eine fremde
+ * Seite schicken, die wie diese aussieht - der klassische Weg, ein Passwort
+ * beim zweiten Versuch abzugreifen. Das doppelte "//" ist mitgeprueft, weil
+ * Browser "//fremd.example" als Adresse mit Protokoll der aktuellen Seite
+ * lesen.
+ */
+export function zielNachAnmeldung(next: string | null): string {
+  if (!next) return '/';
+  if (!next.startsWith('/') || next.startsWith('//')) return '/';
+  return next;
+}
+
 export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary: propClubSecondary, clubAccent: propClubAccent, clubLogo: propClubLogo }: { clubPrimary?: string; clubSecondary?: string; clubAccent?: string; clubLogo?: string | null }) {
   const { login: contextLogin } = useUser();
   const navigate = useNavigate();
+  const [suchParameter] = useSearchParams();
   
   const clubPrimary = propClubPrimary || '#0d6efd';
   const clubSecondary = propClubSecondary || '#6c757d';
@@ -45,7 +62,7 @@ export default function LoginView({ clubPrimary: propClubPrimary, clubSecondary:
 
   const applyLoginResult = async (data: Record<string, any>) => {
     contextLogin(data.token, data.user || data.volunteer);
-    navigate('/');
+    navigate(zielNachAnmeldung(suchParameter.get('next')));
   };
 
   const login = async () => {

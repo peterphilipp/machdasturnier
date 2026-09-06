@@ -10,7 +10,7 @@ import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
 import { describeUserAgent } from '../utils/userAgent.js';
 import { normalizeRoles, highestRole } from '../utils/roles.js';
 import { setUserRoles, getUserRoles } from '../utils/userRoles.js';
-import { ermittleMarke, versendeMails } from '../utils/mailVersand.js';
+import { ermittleMarke, versendeMails, VersandErgebnis } from '../utils/mailVersand.js';
 import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
 import { VORLAGEN } from '../utils/mailVorlagen.js';
 import type { DankeZahlen } from '../utils/mailVorlagen.js';
@@ -365,7 +365,12 @@ export const broadcastPush = async (req: Request, res: Response) => {
    * neben notifyUser() - die Adressauswahl bleibt deshalb schlicht "wer eine
    * eigene Adresse hat".
    */
-  let mailErgebnis = { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0 };
+  // Ausdruecklich getypt und nicht aus dem Startwert abgeleitet: Sonst
+  // verschwindet ein spaeter ergaenztes Feld aus VersandErgebnis stillschweigend
+  // aus der Antwort, weil das Zuweisen zusaetzlicher Felder erlaubt ist.
+  let mailErgebnis: VersandErgebnis = {
+    gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0, ohneOffeneBewertung: 0
+  };
   if (kanaele.includes('mail')) {
     const kandidaten = await prisma.user.findMany({
       where: { id: { in: uniqueIds }, ohneZugang: false },

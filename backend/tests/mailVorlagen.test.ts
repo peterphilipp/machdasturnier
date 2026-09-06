@@ -4,6 +4,7 @@ import { maskiere, alsAbsaetze, kennzahlen, dunkler } from '../src/utils/mailLay
 
 const MARKE = {
   vereinsname: 'TSV Holm',
+  turniername: 'Rathje Junior Cup',
   farbe: '#e43d10',
   logoUrl: 'https://beispiel.test/api/logo/club/1.png',
   appUrl: 'https://beispiel.test'
@@ -100,9 +101,17 @@ describe('baueVorlage', () => {
 
   it('gibt dem Aufruf einen Knopf in die App', () => {
     const m = baueVorlage('appell', basis, MARKE);
-    expect(m.html).toContain('Offene Schichten ansehen');
+    expect(m.html).toContain('Alle offenen Schichten ansehen');
     expect(m.html).toContain('https://beispiel.test/');
     expect(m.text).toContain('https://beispiel.test/');
+  });
+
+  // Wer zu den genannten Zeiten nicht kann, soll nicht in einer Sackgasse
+  // landen - eine Stunde ausserhalb des Rasters ist mehr als keine.
+  it('bietet im Aufruf immer auch den Weg über ein Zeitangebot an', () => {
+    const m = baueVorlage('appell', basis, MARKE);
+    expect(m.html).toContain('https://beispiel.test/?zeitangebot=1');
+    expect(m.text).toContain('https://beispiel.test/?zeitangebot=1');
   });
 
   it('führt bei der Bewertung ohne Schicht in die App', () => {
@@ -145,20 +154,38 @@ describe('Sterne in der Bewertungsmail', () => {
   const schicht = {
     token: 'nutzlast.signatur',
     bereich: 'Grillstand',
+    icon: 'G',
     datum: 'Samstag, 5. September',
-    slot: '14:00-16:00',
-    offen: 1
+    slot: '14:00-16:00'
+  };
+  const zweite = {
+    token: 'zweites.token',
+    bereich: 'Kuchentheke',
+    icon: 'K',
+    datum: 'Sonntag, 6. September',
+    slot: '10:00-12:00'
   };
 
-  it('baut fünf Links mit je einem Wert', () => {
-    const html = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
-    for (const n of [1, 2, 3, 4, 5]) {
-      expect(html).toContain(`https://beispiel.test/bewerten?t=nutzlast.signatur&amp;f=${n}`);
+  // Alle drei Fragen mit je fuenf Stufen - der Empfaenger soll sehen, worauf
+  // er sich einlaesst, bevor er klickt.
+  it('baut für jede der drei Fragen fünf Links', () => {
+    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
+    for (const feld of ['w', 'o', 'f']) {
+      for (const n of [1, 2, 3, 4, 5]) {
+        expect(html).toContain(`https://beispiel.test/bewerten?t=nutzlast.signatur&amp;${feld}=${n}`);
+      }
     }
   });
 
+  it('stellt alle drei Kriterien mit Namen dar', () => {
+    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
+    expect(html).toContain('Stress &amp; Auslastung');
+    expect(html).toContain('Organisation &amp; Einweisung');
+    expect(html).toContain('Spaß &amp; Stimmung');
+  });
+
   it('nennt die Schicht, um die es geht - in HTML und im Text', () => {
-    const m = baueVorlage('bewertung', { ...basis, schicht }, MARKE);
+    const m = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE);
     expect(m.html).toContain('Grillstand');
     expect(m.html).toContain('Samstag, 5. September');
     expect(m.html).toContain('14:00-16:00');
@@ -166,33 +193,170 @@ describe('Sterne in der Bewertungsmail', () => {
   });
 
   it('führt den Knopf auf dieselbe Seite, aber ohne vorgegebenen Wert', () => {
-    const m = baueVorlage('bewertung', { ...basis, schicht }, MARKE);
-    expect(m.html).toContain('Alle drei Fragen beantworten');
+    const m = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE);
+    expect(m.html).toContain('Bewertung im Browser öffnen');
     expect(m.text).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
   });
 
-  // Sonst liest man "Deine Schicht" und hatte drei - und weiss nicht, welche
-  // gemeint ist oder ob die anderen unter den Tisch fallen.
-  it('erwähnt weitere offene Schichten, aber nur wenn es welche gibt', () => {
-    const mehrere = baueVorlage('bewertung', { ...basis, schicht: { ...schicht, offen: 3 } }, MARKE).html;
-    expect(mehrere).toContain('Du hattest 3 Schichten');
-    const eine = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
+  /**
+   * Mehrere Schichten: Die erste bekommt die Fragen, die weiteren je einen
+   * eigenen Link mit eigenem Token. Waeren es dieselben Token, landete die
+   * zweite Bewertung auf der ersten Schicht - ein Fehler, den niemand sieht,
+   * weil die Seite dann einfach die erste Schicht zeigt.
+   */
+  it('verlinkt weitere Schichten mit ihrem eigenen Token', () => {
+    const m = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite] }, MARKE);
+    expect(m.html).toContain('Du hattest noch eine Schicht:');
+    expect(m.html).toContain('Kuchentheke');
+    expect(m.html).toContain('https://beispiel.test/bewerten?t=zweites.token');
+    expect(m.text).toContain('https://beispiel.test/bewerten?t=zweites.token');
+    // Die Fragen gibt es nur einmal - drei Reihen, nicht sechs.
+    expect(m.html.match(/Stress &amp; Auslastung/g)).toHaveLength(1);
+  });
+
+  it('zählt bei mehr als zwei Schichten richtig', () => {
+    const dritte = { ...zweite, token: 'drittes.token', bereich: 'Kasse' };
+    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite, dritte] }, MARKE).html;
+    expect(html).toContain('Du hattest noch 2 Schichten:');
+  });
+
+  it('erwähnt weitere Schichten nur, wenn es welche gibt', () => {
+    const eine = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
     expect(eine).not.toContain('Du hattest');
   });
 
   it('maskiert das Token, statt es ins HTML zu spucken', () => {
     const boese = { ...schicht, token: 'a"><script>x</script>' };
-    const html = baueVorlage('bewertung', { ...basis, schicht: boese }, MARKE).html;
+    const html = baueVorlage('bewertung', { ...basis, schichten: [boese] }, MARKE).html;
     expect(html).not.toContain('<script>');
   });
 
   // Bildblockade ist in Outlook und bei vielen Gmail-Konten die
   // Voreinstellung. Sterne als Bilder waeren dort fuenf leere Rahmen.
   it('benutzt keine Bilder für die Sterne', () => {
-    const html = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
+    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
     const bilder = html.match(/<img/g) ?? [];
     // Genau eines: das Logo im Kopf.
     expect(bilder).toHaveLength(1);
+  });
+});
+
+describe('Helferaufruf mit offenen Schichten', () => {
+  const basis = { betreff: 'Wir brauchen noch Helfer', text: 'Ein paar Schichten sind offen.', anrede: 'Anja' };
+  const offeneSchichten = [
+    { shiftId: 12, bereich: 'Grillstand', icon: 'G', wann: 'Sa, 5. September, 14:00-16:00', plaetze: 5, besetzt: 1, offen: 4 },
+    { shiftId: 13, bereich: 'Kasse', icon: 'K', wann: 'So, 6. September, 10:00-12:00', plaetze: 2, besetzt: 1, offen: 1 }
+  ];
+
+  it('verlinkt jede Schicht einzeln in die App', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    expect(m.html).toContain('https://beispiel.test/?schicht=12');
+    expect(m.html).toContain('https://beispiel.test/?schicht=13');
+    expect(m.text).toContain('https://beispiel.test/?schicht=12');
+  });
+
+  /**
+   * Ein Helfer kann in mehreren Turnieren stehen. Ohne das Turnier im Link
+   * landet er in der Liste des falschen - und dort fehlt die Schicht, auf die
+   * er geklickt hat.
+   */
+  it('nimmt das Turnier in die Links mit, wenn es bekannt ist', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten }, { ...MARKE, turnierId: 7 });
+    expect(m.html).toContain('?schicht=12&amp;turnier=7');
+    expect(m.text).toContain('?schicht=12&turnier=7');
+    expect(m.text).toContain('?zeitangebot=1&turnier=7');
+  });
+
+  it('lässt den Turnierteil weg, wenn kein Turnier bekannt ist', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    expect(m.html).not.toContain('turnier=');
+  });
+
+  it('nennt Bereich, Zeit und wie viele fehlen', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    expect(m.html).toContain('Grillstand');
+    expect(m.html).toContain('Sa, 5. September, 14:00-16:00');
+    expect(m.html).toContain('noch 4 Plätze frei');
+    // Einer im Singular - "noch 1 Plätze frei" liest sich wie ein Fehler.
+    expect(m.html).toContain('noch 1 Platz frei');
+  });
+
+  it('nennt im Text die Belegung, damit die Zahl nicht nur im HTML steht', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    expect(m.text).toContain('1 von 5 besetzt');
+  });
+
+  // Ohne Luecken bleibt der Aufruf trotzdem sinnvoll: Der Weg ueber ein
+  // Zeitangebot und der Knopf in die App stehen weiter da.
+  it('kommt ohne offene Schichten klar', () => {
+    const m = baueVorlage('appell', { ...basis, offeneSchichten: [] }, MARKE);
+    expect(m.html).not.toContain('Hier fehlen gerade die meisten Leute');
+    expect(m.html).toContain('?zeitangebot=1');
+  });
+});
+
+describe('Dankesmail', () => {
+  const basis = { betreff: 'Danke!', text: 'Das Turnier ist vorbei.', anrede: 'Anja' };
+  const zahlen = { beteiligte: 74, stunden: 288.4, schichten: 94, spenden: 67 };
+  const schicht = {
+    token: 'nutzlast.signatur', bereich: 'Grillstand', icon: 'G',
+    datum: 'Samstag, 5. September', slot: '14:00-16:00'
+  };
+
+  it('beginnt mit dem Jubelband, nicht mit einer Textwand', () => {
+    const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
+    expect(html).toContain('Danke fürs Mithelfen!');
+    // Vor der Anrede - sonst ist es kein Aufmacher.
+    expect(html.indexOf('Danke fürs Mithelfen!')).toBeLessThan(html.indexOf('Hallo Anja,'));
+  });
+
+  /**
+   * Die Bitte um Bewertung haengt an der Dankesmail - aber nur fuer die, die
+   * noch nicht bewertet haben. Eine Erinnerung an etwas Erledigtes ist der
+   * schnellste Weg, ueberlesen zu werden.
+   */
+  it('fragt nach einer Bewertung, wenn noch etwas offen ist', () => {
+    const m = baueVorlage('danke', { ...basis, zahlen, schichten: [schicht] }, MARKE);
+    expect(m.html).toContain('Stress &amp; Auslastung');
+    expect(m.html).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
+    expect(m.text).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
+  });
+
+  it('lässt die Bitte weg, wenn schon alles bewertet ist', () => {
+    const m = baueVorlage('danke', { ...basis, zahlen, schichten: [] }, MARKE);
+    expect(m.html).not.toContain('Stress &amp; Auslastung');
+    expect(m.html).not.toContain('/bewerten?t=');
+    // Gedankt wird trotzdem - die Mail bleibt vollständig.
+    expect(m.html).toContain('Danke fürs Mithelfen!');
+    expect(m.html).toContain('74');
+  });
+});
+
+describe('Kopfzeile', () => {
+  const basis = { betreff: 'Wichtige Info', text: 'Bitte melden.', anrede: 'Anja' };
+
+  // Der Kopf soll aussehen wie der in der App: Turniername unter der
+  // Ueberschrift, so wie dort die Begruessung unter dem Turniernamen steht.
+  it('nennt das Turnier unter der Überschrift', () => {
+    const html = baueVorlage('frei', basis, MARKE).html;
+    expect(html).toContain('Rathje Junior Cup');
+    expect(html.indexOf('Wichtige Info')).toBeLessThan(html.indexOf('Rathje Junior Cup'));
+  });
+
+  it('fällt ohne Turnier auf den Vereinsnamen zurück', () => {
+    const html = baueVorlage('frei', basis, { ...MARKE, turniername: null }).html;
+    expect(html).toContain('TSV Holm');
+  });
+
+  /**
+   * Der Verlauf im Kopf braucht eine einfache Farbe daneben: Outlook rendert
+   * mit der Word-Engine und ignoriert background-image. Ohne bgcolor waere
+   * der Kopf dort weiss - und weisse Schrift auf weiss ist kein Kopf.
+   */
+  it('hinterlegt den Verlauf mit einer einfachen Farbe', () => {
+    const html = baueVorlage('frei', basis, MARKE).html;
+    expect(html).toContain('linear-gradient(135deg, #e43d10');
+    expect(html).toContain('bgcolor="#e43d10"');
   });
 });
 
@@ -236,9 +400,14 @@ describe('Kennzeichnung der Testumgebung', () => {
 
   // Ein CSS-Gradient (wie das Streifenband in der App) kommt in Outlook und
   // mehreren Webmailern nicht an - dort bliebe ein weisser Balken, also genau
-  // kein Warnhinweis.
-  it('benutzt eine einfarbige Fläche, keinen Gradienten', () => {
-    expect(baueVorlage('frei', basis, test).html).not.toContain('linear-gradient');
+  // kein Warnhinweis. Das Band traegt deshalb ein bgcolor-Attribut, das auch
+  // die Word-Engine auswertet.
+  it('trägt die Warnfarbe als bgcolor, nicht nur als CSS', () => {
+    const html = baueVorlage('frei', basis, test).html;
+    expect(html).toContain('bgcolor="#BA7517"');
+    // Und im Band selbst steht kein Verlauf, auf den es sich verlassen würde.
+    const band = html.slice(html.indexOf('#BA7517'), html.indexOf('TESTUMGEBUNG'));
+    expect(band).not.toContain('linear-gradient');
   });
 
   it('warnt auch in der Textfassung, und zwar zuerst', () => {
