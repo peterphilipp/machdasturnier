@@ -44,7 +44,13 @@ export interface Mailinhalt {
   text: string;
 }
 
-export type VorlagenId = 'frei' | 'appell' | 'bewertung' | 'danke';
+export type VorlagenId =
+  | 'frei'
+  | 'appell-allgemein'
+  | 'appell-schicht'
+  | 'appell-verpflegung'
+  | 'bewertung'
+  | 'danke';
 
 export interface VorlagenBeschreibung {
   id: VorlagenId;
@@ -114,8 +120,16 @@ export const VORLAGEN: VorlagenBeschreibung[] = [
     text: ''
   },
   {
-    id: 'appell',
-    name: 'Aufruf: Wir brauchen noch Helfer',
+    id: 'appell-allgemein',
+    name: 'Aufruf: Allgemein',
+    zweck: 'Freier Aufruftext, ohne automatische Liste',
+    betreff: 'Wir brauchen deine Unterstützung',
+    text: 'wir haben ein Anliegen an dich, bei dem wir auf deine Hilfe hoffen.\n\n'
+      + 'Melde dich gerne, wenn du uns dabei unterstützen kannst.'
+  },
+  {
+    id: 'appell-schicht',
+    name: 'Aufruf: Schichten',
     zweck: 'Vor dem Turnier – verweist auf die offenen Schichten',
     betreff: 'Wir brauchen noch Helfer für das Turnier',
     text: 'wir sind fast fertig mit der Planung – aber ein paar Schichten sind noch offen.\n\n'
@@ -123,6 +137,15 @@ export const VORLAGEN: VorlagenBeschreibung[] = [
       + 'kannst dich mit zwei Klicks eintragen. Auch eine einzige Schicht hilft.\n\n'
       + 'Wenn du zeitlich nur teilweise kannst, trag ein Zeitangebot ein – wir schneiden '
       + 'die Schicht dann passend zu.'
+  },
+  {
+    id: 'appell-verpflegung',
+    name: 'Aufruf: Verpflegung',
+    zweck: 'Vor dem Turnier – verweist auf die offenen Verpflegungsspenden',
+    betreff: 'Wir brauchen noch Verpflegungsspenden',
+    text: 'für die Verpflegung während des Turniers fehlt uns noch einiges.\n\n'
+      + 'Unten siehst du, wo gerade am meisten fehlt – trag dich mit ein paar Klicks '
+      + 'in der App ein. Auch eine kleine Menge hilft schon.'
   },
   {
     id: 'bewertung',
@@ -170,7 +193,7 @@ export interface BewertungsSchicht {
   slot: string;
 }
 
-/** Eine Schicht, fuer die noch Leute fehlen - fuer den Helferaufruf. */
+/** Eine Schicht, fuer die noch Leute fehlen - fuer den Schichtappell. */
 export interface AufrufSchicht {
   shiftId: number;
   bereich: string;
@@ -179,6 +202,23 @@ export interface AufrufSchicht {
   wann: string;
   plaetze: number;
   besetzt: number;
+  offen: number;
+}
+
+/**
+ * Ein Verpflegungsposten, fuer den noch etwas fehlt - fuer den
+ * Verpflegungsappell. Bereits die fuer DIESEN Empfaenger ausgewaehlte Liste
+ * (siehe waehleFuerEmpfaenger in offeneVerpflegung.ts) - hier steht keine
+ * Auswahllogik mehr, nur noch Anzeige.
+ */
+export interface AufrufVerpflegungsPosten {
+  slotId: number;
+  jahrgang: string;
+  icon: string;
+  name: string;
+  beschreibung: string | null;
+  ziel: number;
+  gesammelt: number;
   offen: number;
 }
 
@@ -274,8 +314,10 @@ export function baueVorlage(
      * Die erste bekommt die Sternereihen, die weiteren je einen Link.
      */
     schichten?: BewertungsSchicht[] | null;
-    /** Die Schichten mit den groessten Luecken - fuer den Aufruf. */
+    /** Die Schichten mit den groessten Luecken - fuer den Schichtappell. */
     offeneSchichten?: AufrufSchicht[] | null;
+    /** Die Verpflegungsposten fuer DIESEN Empfaenger - fuer den Verpflegungsappell. */
+    offeneVerpflegung?: AufrufVerpflegungsPosten[] | null;
   },
   marke: Marke
 ): Mailinhalt {
@@ -290,7 +332,11 @@ export function baueVorlage(
   let aktion: { text: string; url: string } | null = null;
   const absaetze = [anrede, ...eingabe.text.split(/\n{2,}/).map(a => a.trim()).filter(Boolean)];
 
-  if (id === 'appell') {
+  // Der Aufmacher-Link traegt in allen drei Appelltypen dieselbe Turnier-ID -
+  // ein Helfer kann in mehreren Turnieren stehen, siehe Marke.turnierId.
+  const turnier = marke.turnierId ? `&turnier=${marke.turnierId}` : '';
+
+  if (id === 'appell-schicht') {
     /**
      * Die groessten Luecken stehen in der Mail, nicht nur ein Verweis.
      *
@@ -301,7 +347,6 @@ export function baueVorlage(
      * dort suchen muss.
      */
     const offen = eingabe.offeneSchichten ?? [];
-    const turnier = marke.turnierId ? `&turnier=${marke.turnierId}` : '';
     if (offen.length > 0) {
       inhalt += `<div style="font-size:14px;font-weight:700;color:#0f172a;margin:4px 0 8px;">`
         + `Hier fehlen gerade die meisten Leute:</div>`;
@@ -341,6 +386,45 @@ export function baueVorlage(
     absaetze.push(`Keine passende Schicht? Zeit anbieten: ${marke.appUrl}/?zeitangebot=1${turnier}`);
 
     aktion = { text: 'Alle offenen Schichten ansehen', url: `${marke.appUrl}/` };
+  }
+
+  if (id === 'appell-verpflegung') {
+    /**
+     * Dieselbe Idee wie beim Schichtappell, nur fuer Verpflegungsposten -
+     * und personalisiert: `eingabe.offeneVerpflegung` traegt bereits die fuer
+     * DIESEN Empfaenger ausgewaehlte Liste (siehe waehleFuerEmpfaenger in
+     * offeneVerpflegung.ts). Hat er ein eigenes Kind im Turnier, stehen hier
+     * die Posten von dessen Jahrgang - sonst die turnierweit groessten
+     * Luecken.
+     */
+    const posten = eingabe.offeneVerpflegung ?? [];
+    if (posten.length > 0) {
+      inhalt += `<div style="font-size:14px;font-weight:700;color:#0f172a;margin:4px 0 8px;">`
+        + `Hier fehlt gerade am meisten:</div>`;
+      inhalt += schichtListe(posten.map(p => ({
+        icon: p.icon,
+        bereich: p.beschreibung ? `${p.name} (${p.beschreibung})` : p.name,
+        // p.jahrgang ist bereits der volle Anzeigename (z.B. "Jahrgang 2016"
+        // oder "U10", je nach Verein) - kein zusaetzliches Praefix davor.
+        wann: p.jahrgang,
+        hinweis: p.offen === 1 ? 'noch 1 fehlt' : `noch ${p.offen} fehlen`,
+        url: `${marke.appUrl}/?verpflegung=${p.slotId}${turnier}`
+      })), marke.farbe, 'Spenden');
+
+      for (const p of posten) {
+        absaetze.push(`${p.name} (${p.jahrgang}) – ${p.gesammelt} von ${p.ziel}: `
+          + `${marke.appUrl}/?verpflegung=${p.slotId}${turnier}`);
+      }
+    }
+
+    aktion = { text: 'Alle Verpflegungsspenden ansehen', url: `${marke.appUrl}/?verpflegung=alle${turnier}` };
+  }
+
+  if (id === 'appell-allgemein') {
+    // Bewusst ohne automatische Liste - ein allgemeines Anliegen ist weder
+    // eine Schicht noch ein Verpflegungsposten, und eine erratene Liste waere
+    // hier falscher als gar keine.
+    aktion = { text: 'Zur App', url: `${marke.appUrl}/` };
   }
 
   const unbewertet = eingabe.schichten ?? [];

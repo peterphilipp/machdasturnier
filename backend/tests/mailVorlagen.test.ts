@@ -99,8 +99,8 @@ describe('baueVorlage', () => {
     expect(m.html).toContain('🏆');
   });
 
-  it('gibt dem Aufruf einen Knopf in die App', () => {
-    const m = baueVorlage('appell', basis, MARKE);
+  it('gibt dem Schichtappell einen Knopf in die App', () => {
+    const m = baueVorlage('appell-schicht', basis, MARKE);
     expect(m.html).toContain('Alle offenen Schichten ansehen');
     expect(m.html).toContain('https://beispiel.test/');
     expect(m.text).toContain('https://beispiel.test/');
@@ -108,10 +108,20 @@ describe('baueVorlage', () => {
 
   // Wer zu den genannten Zeiten nicht kann, soll nicht in einer Sackgasse
   // landen - eine Stunde ausserhalb des Rasters ist mehr als keine.
-  it('bietet im Aufruf immer auch den Weg über ein Zeitangebot an', () => {
-    const m = baueVorlage('appell', basis, MARKE);
+  it('bietet im Schichtappell immer auch den Weg über ein Zeitangebot an', () => {
+    const m = baueVorlage('appell-schicht', basis, MARKE);
     expect(m.html).toContain('https://beispiel.test/?zeitangebot=1');
     expect(m.text).toContain('https://beispiel.test/?zeitangebot=1');
+  });
+
+  // Der allgemeine Appell hat bewusst keine automatische Liste - weder
+  // Schichten noch Verpflegung passen dazu, und eine erratene Liste waere
+  // falscher als gar keine.
+  it('zeigt beim allgemeinen Appell keine Liste, nur den Weg in die App', () => {
+    const m = baueVorlage('appell-allgemein', basis, MARKE);
+    expect(m.html).toContain('Zur App');
+    expect(m.html).not.toContain('noch 1 Platz frei');
+    expect(m.html).not.toContain('fehlen');
   });
 
   it('führt bei der Bewertung ohne Schicht in die App', () => {
@@ -241,7 +251,7 @@ describe('Sterne in der Bewertungsmail', () => {
   });
 });
 
-describe('Helferaufruf mit offenen Schichten', () => {
+describe('Schichtappell', () => {
   const basis = { betreff: 'Wir brauchen noch Helfer', text: 'Ein paar Schichten sind offen.', anrede: 'Anja' };
   const offeneSchichten = [
     { shiftId: 12, bereich: 'Grillstand', icon: 'G', wann: 'Sa, 5. September, 14:00-16:00', plaetze: 5, besetzt: 1, offen: 4 },
@@ -249,7 +259,7 @@ describe('Helferaufruf mit offenen Schichten', () => {
   ];
 
   it('verlinkt jede Schicht einzeln in die App', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten }, MARKE);
     expect(m.html).toContain('https://beispiel.test/?schicht=12');
     expect(m.html).toContain('https://beispiel.test/?schicht=13');
     expect(m.text).toContain('https://beispiel.test/?schicht=12');
@@ -261,19 +271,19 @@ describe('Helferaufruf mit offenen Schichten', () => {
    * er geklickt hat.
    */
   it('nimmt das Turnier in die Links mit, wenn es bekannt ist', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten }, { ...MARKE, turnierId: 7 });
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten }, { ...MARKE, turnierId: 7 });
     expect(m.html).toContain('?schicht=12&amp;turnier=7');
     expect(m.text).toContain('?schicht=12&turnier=7');
     expect(m.text).toContain('?zeitangebot=1&turnier=7');
   });
 
   it('lässt den Turnierteil weg, wenn kein Turnier bekannt ist', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten }, MARKE);
     expect(m.html).not.toContain('turnier=');
   });
 
   it('nennt Bereich, Zeit und wie viele fehlen', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten }, MARKE);
     expect(m.html).toContain('Grillstand');
     expect(m.html).toContain('Sa, 5. September, 14:00-16:00');
     expect(m.html).toContain('noch 4 Plätze frei');
@@ -282,16 +292,70 @@ describe('Helferaufruf mit offenen Schichten', () => {
   });
 
   it('nennt im Text die Belegung, damit die Zahl nicht nur im HTML steht', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten }, MARKE);
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten }, MARKE);
     expect(m.text).toContain('1 von 5 besetzt');
   });
 
   // Ohne Luecken bleibt der Aufruf trotzdem sinnvoll: Der Weg ueber ein
   // Zeitangebot und der Knopf in die App stehen weiter da.
   it('kommt ohne offene Schichten klar', () => {
-    const m = baueVorlage('appell', { ...basis, offeneSchichten: [] }, MARKE);
+    const m = baueVorlage('appell-schicht', { ...basis, offeneSchichten: [] }, MARKE);
     expect(m.html).not.toContain('Hier fehlen gerade die meisten Leute');
     expect(m.html).toContain('?zeitangebot=1');
+  });
+});
+
+describe('Verpflegungsappell', () => {
+  const basis = { betreff: 'Wir brauchen noch Verpflegungsspenden', text: 'Es fehlt noch einiges.', anrede: 'Anja' };
+  const offeneVerpflegung = [
+    { slotId: 21, jahrgang: '2014', icon: '🍰', name: 'Kuchen', beschreibung: null, ziel: 10, gesammelt: 2, offen: 8 },
+    { slotId: 22, jahrgang: '2016', icon: '🥤', name: 'Getränke', beschreibung: 'bitte alkoholfrei', ziel: 20, gesammelt: 19, offen: 1 }
+  ];
+
+  it('verlinkt jeden Posten einzeln in die App', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, MARKE);
+    expect(m.html).toContain('https://beispiel.test/?verpflegung=21');
+    expect(m.html).toContain('https://beispiel.test/?verpflegung=22');
+    expect(m.text).toContain('https://beispiel.test/?verpflegung=21');
+  });
+
+  it('nennt Artikel, Jahrgang, Beschreibung und wie viel fehlt', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, MARKE);
+    expect(m.html).toContain('Kuchen');
+    expect(m.html).toContain('2014');
+    expect(m.html).toContain('Getränke (bitte alkoholfrei)');
+    expect(m.html).toContain('noch 8 fehlen');
+    // Einer im Singular - "noch 1 fehlen" liest sich wie ein Fehler.
+    expect(m.html).toContain('noch 1 fehlt');
+  });
+
+  // "jahrgang" ist bereits der volle Anzeigename - ein Verein, der seine
+  // Jahrgaenge "2014" nennt (nicht "Jahrgang 2014"), darf kein doppeltes
+  // "Jahrgang Jahrgang 2014" bekommen.
+  it('setzt kein zusätzliches "Jahrgang"-Präfix vor den Anzeigenamen', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, MARKE);
+    expect(m.html).not.toContain('Jahrgang 2014');
+    expect(m.html).not.toContain('Jahrgang Jahrgang');
+  });
+
+  it('nennt im Text den Sammelstand, damit die Zahl nicht nur im HTML steht', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, MARKE);
+    expect(m.text).toContain('2 von 10');
+  });
+
+  it('führt den Aufmacher-Knopf auf die Verpflegungsübersicht', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, MARKE);
+    expect(m.html).toContain('https://beispiel.test/?verpflegung=alle');
+  });
+
+  it('nimmt das Turnier in die Links mit, wenn es bekannt ist', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung }, { ...MARKE, turnierId: 7 });
+    expect(m.html).toContain('?verpflegung=21&amp;turnier=7');
+  });
+
+  it('kommt ohne offene Posten klar', () => {
+    const m = baueVorlage('appell-verpflegung', { ...basis, offeneVerpflegung: [] }, MARKE);
+    expect(m.html).not.toContain('Hier fehlt gerade am meisten');
   });
 });
 
@@ -425,7 +489,9 @@ describe('Kennzeichnung der Testumgebung', () => {
   // Die Kennzeichnung sitzt im Layout, nicht in den Vorlagen - also muss sie
   // fuer jede einzelne gelten, auch fuer kuenftige.
   it('kennzeichnet jede Vorlage', () => {
-    for (const id of ['frei', 'appell', 'bewertung', 'danke'] as const) {
+    for (const id of [
+      'frei', 'appell-allgemein', 'appell-schicht', 'appell-verpflegung', 'bewertung', 'danke'
+    ] as const) {
       const m = baueVorlage(id, { ...basis, zahlen: { beteiligte:1, stunden:1, schichten:1, spenden:1 } }, test);
       expect(m.betreff).toMatch(/^\[TEST\] /);
       expect(m.html).toContain('TESTUMGEBUNG');
@@ -435,8 +501,10 @@ describe('Kennzeichnung der Testumgebung', () => {
 });
 
 describe('VORLAGEN', () => {
-  it('bietet die vier vorgesehenen Vorlagen an', () => {
-    expect(VORLAGEN.map(v => v.id)).toEqual(['frei', 'appell', 'bewertung', 'danke']);
+  it('bietet die sechs vorgesehenen Vorlagen an', () => {
+    expect(VORLAGEN.map(v => v.id)).toEqual([
+      'frei', 'appell-allgemein', 'appell-schicht', 'appell-verpflegung', 'bewertung', 'danke'
+    ]);
   });
 
   it('hat für jede Vorlage außer der freien eine Vorbelegung', () => {

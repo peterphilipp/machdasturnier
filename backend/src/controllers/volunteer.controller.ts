@@ -108,7 +108,9 @@ export const broadcastPushSchema = z.object({
    * bekommt - deshalb mindestens einer.
    */
   kanaele: z.array(z.enum(['push', 'mail'])).min(1, 'Mindestens ein Kanal').optional(),
-  vorlage: z.enum(['frei', 'appell', 'bewertung', 'danke']).optional(),
+  vorlage: z.enum([
+    'frei', 'appell-allgemein', 'appell-schicht', 'appell-verpflegung', 'bewertung', 'danke'
+  ]).optional(),
   /**
    * Nur an das eigene Konto schicken - zum Ansehen, bevor es an alle geht.
    * Ohne diesen Weg ist der erste echte Test immer ein Rundschreiben.
@@ -390,7 +392,13 @@ export const broadcastPush = async (req: Request, res: Response) => {
       vorlage,
       // Das Turnier wird mitgegeben, weil die Bewertungsvorlage je Empfaenger
       // die zu bewertende Schicht braucht - siehe mailVersand.ts.
-      { betreff: title, text: body, zahlen, tournamentId: tournamentId ? Number(tournamentId) : null },
+      {
+        betreff: title,
+        text: body,
+        zahlen,
+        tournamentId: tournamentId ? Number(tournamentId) : null,
+        istTestversand: !!req.body.nurAnMich
+      },
       marke
     );
     mailErgebnis.ohneAdresse = kandidaten.length - mitAdresse.length;

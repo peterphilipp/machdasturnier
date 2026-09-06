@@ -39,6 +39,10 @@ export default function DashboardView() {
   const { volunteer, token, isLoggedIn, login } = useUser();
   const { clubPrimary, clubSecondary, clubAccent, fetchClubColors, setAvailableTournaments, selectedTournamentId, setSelectedTournamentId, setTournamentName } = useOutletContext<LayoutContext>();
   const queryClient = useQueryClient();
+  // Weiter oben deklariert als die uebrigen Deep-Link-Effekte weiter unten,
+  // damit der allererste Ladeaufruf (naechster Abschnitt) sie schon lesen
+  // kann - siehe dort, warum das den Wettlauf mit dem Standardturnier vermeidet.
+  const [suchParameter, setzeSuchParameter] = useSearchParams();
 
   const currentLoadedTournamentId = useRef<number | null>(null);
 
@@ -57,6 +61,28 @@ export default function DashboardView() {
   const [foodCategories, setFoodCategories] = useState<FoodCategory[]>([]);
   const [myDonations, setMyDonations] = useState<FoodDonation[]>([]);
   const [foodDonationSlots, setFoodDonationSlots] = useState<FoodDonationSlot[]>([]);
+  /**
+   * Alle Verpflegungsposten des Turniers, ungefiltert - fuer den Link aus dem
+   * Verpflegungsappell.
+   *
+   * `foodDonationSlots` zeigt nur, was zu den eigenen Kindern passt; ein
+   * Appell kann aber auch auf einen Posten eines fremden Jahrgangs verlinken
+   * (Fallback fuer Empfaenger ohne eigenes Kind im Turnier). Ohne diese
+   * zweite, ungefilterte Liste liesse sich so ein Link nicht von "gibt es
+   * nicht mehr" unterscheiden.
+   */
+  const [alleFoodDonationSlots, setAlleFoodDonationSlots] = useState<FoodDonationSlot[]>([]);
+  /**
+   * Zaehlt hoch, sobald loadFood() fuer ein Turnier fertig geladen hat.
+   *
+   * Der Verpflegungs-Deep-Link braucht ein verlaessliches "jetzt sind die
+   * Daten frisch" - ein einfaches Bool-Flag reicht nicht: Es koennte schon
+   * von einem frueheren Tab-Besuch (anderes Turnier) auf true stehen, obwohl
+   * der gerade angestossene Ladevorgang noch unterwegs ist. Mit einer
+   * Generation laesst sich "neuer als beim Anfordern" pruefen statt nur
+   * "schon mal geladen".
+   */
+  const [verpflegungLadeGeneration, setVerpflegungLadeGeneration] = useState(0);
   const [donationFoodId, setDonationFoodId] = useState(0);
   const [donationQuantity, setDonationQuantity] = useState('');
   const [donationNote, setDonationNote] = useState('');
@@ -193,6 +219,8 @@ export default function DashboardView() {
           return false;
         });
         setFoodDonationSlots(relevantSlots);
+        setAlleFoodDonationSlots(allSlots);
+        setVerpflegungLadeGeneration(g => g + 1);
       }
     } catch (e) {
       console.error(e);
@@ -272,7 +300,21 @@ export default function DashboardView() {
   };
 
   useEffect(() => {
-    loadAvailable();
+    /**
+     * Ein Turnier aus einem Mail-Link zaehlt schon beim allerersten Laden,
+     * nicht erst danach.
+     *
+     * Ohne das laufen zwei Anfragen gegeneinander: diese hier laedt das
+     * Standardturnier, eine zweite (ausgeloest durch den Deep-Link weiter
+     * unten) laedt das verlinkte. `applyAvailableData` setzt
+     * `selectedTournamentId` auf das Turnier der zuletzt EINGETROFFENEN
+     * Antwort - je nachdem, welche Anfrage zuerst durch ist, gewinnt das
+     * falsche Turnier, und der Link aus der Mail landet in der Liste des
+     * Standardturniers. Mit dem Parameter direkt in der ersten Anfrage gibt
+     * es diesen Wettlauf gar nicht erst.
+     */
+    const turnierAusLink = Number(suchParameter.get('turnier'));
+    loadAvailable(Number.isFinite(turnierAusLink) && turnierAusLink > 0 ? turnierAusLink : undefined);
     const interval = setInterval(loadAvailable, 60000);
     const onVisible = () => { if (document.visibilityState === 'visible') loadAvailable(); };
     document.addEventListener('visibilitychange', onVisible);
@@ -492,11 +534,13 @@ export default function DashboardView() {
    * Woche wuerde die verlinkte Schicht ausblenden, und dann fuehrt ein Link
    * aus der Mail auf eine leere Liste.
    */
-  const [suchParameter, setzeSuchParameter] = useSearchParams();
   const [hervorgehobeneSchicht, setHervorgehobeneSchicht] = useState<number | null>(null);
   const [deepLinkHinweis, setDeepLinkHinweis] = useState<string | null>(null);
   const [deepLinkZiel, setDeepLinkZiel] = useState<{ schichtId: number; turnierId: number | null } | null>(null);
   const [zeitangebotAusLink, setZeitangebotAusLink] = useState(false);
+  /** `slotId === null` heisst "nur den Reiter oeffnen" (?verpflegung=alle). */
+  const [verpflegungZiel, setVerpflegungZiel] = useState<{ slotId: number | null; turnierId: number | null } | null>(null);
+  const [hervorgehobenerPosten, setHervorgehobenerPosten] = useState<number | null>(null);
   const deepLinkGelesen = useRef(false);
 
   // Schritt 1: Die Parameter einmal lesen und aus der Adresse entfernen.
@@ -504,7 +548,8 @@ export default function DashboardView() {
     if (deepLinkGelesen.current) return;
     const zeitangebot = suchParameter.get('zeitangebot');
     const schichtParam = suchParameter.get('schicht');
-    if (!zeitangebot && !schichtParam) return;
+    const verpflegungParam = suchParameter.get('verpflegung');
+    if (!zeitangebot && !schichtParam && !verpflegungParam) return;
     deepLinkGelesen.current = true;
 
     const turnierParam = Number(suchParameter.get('turnier'));
@@ -531,11 +576,83 @@ export default function DashboardView() {
     }
     if (zeitangebot) setZeitangebotAusLink(true);
 
+    if (verpflegungParam) {
+      const slotId = Number(verpflegungParam);
+      setVerpflegungZiel({ slotId: Number.isFinite(slotId) && slotId > 0 ? slotId : null, turnierId });
+      setActiveSection('verpflegung');
+      // loadFood() passiert NICHT hier, sondern erst im naechsten Effekt,
+      // sobald `tournament` wirklich das gewuenschte Turnier zeigt - sonst
+      // laedt loadFood() ueber `selectedTournamentId` versehentlich noch das
+      // alte Turnier (der State-Wechsel oben ist zu diesem Zeitpunkt noch
+      // nicht wirksam).
+    }
+
     // Die Parameter wieder entfernen: Sonst springt ein spaeteres Neuladen der
     // Seite erneut dorthin, und der Link bleibt in der Adressleiste stehen,
     // obwohl er schon abgearbeitet ist.
     setzeSuchParameter(new URLSearchParams(), { replace: true });
   }, [suchParameter, setzeSuchParameter, selectedTournamentId, setSelectedTournamentId]);
+
+  /**
+   * Schritt 2b: loadFood() anstossen und zum Verpflegungsposten springen,
+   * sobald es fertig ist.
+   *
+   * Der Anstoss selbst passiert erst hier, nicht schon in Schritt 1: Dort war
+   * der Turnierwechsel gerade erst angestossen, aber noch nicht wirksam - ein
+   * loadFood() an dieser Stelle haette ueber `selectedTournamentId` noch das
+   * alte Turnier geladen. Erst wenn `tournament` das Ziel zeigt, ist der
+   * Wechsel durch.
+   *
+   * `verpflegungLadeGeneration` sorgt dafuer, dass danach wirklich auf die
+   * FRISCHEN Daten gewartet wird und nicht auf einen Ladevorgang von einem
+   * frueheren Tab-Besuch (anderes Turnier).
+   *
+   * Danach drei Faelle, weil `foodDonationSlots` nur die zu den eigenen
+   * Kindern passenden Posten zeigt (siehe loadFood):
+   *  - Der Posten passt zu einem eigenen Kind -> dort steht er, hervorheben.
+   *  - Er passt zu keinem eigenen Kind, ist aber noch offen -> er gehoert zu
+   *    einem fremden Jahrgang; das ist der Fall, in dem die Mail auf die
+   *    turnierweit groessten Luecken zurueckgefallen ist. Zur freien Spende
+   *    springen und den Artikel schon vorauswaehlen, statt zu behaupten, es
+   *    gaebe hier nichts.
+   *  - Er existiert gar nicht mehr oder ist schon gedeckt -> das sagen, statt
+   *    stillschweigend nirgendwo hinzuspringen.
+   */
+  const verpflegungAngefordertBei = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!verpflegungZiel) return;
+    if (verpflegungZiel.turnierId && tournament?.id !== verpflegungZiel.turnierId) return;
+
+    if (verpflegungAngefordertBei.current == null) {
+      verpflegungAngefordertBei.current = verpflegungLadeGeneration;
+      loadFood();
+      return;
+    }
+    if (verpflegungLadeGeneration <= verpflegungAngefordertBei.current) return;
+
+    const { slotId } = verpflegungZiel;
+    setVerpflegungZiel(null);
+    verpflegungAngefordertBei.current = null;
+    if (slotId == null) return; // "?verpflegung=alle" - nur der Reiter, kein Sprungziel.
+
+    if (foodDonationSlots.some(s => s.id === slotId)) {
+      setHervorgehobenerPosten(slotId);
+      return;
+    }
+    const anderswo = alleFoodDonationSlots.find(s => s.id === slotId);
+    if (!anderswo) {
+      setDeepLinkHinweis('Diesen Verpflegungsposten gibt es nicht mehr.');
+    } else if (anderswo.targetQuantity > 0 && anderswo.collected >= anderswo.targetQuantity) {
+      setDeepLinkHinweis(`${anderswo.foodItem?.name || 'Dieser Posten'} ist inzwischen komplett gedeckt – danke an alle, die schon gespendet haben!`);
+    } else {
+      setDeepLinkHinweis(`${anderswo.foodItem?.name || 'Dieser Posten'} betrifft einen anderen Jahrgang als deine eigenen Kinder – du kannst trotzdem unten spenden.`);
+      if (anderswo.foodItemId) setDonationFoodId(anderswo.foodItemId);
+      setTimeout(() => {
+        document.getElementById('verpflegung-frei')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }, 150);
+    }
+  }, [verpflegungZiel, verpflegungLadeGeneration, tournament?.id, foodDonationSlots, alleFoodDonationSlots]);
 
   /**
    * Schritt 2: Springen, sobald die Daten des richtigen Turniers geladen sind.
@@ -601,6 +718,17 @@ export default function DashboardView() {
     zeitgeber.push(setTimeout(() => setHervorgehobeneSchicht(null), 10000));
     return () => zeitgeber.forEach(clearTimeout);
   }, [hervorgehobeneSchicht]);
+
+  // Dasselbe fuer einen Verpflegungsposten - siehe die Begruendung oben.
+  useEffect(() => {
+    if (hervorgehobenerPosten == null) return;
+    const zeitgeber = [150, 700, 1500].map(ms => setTimeout(() => {
+      document.getElementById(`verpflegung-${hervorgehobenerPosten}`)
+        ?.scrollIntoView({ behavior: 'auto', block: 'center' });
+    }, ms));
+    zeitgeber.push(setTimeout(() => setHervorgehobenerPosten(null), 10000));
+    return () => zeitgeber.forEach(clearTimeout);
+  }, [hervorgehobenerPosten]);
 
   const sendeAngebot = async () => {
     if (!selectedTournamentId || busy) return;
@@ -934,6 +1062,22 @@ export default function DashboardView() {
       </div>
 
       <div className="dashboard-content">
+        {/* Wenn ein Link aus einer Aufruf-Mail ins Leere fuehrt (Schicht oder
+            Verpflegungsposten), muss das dastehen, egal welcher Reiter gerade
+            offen ist - eine Liste ohne das erwartete Ziel sieht sonst nach
+            Fehler aus. */}
+        {deepLinkHinweis && (
+          <div className="dashboard-deeplink-hinweis">
+            {deepLinkHinweis}
+            <button
+              type="button"
+              className="dashboard-deeplink-hinweis-schliessen"
+              onClick={() => setDeepLinkHinweis(null)}
+              aria-label="Hinweis schließen"
+            >✕</button>
+          </div>
+        )}
+
         {activeSection === 'jobs' && (
           <>
             {/* Konnte der Dienstplan nicht geladen werden, darf hier NICHT
@@ -1110,20 +1254,6 @@ export default function DashboardView() {
               </div>
 
             <h3 style={{ margin: '0 0 16px', fontSize: 16, color: clubPrimary }}>Offene Jobs</h3>
-
-            {/* Wenn der Link aus der Mail ins Leere fuehrt, muss das dastehen -
-                eine Liste ohne die erwartete Schicht sieht sonst nach Fehler aus. */}
-            {deepLinkHinweis && (
-              <div className="dashboard-deeplink-hinweis">
-                {deepLinkHinweis}
-                <button
-                  type="button"
-                  className="dashboard-deeplink-hinweis-schliessen"
-                  onClick={() => setDeepLinkHinweis(null)}
-                  aria-label="Hinweis schließen"
-                >✕</button>
-              </div>
-            )}
 
             {/* Available Shifts */}
             {filteredShifts.length > 0 ? (
@@ -1397,7 +1527,14 @@ export default function DashboardView() {
                           const isDone = remaining <= 0;
                           
                           return (
-                            <div key={slot.id} className="dashboard-shift-card" style={{ borderLeft: `6px solid ${isDone ? '#198754' : clubAccent}` }}>
+                            <div
+                              key={slot.id}
+                              /* Die id traegt der Link aus dem Verpflegungsappell an
+                                 (?verpflegung=<id>) - siehe den Deep-Link-Effekt oben. */
+                              id={`verpflegung-${slot.id}`}
+                              className={`dashboard-shift-card${hervorgehobenerPosten === slot.id ? ' dashboard-shift-card--hervorgehoben' : ''}`}
+                              style={{ borderLeft: `6px solid ${isDone ? '#198754' : clubAccent}` }}
+                            >
                               <div className="dashboard-shift-card-inner">
                                 <div className="dashboard-shift-title">
                                   <span>{slot.foodItem?.icon || '🍔'}</span> <span>{slot.foodItem?.name || '-'}</span>
@@ -1440,7 +1577,12 @@ export default function DashboardView() {
 
             {/* Zusätzliche Verpflegung */}
             {(!tournament || tournament.status === 'aktiv') && (
-              <div style={{ background: '#fff', border: `2px solid ${clubPrimary}`, borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}>
+              <div
+                /* Sprungziel fuer einen Verpflegungsappell-Link, der zu keinem
+                   eigenen Kind passt - siehe den Deep-Link-Effekt oben. */
+                id="verpflegung-frei"
+                style={{ background: '#fff', border: `2px solid ${clubPrimary}`, borderRadius: 16, padding: 20, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
+              >
                 <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: '600', color: clubPrimary }}>Zusätzliche Verpflegungsspenden</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <select value={donationFoodId} onChange={e => setDonationFoodId(parseInt(e.target.value, 10))} style={{ padding: '12px 14px', border: '2px solid #e9ecef', borderRadius: 10, fontSize: 15, outline: 'none', background: '#fff', boxSizing: 'border-box' }}>

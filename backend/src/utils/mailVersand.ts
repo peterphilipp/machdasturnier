@@ -3,10 +3,12 @@ import prisma from '../config/prisma.js';
 import { resolveEmailFrom, resolveFrontendUrl } from './mailAbsender.js';
 import { ermittleUmgebung } from './umgebung.js';
 import {
-  baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht, AufrufSchicht
+  baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht, AufrufSchicht,
+  AufrufVerpflegungsPosten
 } from './mailVorlagen.js';
 import { baueBewertungsToken } from './bewertungsLink.js';
 import { ermittleOffeneSchichten } from './offeneSchichten.js';
+import { ermittleOffeneVerpflegung, waehleFuerEmpfaenger } from './offeneVerpflegung.js';
 
 /**
  * Der eigentliche Mailversand an eine Gruppe.
@@ -125,7 +127,7 @@ const DATUM_KURZ = new Intl.DateTimeFormat('de-DE', {
   weekday: 'short', day: 'numeric', month: 'long', timeZone: 'Europe/Berlin'
 });
 
-/** Die groessten Luecken, aufbereitet fuer den Helferaufruf. */
+/** Die groessten Luecken, aufbereitet fuer den Schichtappell. */
 async function ermittleAufrufSchichten(tournamentId: number | null): Promise<AufrufSchicht[]> {
   if (!tournamentId) return [];
   const offen = await ermittleOffeneSchichten(tournamentId);
@@ -139,6 +141,61 @@ async function ermittleAufrufSchichten(tournamentId: number | null): Promise<Auf
     besetzt: s.besetzt,
     offen: s.offen
   }));
+}
+
+/**
+ * Die Verpflegungsposten je Empfaenger, fuer den Verpflegungsappell.
+ *
+ * Personalisiert: Hat der Empfaenger ein eigenes Kind im Turnier, sieht er
+ * die Posten von dessen Jahrgang - sonst die turnierweit groessten Luecken.
+ * Die eigentliche Auswahl steckt in der reinen Funktion
+ * `waehleFuerEmpfaenger` (offeneVerpflegung.ts); hier steht nur, WAS dafuer
+ * aus der Datenbank kommt: die Kinder je Empfaenger und die Jahrgaenge dieses
+ * Turniers.
+ */
+async function ermittleVerpflegungListen(
+  tournamentId: number | null,
+  userIds: number[]
+): Promise<Map<number, AufrufVerpflegungsPosten[]>> {
+  const ergebnis = new Map<number, AufrufVerpflegungsPosten[]>();
+  if (!tournamentId || userIds.length === 0) return ergebnis;
+
+  const [alleOffenen, kinder, turnier] = await Promise.all([
+    ermittleOffeneVerpflegung(tournamentId),
+    prisma.userChild.findMany({
+      where: { userId: { in: userIds } },
+      select: { userId: true, childYear: true }
+    }),
+    prisma.tournament.findUnique({
+      where: { id: tournamentId },
+      select: { yearGroups: { select: { id: true, birthYearStart: true, birthYearEnd: true } } }
+    })
+  ]);
+
+  const jahrgaenge = turnier?.yearGroups ?? [];
+  const kinderJeUser = new Map<number, number[]>();
+  for (const k of kinder) {
+    if (k.userId == null) continue;
+    const jahre = kinderJeUser.get(k.userId) ?? [];
+    jahre.push(k.childYear);
+    kinderJeUser.set(k.userId, jahre);
+  }
+
+  for (const uid of userIds) {
+    const ausgewaehlt = waehleFuerEmpfaenger(alleOffenen, kinderJeUser.get(uid) ?? [], jahrgaenge);
+    ergebnis.set(uid, ausgewaehlt.map(p => ({
+      slotId: p.slotId,
+      jahrgang: p.jahrgang,
+      icon: p.icon,
+      name: p.name,
+      beschreibung: p.beschreibung,
+      ziel: p.ziel,
+      gesammelt: p.gesammelt,
+      offen: p.offen
+    })));
+  }
+
+  return ergebnis;
 }
 
 export interface VersandErgebnis {
@@ -170,7 +227,25 @@ export interface VersandErgebnis {
 export async function versendeMails(
   empfaenger: VersandEmpfaenger[],
   vorlage: VorlagenId,
-  eingabe: { betreff: string; text: string; zahlen?: DankeZahlen | null; tournamentId?: number | null },
+  eingabe: {
+    betreff: string;
+    text: string;
+    zahlen?: DankeZahlen | null;
+    tournamentId?: number | null;
+    /**
+     * Testversand an sich selbst - die Sperre "nur an noch nicht Bewertete"
+     * gilt hier NICHT.
+     *
+     * Sonst liesse sich die Bewertungsmail nicht mehr ansehen, sobald man sie
+     * einmal fuer die eigene Schicht abgeschlossen hat: Jeder Testversand
+     * wuerde sich selbst uebersprungen sehen, und eine Vorschau waere gar
+     * nicht mehr moeglich. Gibt es fuer die eigene Person keine offene
+     * Schicht, faellt die Vorlage auf den Platzhaltertext zurueck (siehe
+     * mailVorlagen.ts) - das ist fuer einen Test kein Fehler, nur kein
+     * Beispiel mit echten Sternen.
+     */
+    istTestversand?: boolean;
+  },
   marke: Marke
 ): Promise<VersandErgebnis> {
   const schluessel = process.env.RESEND_API_KEY;
@@ -191,9 +266,12 @@ export async function versendeMails(
   const schichten = vorlage === 'bewertung' || vorlage === 'danke'
     ? await ermittleBewertungsSchichten(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
     : new Map<number, BewertungsSchicht[]>();
-  const offeneSchichten = vorlage === 'appell'
+  const offeneSchichten = vorlage === 'appell-schicht'
     ? await ermittleAufrufSchichten(eingabe.tournamentId ?? null)
     : [];
+  const verpflegungListen = vorlage === 'appell-verpflegung'
+    ? await ermittleVerpflegungListen(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
+    : new Map<number, AufrufVerpflegungsPosten[]>();
 
   const resend = new Resend(schluessel);
   const from = resolveEmailFrom();
@@ -216,7 +294,7 @@ export async function versendeMails(
      * wird auch dem, der schon bewertet hat. Dort entfaellt nur der
      * Bewertungsteil.
      */
-    if (vorlage === 'bewertung' && unbewertet.length === 0) {
+    if (vorlage === 'bewertung' && unbewertet.length === 0 && !eingabe.istTestversand) {
       ohneOffeneBewertung++;
       continue;
     }
@@ -229,7 +307,8 @@ export async function versendeMails(
       anrede: e.name.trim().split(/\s+/)[0] || e.name,
       zahlen: eingabe.zahlen ?? null,
       schichten: unbewertet,
-      offeneSchichten
+      offeneSchichten,
+      offeneVerpflegung: verpflegungListen.get(e.id) ?? []
     }, marke);
 
     try {

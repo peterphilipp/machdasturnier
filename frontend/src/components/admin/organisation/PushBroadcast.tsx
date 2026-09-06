@@ -5,7 +5,7 @@ import { Shift, VolunteerShift, minToTime, inputStyle, btnStyle } from '../share
 import { modal } from '../Modal';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 
-type VorlagenId = 'frei' | 'appell' | 'bewertung' | 'danke';
+type VorlagenId = 'frei' | 'appell-allgemein' | 'appell-schicht' | 'appell-verpflegung' | 'bewertung' | 'danke';
 
 /** Kommt fertig vom Server - siehe backend/src/utils/mailVorlagen.ts. */
 interface Vorlage {
@@ -279,9 +279,22 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
             )}
             {vorlage === 'bewertung' && (
               <div className="nachricht-hinweis">
-                Der Knopf in der Mail führt in die App. Direkt in der Mail zu bewerten würde einen
-                Link brauchen, der für sich schon berechtigt, im Namen dieser Person zu antworten –
-                das wäre eine eigene Entscheidung.
+                Die drei Fragen stehen direkt in der Mail. Geht nur an Empfänger, bei denen noch
+                mindestens eine Schicht unbewertet ist – wer schon geantwortet hat, wird
+                übersprungen.
+              </div>
+            )}
+            {vorlage === 'appell-schicht' && (
+              <div className="nachricht-hinweis">
+                Die fünf Schichten mit den größten Lücken werden automatisch in die Mail
+                aufgenommen, jede mit Link direkt zur Schicht in der App.
+              </div>
+            )}
+            {vorlage === 'appell-verpflegung' && (
+              <div className="nachricht-hinweis">
+                Die Liste der fehlenden Verpflegungsposten wird automatisch eingefügt – jeder
+                Empfänger sieht bevorzugt den Jahrgang seines eigenen Kindes, sonst die turnierweit
+                größten Lücken.
               </div>
             )}
           </div>
