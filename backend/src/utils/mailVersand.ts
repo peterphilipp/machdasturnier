@@ -198,6 +198,32 @@ async function ermittleVerpflegungListen(
   return ergebnis;
 }
 
+/**
+ * Fuehrt eine der Sammel-Abfragen aus und faengt einen Fehlschlag ab.
+ *
+ * `laden` ist `null`, wenn diese Vorlage die Abfrage gar nicht braucht - dann
+ * direkt der Leerwert, ohne zu loggen (das waere kein Fehler, sondern der
+ * Normalfall fuer drei von vier Vorlagen).
+ */
+async function ladeSicher<T>(
+  laden: (() => Promise<T>) | null,
+  leerwert: T,
+  name: string
+): Promise<T> {
+  if (!laden) return leerwert;
+  try {
+    return await laden();
+  } catch (err) {
+    console.error(JSON.stringify({
+      event: 'MAIL_VORBEREITUNG_FEHLGESCHLAGEN',
+      funktion: name,
+      error: (err as Error).message,
+      timestamp: new Date().toISOString()
+    }));
+    return leerwert;
+  }
+}
+
 export interface VersandErgebnis {
   gesendet: number;
   fehlgeschlagen: number;
@@ -260,18 +286,35 @@ export async function versendeMails(
    * Was diese Vorlage an Daten braucht - einmal fuer alle, nicht je Mail.
    *
    * Die Bewertungs- und die Dankesvorlage brauchen die unbewerteten Schichten
-   * je Person, der Aufruf die groessten Luecken des Turniers. Eine Abfrage,
-   * die eine Vorlage nicht braucht, laeuft nicht.
+   * je Person, der Schichtappell die groessten Luecken des Turniers, der
+   * Verpflegungsappell die Listen je Empfaenger. Eine Abfrage, die eine
+   * Vorlage nicht braucht, laeuft nicht.
+   *
+   * Jede einzeln abgesichert: Scheitert eine dieser Abfragen (z.B. weil die
+   * Datenbank kurz nicht erreichbar war), soll das nicht den kompletten
+   * Versand verhindern - eine Bewertungsmail ohne die personalisierte Liste
+   * waere zwar unvollstaendiger als gedacht, aber immer noch besser als eine
+   * Mail, die bei niemandem ankommt.
    */
-  const schichten = vorlage === 'bewertung' || vorlage === 'danke'
-    ? await ermittleBewertungsSchichten(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
-    : new Map<number, BewertungsSchicht[]>();
-  const offeneSchichten = vorlage === 'appell-schicht'
-    ? await ermittleAufrufSchichten(eingabe.tournamentId ?? null)
-    : [];
-  const verpflegungListen = vorlage === 'appell-verpflegung'
-    ? await ermittleVerpflegungListen(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
-    : new Map<number, AufrufVerpflegungsPosten[]>();
+  const schichten = await ladeSicher(
+    vorlage === 'bewertung' || vorlage === 'danke'
+      ? () => ermittleBewertungsSchichten(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
+      : null,
+    new Map<number, BewertungsSchicht[]>(),
+    'ermittleBewertungsSchichten'
+  );
+  const offeneSchichten = await ladeSicher(
+    vorlage === 'appell-schicht' ? () => ermittleAufrufSchichten(eingabe.tournamentId ?? null) : null,
+    [] as AufrufSchicht[],
+    'ermittleAufrufSchichten'
+  );
+  const verpflegungListen = await ladeSicher(
+    vorlage === 'appell-verpflegung'
+      ? () => ermittleVerpflegungListen(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
+      : null,
+    new Map<number, AufrufVerpflegungsPosten[]>(),
+    'ermittleVerpflegungListen'
+  );
 
   const resend = new Resend(schluessel);
   const from = resolveEmailFrom();
@@ -299,19 +342,30 @@ export async function versendeMails(
       continue;
     }
 
-    const mail = baueVorlage(vorlage, {
-      betreff: eingabe.betreff,
-      text: eingabe.text,
-      // Nur der Vorname: "Hallo Anja" liest sich wie von einem Menschen,
-      // "Hallo Anja Petersen" wie von einem Serienbrief.
-      anrede: e.name.trim().split(/\s+/)[0] || e.name,
-      zahlen: eingabe.zahlen ?? null,
-      schichten: unbewertet,
-      offeneSchichten,
-      offeneVerpflegung: verpflegungListen.get(e.id) ?? []
-    }, marke);
-
     try {
+      /**
+       * Der Bau der Mail steht MIT im try-Block, nicht davor.
+       *
+       * Stand er davor (wie frueher), riss ein einziger fehlerhafter
+       * Datensatz - eine Schicht ohne Bereich, ein Empfaenger mit
+       * ungewoehnlichen Daten - den gesamten Versand ab: Die Ausnahme flog
+       * unbehandelt aus dem Schleifenkoerper, `versendeMails` brach ab, und
+       * NIEMAND bekam eine Mail, nicht einmal die Empfaenger vor der
+       * fehlerhaften Stelle. Mit dem Bau im try-Block scheitert nur diese
+       * eine Mail - der Rest der Zielgruppe wird trotzdem erreicht.
+       */
+      const mail = baueVorlage(vorlage, {
+        betreff: eingabe.betreff,
+        text: eingabe.text,
+        // Nur der Vorname: "Hallo Anja" liest sich wie von einem Menschen,
+        // "Hallo Anja Petersen" wie von einem Serienbrief.
+        anrede: e.name.trim().split(/\s+/)[0] || e.name,
+        zahlen: eingabe.zahlen ?? null,
+        schichten: unbewertet,
+        offeneSchichten,
+        offeneVerpflegung: verpflegungListen.get(e.id) ?? []
+      }, marke);
+
       const antwort = await resend.emails.send({
         from,
         to: e.email,
