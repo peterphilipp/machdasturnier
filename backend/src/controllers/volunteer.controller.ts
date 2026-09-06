@@ -10,7 +10,49 @@ import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
 import { describeUserAgent } from '../utils/userAgent.js';
 import { normalizeRoles, highestRole } from '../utils/roles.js';
 import { setUserRoles, getUserRoles } from '../utils/userRoles.js';
+import { ermittleMarke, versendeMails } from '../utils/mailVersand.js';
+import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
+import { VORLAGEN } from '../utils/mailVorlagen.js';
+import type { DankeZahlen } from '../utils/mailVorlagen.js';
+
 import { sanitizeChildrenInput } from '../utils/sanitizeChildren.js';
+
+/**
+ * Die Zahlen fuer die Dankesmail.
+ *
+ * Bewusst aus berechneTurnierStatistik() und nicht hier nachgerechnet: Die
+ * Mail soll dieselben Zahlen nennen wie die Statistikansicht und der
+ * Turnierabschluss. Zwei Rechnungen waeren zwei Wahrheiten, und ein Verein,
+ * dem per Mail andere Zahlen genannt werden als im Bericht, glaubt am Ende
+ * keiner von beiden.
+ */
+async function ermittleDankeZahlen(tournamentId: number): Promise<DankeZahlen | null> {
+  const [shifts, einplanungen, turnier, mitglieder, spenden] = await Promise.all([
+    prisma.shift.findMany({ where: { tournamentId }, include: { daySlot: true, day: true, workArea: true } }),
+    prisma.volunteerShift.findMany({
+      where: { tournamentId },
+      include: { user: { select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
+    }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, include: { yearGroups: true } }),
+    prisma.user.findMany({
+      where: { OR: [{ tournamentMemberships: { some: { tournamentId } } }, { tournamentId }] },
+      select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } }
+    }),
+    prisma.foodDonation.findMany({
+      where: { tournamentId },
+      select: { userId: true, user: { select: { id: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
+    })
+  ]);
+  if (!turnier) return null;
+
+  const s = berechneTurnierStatistik(shifts, einplanungen, turnier.yearGroups, mitglieder, spenden);
+  return {
+    beteiligte: s.eckdaten.beteiligte,
+    stunden: s.eckdaten.stunden,
+    schichten: s.eckdaten.schichten,
+    spenden: s.eckdaten.spenden
+  };
+}
 
 // Gleiche Jahrgangs-Grenzen wie bei den Turnier-Jahrgängen selbst (Jahrgaenge.tsx),
 // da genau darüber (childYear innerhalb YearGroup.birthYearStart/-End) die
@@ -56,8 +98,22 @@ export const broadcastPushSchema = z.object({
   shiftIds: z.array(z.number().int().positive()).optional(),
   tournamentId: z.number().int().positive().nullable().optional(),
   title: z.string().min(1, 'Titel ist erforderlich').max(200, 'Titel ist zu lang'),
-  body: z.string().min(1, 'Nachrichtentext ist erforderlich').max(1000, 'Nachrichtentext ist zu lang'),
-  url: z.string().max(500, 'URL ist zu lang').optional().or(z.literal(''))
+  // Fuer die Mail deutlich mehr Platz als fuer Push: Eine Push-Nachricht wird
+  // vom Betriebssystem ohnehin nach zwei Zeilen abgeschnitten, eine Mail ist
+  // ein Brief.
+  body: z.string().min(1, 'Nachrichtentext ist erforderlich').max(5000, 'Nachrichtentext ist zu lang'),
+  url: z.string().max(500, 'URL ist zu lang').optional().or(z.literal('')),
+  /**
+   * Welche Kanaele bedient werden. Leer waere eine Nachricht, die niemand
+   * bekommt - deshalb mindestens einer.
+   */
+  kanaele: z.array(z.enum(['push', 'mail'])).min(1, 'Mindestens ein Kanal').optional(),
+  vorlage: z.enum(['frei', 'appell', 'bewertung', 'danke']).optional(),
+  /**
+   * Nur an das eigene Konto schicken - zum Ansehen, bevor es an alle geht.
+   * Ohne diesen Weg ist der erste echte Test immer ein Rundschreiben.
+   */
+  nurAnMich: z.boolean().optional()
 });
 
 /** Entfernt den Passwort-Hash aus einem User-Objekt, bevor es ausgeliefert wird. */
@@ -214,6 +270,18 @@ export const updateVolunteerPassword = async (req: Request, res: Response) => {
   return res.json({ success: true });
 };
 
+/**
+ * Die Mail-Vorlagen fuer den Nachrichten-Dialog.
+ *
+ * Kommen vom Server, statt im Frontend ein zweites Mal zu stehen: Es sind
+ * formulierte deutsche Texte, und zwei Fassungen davon laufen unweigerlich
+ * auseinander - dann schickt der Verein einen Aufruf, der anders klingt als
+ * der, den jemand redigiert hat.
+ */
+export const getMailVorlagen = async (_req: Request, res: Response) => {
+  return res.json(VORLAGEN);
+};
+
 export const broadcastPush = async (req: Request, res: Response) => {
   const { mode, userIds, shiftIds, tournamentId, title, body, url } = req.body;
 
@@ -258,33 +326,82 @@ export const broadcastPush = async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Ungültiger Modus' });
   }
 
-  const uniqueIds = Array.from(new Set(targetUserIds));
-  const subscriptions = await prisma.pushSubscription.findMany({
-    where: { userId: { in: uniqueIds } },
-    select: { userId: true }
-  });
-  const usersWithPush = Array.from(new Set(subscriptions.map(s => s.userId)));
+  const kanaele: ('push' | 'mail')[] = req.body.kanaele?.length ? req.body.kanaele : ['push'];
+  const vorlage = req.body.vorlage ?? 'frei';
+  const eigeneId = (req as AuthRequest).userId ?? null;
+
+  // Testversand: nur an das eigene Konto. Steht bewusst NACH der Ermittlung
+  // der Zielgruppe, damit die angezeigte Reichweite dieselbe bleibt - man
+  // testet die Nachricht, nicht einen anderen Empfaengerkreis.
+  let uniqueIds = Array.from(new Set(targetUserIds));
+  if (req.body.nurAnMich) {
+    if (!eigeneId) return res.status(401).json({ error: 'Nicht angemeldet.' });
+    uniqueIds = [eigeneId];
+  }
 
   let sentCount = 0;
-  for (const uid of usersWithPush) {
-    await sendPushToUser(uid, title, body, url || '/');
-    sentCount++;
+  if (kanaele.includes('push')) {
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userId: { in: uniqueIds } },
+      select: { userId: true }
+    });
+    const usersWithPush = Array.from(new Set(subscriptions.map(s => s.userId)));
+    for (const uid of usersWithPush) {
+      await sendPushToUser(uid, title, body, url || '/');
+      sentCount++;
+    }
+  }
+
+  /**
+   * Der Mailkanal.
+   *
+   * Anlass: Es liegen deutlich mehr Mailadressen vor als Push-Abos - Push
+   * erreicht nur, wer die App installiert UND Benachrichtigungen erlaubt hat.
+   * Wer den Verein wirklich erreichen will, braucht die Mail.
+   *
+   * Helfer ohne App-Zugang bekommen keine eigene Mail: Sie haben in der Regel
+   * gar keine Adresse hinterlegt, und wenn doch, gehoert sie oft der
+   * Kontaktperson. Diese Kette hier nachzubauen waere eine zweite Wahrheit
+   * neben notifyUser() - die Adressauswahl bleibt deshalb schlicht "wer eine
+   * eigene Adresse hat".
+   */
+  let mailErgebnis = { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0 };
+  if (kanaele.includes('mail')) {
+    const kandidaten = await prisma.user.findMany({
+      where: { id: { in: uniqueIds }, ohneZugang: false },
+      select: { id: true, name: true, email: true }
+    });
+    const mitAdresse = kandidaten.filter(
+      (k): k is { id: number; name: string; email: string } => !!k.email?.trim()
+    );
+
+    const marke = await ermittleMarke(tournamentId ? Number(tournamentId) : null);
+    const zahlen = vorlage === 'danke' && tournamentId
+      ? await ermittleDankeZahlen(Number(tournamentId))
+      : null;
+
+    mailErgebnis = await versendeMails(mitAdresse, vorlage, { betreff: title, text: body, zahlen }, marke);
+    mailErgebnis.ohneAdresse = kandidaten.length - mitAdresse.length;
   }
 
   // Den Aufruf festhalten, damit spaeter nachvollziehbar ist, was er bewirkt
   // hat. Ohne diesen Eintrag zeigt die Verlaufskurve nur Ausschlaege, aber
   // keinen Anlass. Festgehalten wird die erreichte Zahl, nicht die
   // angepeilte: Push kommt nur bei denen an, die es erlaubt haben.
-  if (tournamentId) {
+  // Ein Testversand an einen selbst ist kein Aufruf an den Verein - er wuerde
+  // die Verlaufskurve mit Ausschlaegen fuellen, die niemanden erreicht haben.
+  if (tournamentId && !req.body.nurAnMich) {
     try {
       await prisma.aufruf.create({
         data: {
           tournamentId: Number(tournamentId),
-          userId: (req as AuthRequest).userId ?? null,
+          userId: eigeneId,
           titel: title,
           text: body,
           empfaenger: mode,
-          erreicht: sentCount
+          erreicht: sentCount,
+          erreichtMail: mailErgebnis.gesendet,
+          kanaele: kanaele.join(',')
         }
       });
     } catch (err) {
@@ -294,6 +411,12 @@ export const broadcastPush = async (req: Request, res: Response) => {
     }
   }
 
-  return res.json({ success: true, targetedUsers: uniqueIds.length, sentPushCount: sentCount });
+  return res.json({
+    success: true,
+    targetedUsers: uniqueIds.length,
+    sentPushCount: sentCount,
+    mail: mailErgebnis,
+    nurAnMich: !!req.body.nurAnMich
+  });
 };
 

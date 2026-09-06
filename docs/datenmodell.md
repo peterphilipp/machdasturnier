@@ -11,7 +11,7 @@ Das Schema umfasst **40 Modelle**.
 | Modell | Tabelle | Felder |
 |--------|---------|--------|
 | [Aenderung](#aenderung) | `aenderungen` | 11 |
-| [Aufruf](#aufruf) | `aufrufe` | 10 |
+| [Aufruf](#aufruf) | `aufrufe` | 12 |
 | [Club](#club) | `clubs` | 9 |
 | [DaySlot](#dayslot) | `day_slots` | 9 |
 | [Field](#field) | `fields` | 8 |
@@ -88,6 +88,8 @@ Tabelle: `aufrufe`
 | `text` | `String` |  |
 | `empfaenger` | `String` |  |
 | `erreicht` | `Int` | Standard: `0` |
+| `erreichtMail` | `Int` | Standard: `0` |
+| `kanaele` | `String` | Standard: `"push"` |
 | `createdAt` | `DateTime` | Standard: `now()` |
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `user` | `User?` | Beziehung über `userId`, beim Löschen: SetNull |

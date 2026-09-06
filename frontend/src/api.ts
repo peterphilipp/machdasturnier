@@ -300,6 +300,8 @@ export const addDayWorkArea = (dayId: number, workAreaId: number, order?: number
 export const getVapidPublicKey = () => apiFetch('/api/self/vapid-public-key');
 export const subscribeToPush = <T = Record<string, unknown>>(subscription: T) => apiPost('/api/self/push-subscribe', subscription);
 export const broadcastPush = <T = Record<string, unknown>>(data: T) => apiPost('/api/volunteers/push-broadcast', data);
+/** Die Mail-Vorlagen fuer den Nachrichten-Dialog - Texte kommen vom Server. */
+export const getMailVorlagen = () => apiFetch('/api/volunteers/mail-vorlagen');
 
 // ===================== Passkeys (WebAuthn) =====================
 export const getPasskeyRegistrationOptions = () => apiPost('/api/auth/passkey/register-options', {});

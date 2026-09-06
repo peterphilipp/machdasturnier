@@ -864,9 +864,15 @@ model Aufruf {
   text         String
   /// all | shifts | users - derselbe Empfaengerkreis wie im Broadcast-Dialog.
   empfaenger   String
-  /// Wie viele tatsaechlich erreicht wurden. Sagt mehr als die Absicht:
-  /// Push erreicht nur, wer die App installiert und erlaubt hat.
+  /// Wie viele per PUSH tatsaechlich erreicht wurden. Sagt mehr als die
+  /// Absicht: Push erreicht nur, wer die App installiert und erlaubt hat.
   erreicht     Int      @default(0)
+  /// Wie viele per MAIL erreicht wurden. Getrennt gezaehlt, weil die beiden
+  /// Kanaele sehr unterschiedlich weit reichen - es liegen deutlich mehr
+  /// Mailadressen vor als Push-Abos. Eine Summe wuerde genau das verdecken.
+  erreichtMail Int      @default(0) @map("erreicht_mail")
+  /// Welche Kanaele benutzt wurden: "push", "mail" oder "push,mail".
+  kanaele      String   @default("push")
   createdAt    DateTime @default(now()) @map("created_at")
 
   tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)

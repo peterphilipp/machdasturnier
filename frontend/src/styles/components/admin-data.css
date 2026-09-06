@@ -1213,3 +1213,100 @@
 @media (max-width: 767px) {
   .helfer-filter-feld { flex: 1 1 100%; min-width: 0; }
 }
+
+/* ===== Nachrichten: Kanäle, Vorlagen, Testversand =====
+   Der Mailkanal ist dazugekommen, weil Push nur erreicht, wer die App
+   installiert UND Benachrichtigungen erlaubt hat - das sind deutlich weniger
+   als die, von denen eine Mailadresse vorliegt. */
+
+.nachricht-kanaele {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.nachricht-kanal {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  flex: 1 1 220px;
+  padding: 11px 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.nachricht-kanal--an {
+  border-color: #2563eb;
+  background: #f5f9ff;
+}
+
+.nachricht-kanal input {
+  margin-top: 3px;
+  accent-color: #2563eb;
+  flex-shrink: 0;
+}
+
+/* Die Reichweite steht direkt am Kanal, nicht in einer Fußnote: Sie ist der
+   Grund, sich für oder gegen ihn zu entscheiden. */
+.nachricht-kanal-zahl {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.nachricht-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.nachricht-hinweis {
+  font-size: 12px;
+  line-height: 1.55;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 9px 11px;
+}
+
+.nachricht-warnung {
+  margin-bottom: 14px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: #fff3cd;
+  border: 1px solid #ffe69c;
+  color: #7c5a00;
+  font-size: 13px;
+}
+
+/* Zurückhaltend neben dem Absenden-Knopf: Es ist der Schritt davor, nicht
+   die Hauptaktion. */
+.nachricht-testknopf {
+  padding: 11px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nachricht-testknopf:hover:not(:disabled) {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+.nachricht-testknopf:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

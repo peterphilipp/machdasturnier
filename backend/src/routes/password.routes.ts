@@ -12,6 +12,7 @@ import { sendPushToUser } from '../utils/push.js';
 import { formatPhoneNumber } from '../utils/phone.js';
 import validate from '../middleware/validate.js';
 import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
+import { resolveEmailFrom, resolveFrontendUrl } from '../utils/mailAbsender.js';
 import { merkeAnmeldung } from '../utils/nutzung.js';
 import { resolveRolesAndForceAdmin, signSessionToken } from '../utils/authSession.js';
 import { ROLES, highestRole, normalizeRoles } from '../utils/roles.js';
@@ -78,50 +79,6 @@ async function createPinPair(): Promise<{ plain: string; hash: string }> {
  */
 const DUMMY_BCRYPT_HASH = '$2b$10$abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345';
 
-/**
- * Von Resend geforderte Absender-Formate: `email@example.com` oder
- * `Name <email@example.com>`. EMAIL_FROM kommt aus der Server-Umgebung (z.B.
- * einer systemd/Quadlet Environment=-Zeile) - ein dort fehlerhaft gequotetes
- * oder am Leerzeichen abgeschnittenes Value würde sonst erst als kryptischer
- * Resend-422-Fehler beim Versand auffallen, statt klar benannt im Log.
- */
-const FROM_ADDRESS_REGEX = /^(?:[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+|[^<>]+<[^<>@\s]+@[^<>@\s]+\.[^<>@\s]+>)$/;
-const DEFAULT_EMAIL_FROM = 'Macht das Turnier! <noreply@mygate.dedyn.io>';
-
-function resolveEmailFrom(): string {
-  const configured = process.env.EMAIL_FROM;
-  if (!configured) return DEFAULT_EMAIL_FROM;
-  if (FROM_ADDRESS_REGEX.test(configured.trim())) return configured.trim();
-
-  console.error(JSON.stringify({
-    event: 'EMAIL_FROM_INVALID_FORMAT',
-    configuredValue: configured,
-    fallback: DEFAULT_EMAIL_FROM,
-    timestamp: new Date().toISOString()
-  }));
-  return DEFAULT_EMAIL_FROM;
-}
-
-/**
- * Basis-URL fürs Frontend (Passwort-Reset-Links). Der Dev-Default
- * (localhost:5173) ist absichtlich NICHT produktionstauglich - fehlt
- * FRONTEND_URL in der Server-Umgebung (z.B. weil die Quadlet/systemd-Unit sie
- * nicht setzt), landet der Link sonst kommentarlos auf localhost statt auf der
- * echten Domain. Ein klar benannter Log-Eintrag macht das sofort auffindbar,
- * statt erst durch einen kaputten Link beim Nutzer entdeckt zu werden.
- */
-function resolveFrontendUrl(): string {
-  const configured = process.env.FRONTEND_URL;
-  if (configured) return configured;
-
-  console.error(JSON.stringify({
-    event: 'FRONTEND_URL_NOT_CONFIGURED',
-    fallback: 'http://localhost:5173',
-    hint: 'FRONTEND_URL ist in dieser Umgebung nicht gesetzt - Links (z.B. Passwort-Reset) zeigen auf den Dev-Fallback statt auf die echte Domain.',
-    timestamp: new Date().toISOString()
-  }));
-  return 'http://localhost:5173';
-}
 
 /**
  * Einheitliche Login-Fehlermeldung (verhindert User-Enumeration). Die genaue

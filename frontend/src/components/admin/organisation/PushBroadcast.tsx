@@ -1,9 +1,20 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getVolunteers, getShifts, getVolunteerShifts, broadcastPush } from '../../../api';
+import { getVolunteers, getShifts, getVolunteerShifts, broadcastPush, getMailVorlagen } from '../../../api';
 import { Shift, VolunteerShift, minToTime, inputStyle, btnStyle } from '../shared';
 import { modal } from '../Modal';
 import { useIsMobile } from '../../../hooks/useIsMobile';
+
+type VorlagenId = 'frei' | 'appell' | 'bewertung' | 'danke';
+
+/** Kommt fertig vom Server - siehe backend/src/utils/mailVorlagen.ts. */
+interface Vorlage {
+  id: VorlagenId;
+  name: string;
+  zweck: string;
+  betreff: string;
+  text: string;
+}
 
 export default function PushBroadcast({ selectedTournament }: { selectedTournament: number | null }) {
   const isMobile = useIsMobile();
@@ -17,17 +28,34 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
   const [body, setBody] = useState('');
   const [url, setUrl] = useState('/');
   const [sending, setSending] = useState(false);
+  /**
+   * Beide Kanaele sind vorausgewaehlt.
+   *
+   * Anlass fuer den Mailkanal: Es liegen deutlich mehr Mailadressen vor als
+   * Push-Abos - Push erreicht nur, wer die App installiert UND
+   * Benachrichtigungen erlaubt hat. Wer nur Push schickt, erreicht einen
+   * Bruchteil, ohne es zu merken.
+   */
+  const [kanaele, setKanaele] = useState<('push' | 'mail')[]>(['push', 'mail']);
+  const [vorlage, setVorlage] = useState<VorlagenId>('frei');
 
   const { data: volunteers = [], isLoading: loadingVolunteers } = useQuery<any[]>({
     queryKey: ['volunteers', selectedTournament],
     queryFn: () => getVolunteers(selectedTournament),
-    enabled: !!selectedTournament && (mode === 'users' || mode === 'all')
+    // In allen Modi: Auch fuer die Schichten-Auswahl braucht die
+    // Reichweitenanzeige Push- und Mail-Status der betroffenen Personen.
+    enabled: !!selectedTournament
   });
 
   const gefilterteVolunteers = volunteers.filter(v => {
     const q = helferSuche.trim().toLowerCase();
     if (!q) return true;
     return (v.name || '').toLowerCase().includes(q) || (v.email || '').toLowerCase().includes(q);
+  });
+
+  const { data: vorlagen = [] } = useQuery<Vorlage[]>({
+    queryKey: ['mail-vorlagen'],
+    queryFn: getMailVorlagen
   });
 
   const { data: shifts = [], isLoading: loadingShifts } = useQuery<Shift[]>({
@@ -39,8 +67,31 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
   const { data: volunteerShifts = [] } = useQuery<VolunteerShift[]>({
     queryKey: ['volunteerShifts', selectedTournament],
     queryFn: () => getVolunteerShifts(selectedTournament),
-    enabled: !!selectedTournament && mode === 'shifts'
+    enabled: !!selectedTournament
   });
+
+  /**
+   * Wie weit jeder Kanal reicht.
+   *
+   * Steht bewusst vor dem Absenden und nicht erst im Ergebnis: Der Grund fuer
+   * den Mailkanal ist gerade, dass die beiden Zahlen weit auseinanderliegen -
+   * das soll man sehen, bevor man sich fuer einen Weg entscheidet.
+   */
+  const reichweite = useMemo(() => {
+    const zielIds = mode === 'users' ? new Set(selectedUserIds)
+      : mode === 'all' ? new Set(volunteers.map(v => v.id))
+      : new Set(
+          volunteerShifts
+            .filter(vs => vs.shiftId && selectedShiftIds.includes(vs.shiftId))
+            .map(vs => vs.userId)
+        );
+    const ziel = volunteers.filter(v => zielIds.has(v.id));
+    return {
+      gesamt: mode === 'shifts' ? zielIds.size : ziel.length,
+      mitPush: ziel.filter(v => (v.pushSubscriptions?.length ?? 0) > 0).length,
+      mitMail: ziel.filter(v => !v.ohneZugang && !!(v.email || '').trim()).length
+    };
+  }, [mode, selectedUserIds, selectedShiftIds, volunteers, volunteerShifts]);
 
   // Sort shifts by date and startMin
   const sortedShifts = useMemo(() => {
@@ -83,26 +134,31 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
     setSelectedShiftIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
-  const handleSend = async () => {
+  const handleSend = async (nurAnMich = false) => {
     if (!title.trim() || !body.trim()) {
       return await modal.alert({ title: 'Hinweis', message: 'Bitte Titel und Nachrichtentext ausfüllen.' });
     }
-    if (mode === 'users' && selectedUserIds.length === 0) {
+    if (kanaele.length === 0) {
+      return await modal.alert({ title: 'Hinweis', message: 'Bitte mindestens einen Kanal auswählen.' });
+    }
+    if (!nurAnMich && mode === 'users' && selectedUserIds.length === 0) {
       return await modal.alert({ title: 'Hinweis', message: 'Bitte mindestens einen Helfer auswählen.' });
     }
-    if (mode === 'shifts' && selectedShiftIds.length === 0) {
+    if (!nurAnMich && mode === 'shifts' && selectedShiftIds.length === 0) {
       return await modal.alert({ title: 'Hinweis', message: 'Bitte mindestens eine Schicht auswählen.' });
     }
 
-    const recipientText = mode === 'all'
-      ? `${volunteers.length} Helfer dieses Turniers`
-      : mode === 'shifts'
-      ? `${estimatedShiftRecipients} Helfer aus ${selectedShiftIds.length} Schichten`
-      : `${selectedUserIds.length} ausgewählte Helfer`;
+    // Beim echten Versand die Reichweite JE KANAL nennen, nicht die Zielgruppe:
+    // "an 80 Helfer" wäre eine Zahl, die so nie ankommt.
+    const wege = [
+      kanaele.includes('push') ? `${reichweite.mitPush} per Push` : null,
+      kanaele.includes('mail') ? `${reichweite.mitMail} per E-Mail` : null
+    ].filter(Boolean).join(' und ');
 
-    if (!(await modal.confirm({
-      title: 'Push-Nachricht senden?',
-      message: `Möchtest du diese Nachricht jetzt an ${recipientText} absenden?\n\nTitel: "${title}"\nText: "${body}"`
+    if (!nurAnMich && !(await modal.confirm({
+      title: 'Nachricht senden?',
+      message: `Die Nachricht geht an ${wege}.\n\nBetreff: "${title}"\n\n`
+        + 'Das lässt sich nicht zurücknehmen.'
     }))) {
       return;
     }
@@ -116,16 +172,27 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
         tournamentId: selectedTournament,
         title: title.trim(),
         body: body.trim(),
-        url: url.trim() || '/'
+        url: url.trim() || '/',
+        kanaele,
+        vorlage,
+        nurAnMich
       }) as any;
 
+      const mail = res.mail || { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0 };
+      const zeilen = [
+        kanaele.includes('push') ? `Push: ${res.sentPushCount || 0} Geräte erreicht` : null,
+        kanaele.includes('mail') ? `E-Mail: ${mail.gesendet} versendet` : null,
+        mail.fehlgeschlagen > 0 ? `${mail.fehlgeschlagen} Mail(s) fehlgeschlagen – siehe Server-Log` : null,
+        mail.ohneAdresse > 0 ? `${mail.ohneAdresse} ohne hinterlegte Adresse übersprungen` : null
+      ].filter(Boolean);
+
       await modal.alert({
-        title: 'Erfolgreich gesendet 🎉',
-        message: `Die Nachricht wurde an ${res.targetedUsers || 0} Helfer weitergeleitet.\n\nDavon wurden ${res.sentPushCount || 0} aktive PWA-Geräte direkt erreicht!`
+        title: nurAnMich ? 'Testnachricht an dich unterwegs' : 'Gesendet',
+        message: (nurAnMich ? 'Nur an dein eigenes Konto geschickt.\n\n' : '') + zeilen.join('\n')
       });
-      setBody('');
+      if (!nurAnMich) setBody('');
     } catch (err: any) {
-      await modal.alert({ title: 'Fehler', message: err?.message || 'Konnte Push-Nachricht nicht senden.' });
+      await modal.alert({ title: 'Fehler', message: err?.message || 'Konnte die Nachricht nicht senden.' });
     } finally {
       setSending(false);
     }
@@ -141,11 +208,78 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
     <div className="push-broadcast-container" style={{ paddingBottom: isMobile ? 80 : undefined }}>
       <div className="push-broadcast-card">
         <h2 className="push-broadcast-title">
-          <span>🔔</span> Helfer per PWA Push kontaktieren
+          <span>✉️</span> Nachricht an die Helfer
         </h2>
         <p className="push-broadcast-description">
-          Sende Sofort-Benachrichtigungen direkt auf die Geräte deiner Helfer. Keine E-Mails erforderlich!
+          Push erreicht nur, wer die App installiert und Benachrichtigungen erlaubt hat – das sind
+          deutlich weniger als die, von denen eine Mailadresse vorliegt. Deshalb sind beide Wege
+          vorausgewählt.
         </p>
+
+        {/* Kanäle: was hier abgewählt wird, erreicht niemanden mehr. */}
+        <div className="nachricht-kanaele">
+          {([['push', '🔔 Push aufs Gerät', reichweite.mitPush],
+             ['mail', '✉️ E-Mail', reichweite.mitMail]] as const).map(([k, label, anzahl]) => (
+            <label key={k} className={`nachricht-kanal${kanaele.includes(k) ? ' nachricht-kanal--an' : ''}`}>
+              <input
+                type="checkbox"
+                checked={kanaele.includes(k)}
+                onChange={e => setKanaele(prev =>
+                  e.target.checked ? [...prev, k] : prev.filter(x => x !== k))}
+              />
+              <span>
+                <strong>{label}</strong>
+                <span className="nachricht-kanal-zahl">
+                  erreicht {anzahl} von {reichweite.gesamt}
+                </span>
+              </span>
+            </label>
+          ))}
+        </div>
+
+        {kanaele.length === 0 && (
+          <div className="nachricht-warnung">
+            Ohne Kanal geht die Nachricht an niemanden. Bitte mindestens einen auswählen.
+          </div>
+        )}
+
+        {/* Vorlagen vom Server - damit die Formulierungen nicht doppelt gepflegt werden. */}
+        {vorlagen.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <label className="nachricht-label" htmlFor="nachricht-vorlage">📄 Vorlage</label>
+            <select
+              id="nachricht-vorlage"
+              style={{ ...inputStyle, marginBottom: 6 }}
+              value={vorlage}
+              onChange={e => {
+                const id = e.target.value as VorlagenId;
+                setVorlage(id);
+                const v = vorlagen.find(x => x.id === id);
+                // Nur fuellen, was die Vorlage mitbringt: Bei der freien
+                // Nachricht bleibt stehen, was schon getippt wurde.
+                if (v?.betreff) setTitle(v.betreff);
+                if (v?.text) setBody(v.text);
+              }}
+            >
+              {vorlagen.map(v => (
+                <option key={v.id} value={v.id}>{v.name} – {v.zweck}</option>
+              ))}
+            </select>
+            {vorlage === 'danke' && (
+              <div className="nachricht-hinweis">
+                Die Zahlen des Turniers (Beteiligte, Stunden, Schichten, Spenden) setzt der Server
+                selbst ein – dieselben wie in der Statistik und im Turnierabschluss.
+              </div>
+            )}
+            {vorlage === 'bewertung' && (
+              <div className="nachricht-hinweis">
+                Der Knopf in der Mail führt in die App. Direkt in der Mail zu bewerten würde einen
+                Link brauchen, der für sich schon berechtigt, im Namen dieser Person zu antworten –
+                das wäre eine eigene Entscheidung.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Schnell-Vorlagen / Presets */}
         <div style={{ marginBottom: 12, fontWeight: 'bold', fontSize: 13, color: '#495057' }}>⚡ Schnell-Vorlagen (1-Tipp):</div>
@@ -422,16 +556,27 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
           </div>
         </div>
 
-        {/* Absenden Button */}
+        {/* Absenden. Der Testversand steht daneben und nicht irgendwo im
+            Formular: Er ist der Schritt, den man VOR dem echten Versand
+            macht, und ein Rundschreiben an achtzig Leute soll nicht der
+            erste Blick auf die eigene Mail sein. */}
         <div className={`push-broadcast-footer ${isMobile ? 'push-broadcast-footer-mobile' : 'push-broadcast-footer-desktop'}`}>
           <button
-            onClick={handleSend}
-            disabled={sending || !title.trim() || !body.trim()}
+            type="button"
+            onClick={() => handleSend(true)}
+            disabled={sending || !title.trim() || !body.trim() || kanaele.length === 0}
+            className="nachricht-testknopf"
+          >
+            ✉️ Erst als Test an mich
+          </button>
+          <button
+            onClick={() => handleSend()}
+            disabled={sending || !title.trim() || !body.trim() || kanaele.length === 0}
             style={btnStyle}
             className={`push-broadcast-submit-btn ${isMobile ? 'push-broadcast-submit-btn-mobile' : ''} ${sending || !title.trim() || !body.trim() ? 'push-broadcast-submit-btn-disabled' : ''}`}
           >
             <span>{sending ? '⏳' : '🚀'}</span>
-            <span>{sending ? 'Versende Push-Nachrichten...' : 'Push-Nachricht jetzt absenden'}</span>
+            <span>{sending ? 'Wird versendet …' : 'Jetzt an alle absenden'}</span>
           </button>
         </div>
       </div>
@@ -446,7 +591,7 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
           </div>
           <button
             type="button"
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={sending || !title.trim() || !body.trim()}
             style={{
               background: sending || !title.trim() || !body.trim() ? '#adb5bd' : '#0d6efd',

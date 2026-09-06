@@ -9,6 +9,7 @@ import {
   updateVolunteer,
   updateVolunteerPassword,
   broadcastPush,
+  getMailVorlagen,
   volunteerSchema,
   updateVolunteerPasswordSchema,
   broadcastPushSchema
@@ -24,6 +25,11 @@ router.get('/', authenticate, requireAdmin, getVolunteers);
 
 // Nur Admin/Organizer: Push Broadcast (bewusst turniergebunden, siehe oben)
 router.post('/push-broadcast', authenticate, requireAdmin, broadcastLimiter, validate(broadcastPushSchema), broadcastPush);
+
+// Die Mail-Vorlagen fuer den Nachrichten-Dialog. Nur lesend, aber hinter
+// requireAdmin: Es sind die Formulierungen, mit denen der Verein angeschrieben
+// wird - kein Geheimnis, aber auch nichts, was nach draussen gehoert.
+router.get('/mail-vorlagen', authenticate, requireAdmin, getMailVorlagen);
 
 // Benutzerverwaltung (anlegen/bearbeiten/löschen/Passwort setzen): nur Admin -
 // betrifft immer den ganzen Account, nicht nur den Kontext eines Turniers.
