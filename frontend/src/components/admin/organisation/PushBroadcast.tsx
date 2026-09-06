@@ -249,12 +249,6 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
     }
   };
 
-  const applyPreset = (presetTitle: string, presetBody: string, presetMode: 'all' | 'shifts' | 'users' = 'all') => {
-    setTitle(presetTitle);
-    setBody(presetBody);
-    setMode(presetMode);
-  };
-
   return (
     <div className="push-broadcast-container" style={{ paddingBottom: isMobile ? 80 : undefined }}>
       <div className="push-broadcast-card">
@@ -350,39 +344,6 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
             )}
           </div>
         )}
-
-        {/* Schnell-Vorlagen / Presets */}
-        <div style={{ marginBottom: 12, fontWeight: 'bold', fontSize: 13, color: '#495057' }}>⚡ Schnell-Vorlagen (1-Tipp):</div>
-        <div className="mobile-preset-chips-container">
-          <button
-            type="button"
-            className="mobile-preset-chip"
-            onClick={() => applyPreset('Wichtige Info zum Turnier', 'Hallo zusammen! Hier ist eine wichtige Information zum Turnierverlauf.', 'all')}
-          >
-            📢 Wichtige Info
-          </button>
-          <button
-            type="button"
-            className="mobile-preset-chip"
-            onClick={() => applyPreset('⚠️ Dringend: Schicht besetzen', 'Wir suchen aktuell noch Unterstützung für Schichten. Wer kann spontan einspringen?', 'all')}
-          >
-            ⚠️ Schichten besetzen
-          </button>
-          <button
-            type="button"
-            className="mobile-preset-chip"
-            onClick={() => applyPreset('⏰ Schicht-Erinnerung', 'Erinnerung: Deine Schicht steht in Kürze an. Bitte denke an dein Pünktlichsein! Danke!', 'all')}
-          >
-            ⏰ Schicht-Erinnerung
-          </button>
-          <button
-            type="button"
-            className="mobile-preset-chip"
-            onClick={() => applyPreset('🍕 Verpflegungs-Info', 'Vielen Dank für alle Spenden und die Unterstützung am Verpflegungsstand!', 'all')}
-          >
-            🍕 Verpflegung & Danke
-          </button>
-        </div>
 
         <div className="push-broadcast-section">
           <label className="push-broadcast-section-label">1. Zielgruppe wählen:</label>
