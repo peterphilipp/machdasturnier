@@ -112,8 +112,12 @@ export function kennzahlen(werte: { wert: string; label: string }[], farbe: stri
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
              style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
         <tr><td align="center" style="padding:14px 8px;">
-          <div style="text-align:center;font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</div>
-          <div style="text-align:center;font-size:12px;color:#475569;margin-top:4px;">${maskiere(k.label)}</div>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+            <td align="center" style="font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</td>
+          </tr></table>
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:4px;"><tr>
+            <td align="center" style="font-size:12px;color:#475569;">${maskiere(k.label)}</td>
+          </tr></table>
         </td></tr>
       </table>
     </td>`);
@@ -253,18 +257,20 @@ export function jubelBand(o: { symbole: string; text: string; farbe: string }): 
               background:${o.farbe};
               background-image:linear-gradient(135deg, ${o.farbe} 0%, ${dunkler(o.farbe, 0.3)} 100%);">
         <!--
-          text-align:center auf JEDEM div, nicht nur align="center" auf der
-          Zelle: Ein <div> ist ein Blockelement und fuellt seinen Container
-          automatisch auf volle Breite - das zentriert die Zelle dann selbst
-          nicht mehr sichtbar (der Div fuellt sie ja schon), aber der TEXT
-          darin bleibt ohne eigene Ausrichtung linksbuendig. Auf dem Handy war
-          das gut sichtbar: die Emoji-Zeile klebte links, obwohl die Box um sie
-          herum die volle Breite hatte.
+          Keine <div style="text-align:center"> mehr: Ein Div fuellt seine
+          Zelle auf volle Breite, und genau da zentrierte Gmails Android-App
+          den Text darin nachweislich nicht zuverlaessig, obwohl jeder
+          Desktop-Client es tat (per Screenshot bestaetigt, mit korrektem CSS).
+          Eine Tabelle ohne width bleibt inhaltsbreit, und align="center" auf
+          der Zelle darum herum ist ein HTML-Attribut aus den 90ern, kein
+          CSS-Wert - das haelt jeder Mail-Renderer ein, auch die einfachsten.
         -->
-        <div style="text-align:center;font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</div>
-        <div style="text-align:center;font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;margin-top:8px;">
-          ${maskiere(o.text)}
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+          <td align="center" style="font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</td>
+        </tr></table>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:8px;"><tr>
+          <td align="center" style="font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;">${maskiere(o.text)}</td>
+        </tr></table>
       </td></tr>
     </table>`;
 }

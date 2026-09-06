@@ -375,25 +375,29 @@ describe('Dankesmail', () => {
   });
 
   /**
-   * Ein <div> ist ein Blockelement und fuellt seinen Container automatisch
-   * auf volle Breite - align="center" auf der umgebenden Tabellenzelle
-   * zentriert dann nichts mehr sichtbar, weil der Div die Zelle schon
-   * ausfuellt. Ohne eigenes text-align blieb der Text darin linksbuendig -
-   * auf dem Handy gut sichtbar, weil die Box die volle Breite hatte, der
-   * Text aber links klebte. Betraf Jubelband und Kennzahlen-Kacheln gleich.
+   * text-align:center auf einem <div> zentrierte den Text auf Gmails
+   * Android-App nachweislich nicht zuverlaessig, obwohl jeder Desktop-Client
+   * es tat (per Screenshot bestaetigt, mit korrektem CSS). Seitdem steckt der
+   * Text in einer inhaltsbreiten Tabelle mit align="center" - ein
+   * HTML-Attribut statt einer CSS-Regel. Betraf Jubelband und
+   * Kennzahlen-Kacheln gleich.
    */
-  it('zentriert Emoji und Text im Jubelband auch ohne align="center" der Zelle', () => {
+  it('zentriert Emoji und Text im Jubelband ueber eine inhaltsbreite Tabelle', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const bandStelle = html.indexOf('Danke fürs Mithelfen!');
-    const divDavor = html.lastIndexOf('<div', bandStelle);
-    expect(html.slice(divDavor, divDavor + 40)).toContain('text-align:center');
+    const tdDavor = html.lastIndexOf('<td', bandStelle);
+    expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
+    const tableDavor = html.lastIndexOf('<table', tdDavor);
+    expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
   });
 
-  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln', () => {
+  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln ueber eine inhaltsbreite Tabelle', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const zahlStelle = html.indexOf('74');
-    const divDavor = html.lastIndexOf('<div', zahlStelle);
-    expect(html.slice(divDavor, divDavor + 40)).toContain('text-align:center');
+    const tdDavor = html.lastIndexOf('<td', zahlStelle);
+    expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
+    const tableDavor = html.lastIndexOf('<table', tdDavor);
+    expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
   });
 
   /**
