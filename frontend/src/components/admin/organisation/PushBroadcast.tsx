@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getVolunteers, getShifts, getVolunteerShifts, broadcastPush, getMailVorlagen } from '../../../api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  getVolunteers, getShifts, getVolunteerShifts, broadcastPush, getMailVorlagen,
+  getVersandauftraege, abbrechenVersandauftrag
+} from '../../../api';
 import { Shift, VolunteerShift, Tournament, minToTime, inputStyle, btnStyle } from '../shared';
 import { modal } from '../Modal';
 import { useIsMobile } from '../../../hooks/useIsMobile';
@@ -14,6 +17,22 @@ interface Vorlage {
   zweck: string;
   betreff: string;
   text: string;
+}
+
+/** Ein Mailversand, der ueber mehrere Tage laufen kann - siehe backend/src/utils/scheduler.ts. */
+interface Versandauftrag {
+  id: number;
+  vorlage: VorlagenId;
+  betreff: string;
+  status: 'laufend' | 'abgeschlossen' | 'abgebrochen';
+  createdAt: string;
+  completedAt: string | null;
+  gesamt: number;
+  offen: number;
+  gesendet: number;
+  fehlgeschlagen: number;
+  uebersprungen: number;
+  abgebrochen: number;
 }
 
 /**
@@ -48,6 +67,7 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
   const [body, setBody] = useState('');
   const [url, setUrl] = useState('/');
   const [sending, setSending] = useState(false);
+  const [abbrechendId, setAbbrechendId] = useState<number | null>(null);
   /**
    * Beide Kanaele sind vorausgewaehlt.
    *
@@ -76,6 +96,26 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
   const { data: vorlagen = [] } = useQuery<Vorlage[]>({
     queryKey: ['mail-vorlagen'],
     queryFn: getMailVorlagen
+  });
+
+  const queryClient = useQueryClient();
+
+  /**
+   * Versandauftraege dieses Turniers - der Mailversand laeuft seit v1.40.7
+   * als Auftrag, den der Server in kleinen Schritten abarbeitet (Resends
+   * Tageskontingent reicht sonst nicht mehr, siehe backend/scheduler.ts).
+   * Pollt alle 5s, solange mindestens einer noch laeuft - dieselbe Technik
+   * (useQuery + refetchInterval), die auf dieser Seite schon fuer die
+   * Reichweitenanzeige laeuft, kein neuer Mechanismus.
+   */
+  const { data: versandauftraege = [] } = useQuery<Versandauftrag[]>({
+    queryKey: ['versandauftraege', selectedTournament],
+    queryFn: () => getVersandauftraege(selectedTournament as number),
+    enabled: !!selectedTournament,
+    refetchInterval: query => {
+      const laeuft = (query.state.data as Versandauftrag[] | undefined)?.some(a => a.status === 'laufend');
+      return laeuft ? 5000 : false;
+    }
   });
 
   const { data: shifts = [], isLoading: loadingShifts } = useQuery<Shift[]>({
@@ -223,29 +263,66 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
         nurAnMich
       }) as any;
 
-      const mail = res.mail || { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0, ohneOffeneBewertung: 0 };
-      const zeilen = [
-        kanaele.includes('push') ? `Push: ${res.sentPushCount || 0} Geräte erreicht` : null,
-        kanaele.includes('mail') ? `E-Mail: ${mail.gesendet} versendet` : null,
-        mail.fehlgeschlagen > 0 ? `${mail.fehlgeschlagen} Mail(s) fehlgeschlagen – siehe Server-Log` : null,
-        mail.ohneAdresse > 0 ? `${mail.ohneAdresse} ohne hinterlegte Adresse übersprungen` : null,
-        // Muss dastehen: Sonst wartet man auf Antworten von Leuten, die nie
-        // gefragt wurden - die Bewertungsmail geht nur an die, bei denen noch
-        // etwas offen ist.
-        mail.ohneOffeneBewertung > 0
-          ? `${mail.ohneOffeneBewertung} übersprungen – dort ist nichts mehr zu bewerten`
-          : null
-      ].filter(Boolean);
+      /**
+       * Echter Versand mit Mailkanal: Der Server hat keinen Mailversand mehr
+       * synchron ausgefuehrt, sondern einen Versandauftrag angelegt (siehe
+       * broadcastPush() im Backend) - Resends Tageskontingent reicht sonst
+       * nicht mehr fuer groessere Verteiler. `res.mail` bleibt in diesem Fall
+       * null; der Fortschritt steht stattdessen unten auf dieser Seite (siehe
+       * versandauftraege-Query oben, pollt automatisch).
+       */
+      if (!nurAnMich && res.auftragId) {
+        const zeilen = [
+          kanaele.includes('push') ? `Push: ${res.sentPushCount || 0} Geräte sofort erreicht` : null,
+          `E-Mail: Auftrag erstellt für ${res.mailKandidatenAnzahl} Empfänger - Fortschritt steht unten auf dieser Seite.`
+        ].filter(Boolean);
+        await modal.alert({ title: 'Versand gestartet', message: zeilen.join('\n') });
+        setBody('');
+        queryClient.invalidateQueries({ queryKey: ['versandauftraege', selectedTournament] });
+      } else {
+        const mail = res.mail || { gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0, ohneOffeneBewertung: 0 };
+        const zeilen = [
+          kanaele.includes('push') ? `Push: ${res.sentPushCount || 0} Geräte erreicht` : null,
+          kanaele.includes('mail') ? `E-Mail: ${mail.gesendet} versendet` : null,
+          mail.fehlgeschlagen > 0 ? `${mail.fehlgeschlagen} Mail(s) fehlgeschlagen – siehe Server-Log` : null,
+          mail.ohneAdresse > 0 ? `${mail.ohneAdresse} ohne hinterlegte Adresse übersprungen` : null,
+          // Muss dastehen: Sonst wartet man auf Antworten von Leuten, die nie
+          // gefragt wurden - die Bewertungsmail geht nur an die, bei denen noch
+          // etwas offen ist.
+          mail.ohneOffeneBewertung > 0
+            ? `${mail.ohneOffeneBewertung} übersprungen – dort ist nichts mehr zu bewerten`
+            : null
+        ].filter(Boolean);
 
-      await modal.alert({
-        title: nurAnMich ? 'Testnachricht an dich unterwegs' : 'Gesendet',
-        message: (nurAnMich ? 'Nur an dein eigenes Konto geschickt.\n\n' : '') + zeilen.join('\n')
-      });
-      if (!nurAnMich) setBody('');
+        await modal.alert({
+          title: nurAnMich ? 'Testnachricht an dich unterwegs' : 'Gesendet',
+          message: (nurAnMich ? 'Nur an dein eigenes Konto geschickt.\n\n' : '') + zeilen.join('\n')
+        });
+        if (!nurAnMich) setBody('');
+      }
     } catch (err: any) {
       await modal.alert({ title: 'Fehler', message: err?.message || 'Konnte die Nachricht nicht senden.' });
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleAbbrechen = async (auftrag: Versandauftrag) => {
+    if (!(await modal.confirm({
+      title: 'Versand abbrechen?',
+      message: `"${auftrag.betreff}": ${auftrag.offen} noch offene Empfänger bekommen diese Mail dann nicht mehr. `
+        + 'Bereits Verschickte bleiben unberührt.'
+    }))) {
+      return;
+    }
+    setAbbrechendId(auftrag.id);
+    try {
+      await abbrechenVersandauftrag(auftrag.id);
+      queryClient.invalidateQueries({ queryKey: ['versandauftraege', selectedTournament] });
+    } catch (err: any) {
+      await modal.alert({ title: 'Fehler', message: err?.message || 'Konnte den Auftrag nicht abbrechen.' });
+    } finally {
+      setAbbrechendId(null);
     }
   };
 
@@ -617,6 +694,59 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
           </button>
         </div>
       </div>
+
+      {/* Versandaufträge: der Mailversand läuft seit v1.40.7 als Auftrag,
+          den der Server über mehrere Tage abarbeiten kann (siehe
+          Query oben) - hier steht der Fortschritt, nicht nur eine
+          Bestätigung im Moment des Klicks. */}
+      {versandauftraege.length > 0 && (
+        <div className="push-broadcast-card push-broadcast-auftraege-card">
+          <h2 className="push-broadcast-title"><span>📤</span> Versandaufträge</h2>
+          {versandauftraege.map(a => {
+            const erledigt = a.gesendet + a.fehlgeschlagen + a.uebersprungen + a.abgebrochen;
+            const prozent = a.gesamt > 0 ? Math.round((erledigt / a.gesamt) * 100) : 100;
+            const statusText = a.status === 'abgeschlossen'
+              ? 'Abgeschlossen'
+              : a.status === 'abgebrochen'
+                ? 'Abgebrochen'
+                // Noch kein einziger Versuch: der naechste Tick hat den
+                // Auftrag noch nicht erreicht - kein Kontingent-Problem.
+                : erledigt === 0
+                  ? 'Wird vorbereitet …'
+                  : a.offen > 0
+                    ? 'Wartet auf freies Tageskontingent …'
+                    : 'Läuft …';
+            return (
+              <div key={a.id} className="push-broadcast-auftrag-zeile">
+                <div className="push-broadcast-auftrag-kopf">
+                  <strong>{a.betreff}</strong>
+                  <span className={`push-broadcast-auftrag-status push-broadcast-auftrag-status-${a.status}`}>
+                    {statusText}
+                  </span>
+                </div>
+                <div className="push-broadcast-auftrag-balken">
+                  <div className="push-broadcast-auftrag-balken-fuellung" style={{ width: `${prozent}%` }} />
+                </div>
+                <div className="push-broadcast-auftrag-zahlen">
+                  {a.gesendet} verschickt · {a.fehlgeschlagen} fehlgeschlagen · {a.uebersprungen} übersprungen
+                  {a.abgebrochen > 0 ? ` · ${a.abgebrochen} abgebrochen` : ''}
+                  {a.offen > 0 ? ` · ${a.offen} noch offen` : ''} (von {a.gesamt})
+                </div>
+                {a.status === 'laufend' && (
+                  <button
+                    type="button"
+                    onClick={() => handleAbbrechen(a)}
+                    disabled={abbrechendId === a.id}
+                    className="push-broadcast-auftrag-abbrechen"
+                  >
+                    {abbrechendId === a.id ? 'Wird abgebrochen …' : 'Abbrechen'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {isMobile && (
         <div className="mobile-sticky-push-bar">

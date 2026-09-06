@@ -10,6 +10,7 @@ import { baueBewertungsToken } from './bewertungsLink.js';
 import { ermittleOffeneSchichten } from './offeneSchichten.js';
 import { ermittleOffeneVerpflegung, waehleFuerEmpfaenger } from './offeneVerpflegung.js';
 import { aktuelleSchichtzeit } from './schichtzeit.js';
+import { berechneTurnierStatistik } from './turnierStatistik.js';
 
 /**
  * Der eigentliche Mailversand an eine Gruppe.
@@ -55,6 +56,48 @@ export async function ermittleMarke(tournamentId: number | null): Promise<Marke>
     logoUrl,
     appUrl,
     testumgebung
+  };
+}
+
+/**
+ * Die Zahlen fuer die Dankesmail.
+ *
+ * Bewusst aus berechneTurnierStatistik() und nicht hier nachgerechnet: Die
+ * Mail soll dieselben Zahlen nennen wie die Statistikansicht und der
+ * Turnierabschluss. Zwei Rechnungen waeren zwei Wahrheiten, und ein Verein,
+ * dem per Mail andere Zahlen genannt werden als im Bericht, glaubt am Ende
+ * keiner von beiden.
+ *
+ * Hier statt im Controller, weil ein Versandauftrag (siehe scheduler.ts) die
+ * Zahlen bei jedem Tick frisch braucht, nicht nur beim allerersten Aufruf -
+ * sonst zeigte die Danke-Mail an einem spaeteren Tag noch den Stand von
+ * vorgestern.
+ */
+export async function ermittleDankeZahlen(tournamentId: number): Promise<DankeZahlen | null> {
+  const [shifts, einplanungen, turnier, mitglieder, spenden] = await Promise.all([
+    prisma.shift.findMany({ where: { tournamentId }, include: { daySlot: true, day: true, workArea: true } }),
+    prisma.volunteerShift.findMany({
+      where: { tournamentId },
+      include: { user: { select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
+    }),
+    prisma.tournament.findUnique({ where: { id: tournamentId }, include: { yearGroups: true } }),
+    prisma.user.findMany({
+      where: { OR: [{ tournamentMemberships: { some: { tournamentId } } }, { tournamentId }] },
+      select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } }
+    }),
+    prisma.foodDonation.findMany({
+      where: { tournamentId },
+      select: { userId: true, user: { select: { id: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
+    })
+  ]);
+  if (!turnier) return null;
+
+  const s = berechneTurnierStatistik(shifts, einplanungen, turnier.yearGroups, mitglieder, spenden);
+  return {
+    beteiligte: s.eckdaten.beteiligte,
+    stunden: s.eckdaten.stunden,
+    schichten: s.eckdaten.schichten,
+    spenden: s.eckdaten.spenden
   };
 }
 
@@ -245,7 +288,42 @@ function warte(ms: number): Promise<void> {
 }
 
 /**
- * Verschickt eine Mail - mit Geduld gegenueber Resends Ratenlimit.
+ * Resends Tageskontingent, mit Puffer.
+ *
+ * Der kostenlose Plan deckelt hart bei 100 Mails pro Kalendertag (UTC - das
+ * ist Resends eigene Reset-Grenze, nicht Berliner Mitternacht). Der Standard
+ * hier liegt bewusst darunter: Reminder, Bestaetigungen und Versandauftraege
+ * teilen sich denselben Zaehler, und ein Puffer verhindert, dass ausgerechnet
+ * die letzten paar Anfragen des Tages doch noch von Resend selbst abgelehnt
+ * werden (dort zaehlt der Tag u.U. schon eine Sekunde frueher um).
+ */
+const RESEND_DAILY_LIMIT = Number(process.env.RESEND_DAILY_LIMIT) || 90;
+
+function heutigerUtcTag(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Ob heute noch Luft im Tageskontingent ist - ohne bei Resend nachzufragen. */
+async function kontingentVerfuegbar(): Promise<boolean> {
+  const eintrag = await prisma.mailkontingent.findUnique({ where: { tag: heutigerUtcTag() } });
+  return (eintrag?.anzahl ?? 0) < RESEND_DAILY_LIMIT;
+}
+
+/** Zaehlt einen tatsaechlich verschickten Versuch auf den heutigen Tag. */
+async function kontingentVerbrauchen(): Promise<void> {
+  const tag = heutigerUtcTag();
+  await prisma.mailkontingent.upsert({
+    where: { tag },
+    create: { tag, anzahl: 1 },
+    update: { anzahl: { increment: 1 } }
+  });
+}
+
+export type SendeErgebnis = 'gesendet' | 'fehlgeschlagen' | 'kontingent_erschoepft';
+
+/**
+ * Verschickt eine Mail - mit Geduld gegenueber Resends Ratenlimit UND
+ * Tageskontingent.
  *
  * Aufgefallen bei einem echten Versand an ueber 50 Empfaenger: Nur die ersten
  * paar kamen an, der Rest verschwand spurlos - nicht einmal als Fehlschlag im
@@ -256,15 +334,27 @@ function warte(ms: number): Promise<void> {
  * Pause zwischen JEDER Mail (siehe versendeMails, WARTE_ZWISCHEN_MAILS_MS),
  * und hier zusaetzlich ein paar Versuche mit steigender Wartezeit, falls es
  * trotzdem knapp wird - Resends Fehlercode dafuer ist "rate_limit_exceeded".
+ *
+ * Das TAGESkontingent ist ein zweites, hartes Limit (100/Tag beim kostenlosen
+ * Plan) - dagegen hilft kein Warten und kein Wiederholen. Ist es erschoepft,
+ * wird gar nicht erst versucht: sonst zaehlte ein serverseitig abgelehnter
+ * Versuch als "fehlgeschlagen", obwohl er morgen anstandslos ankaeme.
+ * `versendeMails()` und `verarbeiteVersandauftraege()` lassen so einen
+ * Empfaenger dann bewusst "offen" statt ihn als endgueltig gescheitert zu
+ * markieren.
  */
 export async function sendeEinzelmail(
   empfaenger: { id: number; email: string },
   mail: Mailinhalt
-): Promise<boolean> {
+): Promise<SendeErgebnis> {
   const schluessel = process.env.RESEND_API_KEY;
   if (!schluessel) {
     console.warn('[mail] RESEND_API_KEY fehlt - es wird nichts versendet.');
-    return false;
+    return 'fehlgeschlagen';
+  }
+
+  if (!(await kontingentVerfuegbar())) {
+    return 'kontingent_erschoepft';
   }
 
   const resend = new Resend(schluessel);
@@ -284,9 +374,17 @@ export async function sendeEinzelmail(
           await warte(versuch * 1000);
           continue;
         }
+        if (antwort.error.name === 'daily_quota_exceeded' || antwort.error.name === 'monthly_quota_exceeded') {
+          // Unser eigener Zaehler haette das eigentlich schon abgefangen -
+          // z.B. weil ein anderer Prozess (Erinnerung, Bestaetigung)
+          // zwischenzeitlich denselben Tag ausgeschoepft hat. Trotzdem als
+          // Kontingent-Erschoepfung behandeln, nicht als Fehlschlag.
+          return 'kontingent_erschoepft';
+        }
         throw new Error(antwort.error.message);
       }
-      return true;
+      await kontingentVerbrauchen();
+      return 'gesendet';
     } catch (err) {
       if (versuch < MAX_VERSUCHE) {
         await warte(versuch * 1000);
@@ -301,10 +399,10 @@ export async function sendeEinzelmail(
         error: (err as Error).message,
         timestamp: new Date().toISOString()
       }));
-      return false;
+      return 'fehlgeschlagen';
     }
   }
-  return false;
+  return 'fehlgeschlagen';
 }
 
 export interface VersandErgebnis {
@@ -320,6 +418,26 @@ export interface VersandErgebnis {
    * sonst wartet er auf Antworten von Leuten, die nie gefragt wurden.
    */
   ohneOffeneBewertung: number;
+  /**
+   * Gar nicht erst versucht, weil das Tageskontingent aufgebraucht war -
+   * anders als "fehlgeschlagen" bewusst getrennt gezaehlt: Diese Empfaenger
+   * sind kein Fehler, sie sind morgen dran (siehe verarbeiteVersandauftraege
+   * in scheduler.ts).
+   */
+  kontingentErschoepft: number;
+  /**
+   * Ergebnis JE Empfaenger, nicht nur die Summen - fuer versandauftraege.ts:
+   * ein Versandauftrag muss auf genau dieser Person weitermachen koennen,
+   * nicht nur wissen, dass "irgendwer" gescheitert ist.
+   */
+  ergebnisse: VersandEmpfaengerErgebnis[];
+}
+
+export interface VersandEmpfaengerErgebnis {
+  userId: number;
+  /** "offen" heisst: nicht versucht, weil das Tageskontingent leer war. */
+  status: 'gesendet' | 'fehlgeschlagen' | 'uebersprungen' | 'offen';
+  grund?: string;
 }
 
 /**
@@ -361,7 +479,9 @@ export async function versendeMails(
   if (!schluessel) {
     console.warn('[mail] RESEND_API_KEY fehlt - es wird nichts versendet.');
     return {
-      gesendet: 0, fehlgeschlagen: empfaenger.length, ohneAdresse: 0, ohneOffeneBewertung: 0
+      gesendet: 0, fehlgeschlagen: empfaenger.length, ohneAdresse: 0, ohneOffeneBewertung: 0,
+      kontingentErschoepft: 0,
+      ergebnisse: empfaenger.map(e => ({ userId: e.id, status: 'fehlgeschlagen' as const }))
     };
   }
 
@@ -414,7 +534,9 @@ export async function versendeMails(
   let gesendet = 0;
   let fehlgeschlagen = 0;
   let ohneOffeneBewertung = 0;
+  let kontingentErschoepft = 0;
   let versandVersuche = 0;
+  const ergebnisse: VersandEmpfaengerErgebnis[] = [];
 
   for (const e of empfaenger) {
     const unbewertet = schichten.get(e.id) ?? [];
@@ -433,6 +555,20 @@ export async function versendeMails(
      */
     if (vorlage === 'bewertung' && unbewertet.length === 0 && !eingabe.istTestversand) {
       ohneOffeneBewertung++;
+      ergebnisse.push({ userId: e.id, status: 'uebersprungen', grund: 'ohneOffeneBewertung' });
+      continue;
+    }
+
+    /**
+     * Sobald ein Versuch am Tageskontingent scheitert, gilt das fuer den Rest
+     * dieses Laufs genauso - ein erneuter Versuch wuerde nur dieselbe Absage
+     * kassieren. Die restlichen Empfaenger bleiben deshalb unangetastet
+     * ("offen"), statt sie als Fehlschlag zu verbrauchen: Sie sind morgen
+     * ganz normal dran.
+     */
+    if (kontingentErschoepft > 0) {
+      kontingentErschoepft++;
+      ergebnisse.push({ userId: e.id, status: 'offen' });
       continue;
     }
 
@@ -463,12 +599,23 @@ export async function versendeMails(
         offeneVerpflegung: verpflegungListen.get(e.id) ?? []
       }, marke);
 
-      if (await sendeEinzelmail(e, mail)) gesendet++; else fehlgeschlagen++;
+      const ergebnis = await sendeEinzelmail(e, mail);
+      if (ergebnis === 'gesendet') {
+        gesendet++;
+        ergebnisse.push({ userId: e.id, status: 'gesendet' });
+      } else if (ergebnis === 'kontingent_erschoepft') {
+        kontingentErschoepft++;
+        ergebnisse.push({ userId: e.id, status: 'offen' });
+      } else {
+        fehlgeschlagen++;
+        ergebnisse.push({ userId: e.id, status: 'fehlgeschlagen' });
+      }
     } catch (err) {
       // Der Mailbau selbst ist gescheitert (sendeEinzelmail loggt einen
       // Sendefehlschlag bereits selbst - das hier ist der seltenere Fall
       // davor).
       fehlgeschlagen++;
+      ergebnisse.push({ userId: e.id, status: 'fehlgeschlagen' });
       console.error(JSON.stringify({
         event: 'MAIL_BUILD_FAILED',
         to: e.email,
@@ -479,5 +626,5 @@ export async function versendeMails(
     }
   }
 
-  return { gesendet, fehlgeschlagen, ohneAdresse: 0, ohneOffeneBewertung };
+  return { gesendet, fehlgeschlagen, ohneAdresse: 0, ohneOffeneBewertung, kontingentErschoepft, ergebnisse };
 }

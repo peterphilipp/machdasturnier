@@ -302,6 +302,11 @@ export const subscribeToPush = <T = Record<string, unknown>>(subscription: T) =>
 export const broadcastPush = <T = Record<string, unknown>>(data: T) => apiPost('/api/volunteers/push-broadcast', data);
 /** Die Mail-Vorlagen fuer den Nachrichten-Dialog - Texte kommen vom Server. */
 export const getMailVorlagen = () => apiFetch('/api/volunteers/mail-vorlagen');
+/** Versandauftraege eines Turniers - fuer den Fortschritt im Broadcast-Dialog. */
+export const getVersandauftraege = (tournamentId: number) =>
+  apiFetch(`/api/versandauftraege?tournamentId=${tournamentId}`);
+export const abbrechenVersandauftrag = (id: number) =>
+  apiPost(`/api/versandauftraege/${id}/abbrechen`, {});
 
 // ===================== Passkeys (WebAuthn) =====================
 export const getPasskeyRegistrationOptions = () => apiPost('/api/auth/passkey/register-options', {});

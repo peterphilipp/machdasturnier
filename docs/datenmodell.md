@@ -4,7 +4,7 @@
 > Quelle ist [`backend/prisma/schema.prisma`](../backend/prisma/schema.prisma).
 > Neu erzeugen mit `npm run docs:datamodel` im Ordner `backend`.
 
-Das Schema umfasst **40 Modelle**.
+Das Schema umfasst **43 Modelle**.
 
 ## Überblick
 
@@ -22,6 +22,7 @@ Das Schema umfasst **40 Modelle**.
 | [GlobalDayTemplate](#globaldaytemplate) | `global_day_templates` | 6 |
 | [Group](#group) | `groups` | 8 |
 | [KnockoutBracket](#knockoutbracket) | `knockout_brackets` | 9 |
+| [Mailkontingent](#mailkontingent) | `mailkontingent` | 2 |
 | [Match](#match) | `matches` | 29 |
 | [MaterialItem](#materialitem) | `material_items` | 8 |
 | [NutzungTag](#nutzungtag) | `nutzung_tage` | 7 |
@@ -35,16 +36,18 @@ Das Schema umfasst **40 Modelle**.
 | [Team](#team) | `teams` | 16 |
 | [TemplateWorkArea](#templateworkarea) | `template_work_areas` | 8 |
 | [TimeSlot](#timeslot) | `time_slots` | 11 |
-| [Tournament](#tournament) | `tournaments` | 42 |
+| [Tournament](#tournament) | `tournaments` | 43 |
 | [TournamentClub](#tournamentclub) | `tournament_clubs` | 5 |
 | [TournamentDay](#tournamentday) | `tournament_days` | 10 |
 | [TournamentDayWorkArea](#tournamentdayworkarea) | `tournament_day_work_areas` | 9 |
 | [TournamentMembership](#tournamentmembership) | `tournament_memberships` | 6 |
 | [TournamentWorkArea](#tournamentworkarea) | `tournament_work_areas` | 18 |
-| [User](#user) | `users` | 34 |
+| [User](#user) | `users` | 36 |
 | [UserChild](#userchild) | `volunteer_children` | 5 |
 | [UserNotification](#usernotification) | `user_notifications` | 9 |
 | [UserRole](#userrole) | `user_roles` | 4 |
+| [Versandauftrag](#versandauftrag) | `versandauftraege` | 15 |
+| [VersandauftragEmpfaenger](#versandauftragempfaenger) | `versandauftrag_empfaenger` | 8 |
 | [VolunteerShift](#volunteershift) | `volunteer_shifts` | 18 |
 | [WebAuthnCredential](#webauthncredential) | `webauthn_credentials` | 11 |
 | [WorkArea](#workarea) | `arbeitsbereiche` | 13 |
@@ -260,6 +263,17 @@ Tabelle: `knockout_brackets`
 | `tournament` | `Tournament` | Beziehung über `tournamentId`, beim Löschen: Cascade |
 | `yearGroup` | `YearGroup?` | Beziehung über `yearGroupId`, beim Löschen: Cascade |
 | `matches` | `Match[]` | Gegenstück einer Beziehung (Liste) |
+
+## Mailkontingent
+
+/ Wie viele Mails an einem Kalendertag (UTC - Resends eigene Reset-Grenze) / schon ueber sendeEinzelmail() rausgegangen sind. EIN gemeinsamer Zaehler / fuer alle Absender-Pfade (Versandauftraege, Erinnerungen, Bestaetigungen), / weil das Tageskontingent bei Resend genauso ein einziges, geteiltes Konto / ist - nicht eines je Feature.
+
+Tabelle: `mailkontingent`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `tag` | `String` | Primärschlüssel |
+| `anzahl` | `Int` | Standard: `0` |
 
 ## Match
 
@@ -573,6 +587,7 @@ Tabelle: `tournaments`
 | `volunteerShifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `aufrufe` | `Aufruf[]` | Gegenstück einer Beziehung (Liste) |
+| `versandauftraege` | `Versandauftrag[]` | Gegenstück einer Beziehung (Liste) |
 | `yearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
 
 ## TournamentClub
@@ -702,6 +717,8 @@ Tabelle: `users`
 | `shifts` | `VolunteerShift[]` | Gegenstück einer Beziehung (Liste) |
 | `shiftOffers` | `ShiftOffer[]` | Gegenstück einer Beziehung (Liste) |
 | `aufrufe` | `Aufruf[]` | Gegenstück einer Beziehung (Liste) |
+| `versandauftraege` | `Versandauftrag[]` | Gegenstück einer Beziehung (Liste) |
+| `versandauftragEmpfaenger` | `VersandauftragEmpfaenger[]` | Gegenstück einer Beziehung (Liste) |
 | `webAuthnCredentials` | `WebAuthnCredential[]` | Gegenstück einer Beziehung (Liste) |
 | `nutzungTage` | `NutzungTag[]` | Gegenstück einer Beziehung (Liste) |
 | `trainedYearGroups` | `YearGroup[]` | Gegenstück einer Beziehung (Liste) |
@@ -751,6 +768,47 @@ Tabelle: `user_roles`
 | `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |
 
 Eindeutigkeit: `@@unique([userId, role])`
+
+## Versandauftrag
+
+/ Ein Mailversand, der laenger dauern kann als eine Anfrage. / / Anlass: Resends kostenloser Plan deckelt hart bei 100 Mails pro Tag. Ein / Versand an mehr Helfer als das Tageskontingent hergibt, musste bisher in / EINEM synchronen Request laufen und verlor dabei stillschweigend jeden / Empfaenger nach dem Limit (siehe v1.40.6 - ein Broadcast an 53 Personen / erreichte nur 6). Ein Versandauftrag macht daraus einen Zustand, den ein / Scheduler-Tick ueber mehrere Tage in kleinen Schritten abarbeiten kann, / statt alles auf einmal zu versuchen. / / Der Empfaengerkreis wird bewusst NICHT eingefroren (keine gespeicherte / Schicht-/Bewertungsliste je Person) - jeder Tick fragt den aktuellen Stand / frisch ab (siehe verarbeiteVersandauftraege in scheduler.ts). Sonst zeigte / ein Appell zu offenen Schichten am zweiten Tag noch Luecken, die laengst / gefuellt sind.
+
+Tabelle: `versandauftraege`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `tournamentId` | `Int?` |  |
+| `userId` | `Int?` |  |
+| `vorlage` | `String` |  |
+| `betreff` | `String` |  |
+| `text` | `String` |  |
+| `empfaengerModus` | `String` | Standard: `"all"` |
+| `pushErreicht` | `Int` | Standard: `0` |
+| `kanaele` | `String` | Standard: `"mail"` |
+| `status` | `String` | Standard: `"laufend"` |
+| `createdAt` | `DateTime` | Standard: `now()` |
+| `completedAt` | `DateTime?` |  |
+| `tournament` | `Tournament?` | Beziehung über `tournamentId`, beim Löschen: Cascade |
+| `user` | `User?` | Beziehung über `userId`, beim Löschen: SetNull |
+| `empfaenger` | `VersandauftragEmpfaenger[]` | Gegenstück einer Beziehung (Liste) |
+
+## VersandauftragEmpfaenger
+
+/ Eine Person innerhalb eines Versandauftrags - mit eigenem Fortschritt, / damit ein Tick genau da weitermacht, wo der vorherige aufgehoert hat.
+
+Tabelle: `versandauftrag_empfaenger`
+
+| Feld | Typ | Hinweise |
+|------|-----|----------|
+| `id` | `Int` | Primärschlüssel, Standard: `autoincrement()` |
+| `auftragId` | `Int` |  |
+| `userId` | `Int` |  |
+| `status` | `String` | Standard: `"offen"` |
+| `grund` | `String?` |  |
+| `gesendetAm` | `DateTime?` |  |
+| `auftrag` | `Versandauftrag` | Beziehung über `auftragId`, beim Löschen: Cascade |
+| `user` | `User` | Beziehung über `userId`, beim Löschen: Cascade |
 
 ## VolunteerShift
 

@@ -49,6 +49,7 @@ model Tournament {
   volunteerShifts        VolunteerShift[]
   shiftOffers            ShiftOffer[]
   aufrufe                Aufruf[]
+  versandauftraege       Versandauftrag[]
   yearGroups             YearGroup[]            @relation("TournamentYearGroups")
 
   @@map("tournaments")
@@ -210,6 +211,8 @@ model User {
   shifts                VolunteerShift[]
   shiftOffers           ShiftOffer[]
   aufrufe               Aufruf[]
+  versandauftraege      Versandauftrag[]
+  versandauftragEmpfaenger VersandauftragEmpfaenger[]
   webAuthnCredentials   WebAuthnCredential[]
   nutzungTage           NutzungTag[]
   trainedYearGroups     YearGroup[]            @relation("TrainerYearGroups")
@@ -886,4 +889,82 @@ model Aufruf {
 
   @@index([tournamentId, createdAt])
   @@map("aufrufe")
+}
+
+/// Ein Mailversand, der laenger dauern kann als eine Anfrage.
+///
+/// Anlass: Resends kostenloser Plan deckelt hart bei 100 Mails pro Tag. Ein
+/// Versand an mehr Helfer als das Tageskontingent hergibt, musste bisher in
+/// EINEM synchronen Request laufen und verlor dabei stillschweigend jeden
+/// Empfaenger nach dem Limit (siehe v1.40.6 - ein Broadcast an 53 Personen
+/// erreichte nur 6). Ein Versandauftrag macht daraus einen Zustand, den ein
+/// Scheduler-Tick ueber mehrere Tage in kleinen Schritten abarbeiten kann,
+/// statt alles auf einmal zu versuchen.
+///
+/// Der Empfaengerkreis wird bewusst NICHT eingefroren (keine gespeicherte
+/// Schicht-/Bewertungsliste je Person) - jeder Tick fragt den aktuellen Stand
+/// frisch ab (siehe verarbeiteVersandauftraege in scheduler.ts). Sonst zeigte
+/// ein Appell zu offenen Schichten am zweiten Tag noch Luecken, die laengst
+/// gefuellt sind.
+model Versandauftrag {
+  id           Int       @id @default(autoincrement())
+  tournamentId Int?      @map("tournament_id")
+  /// Wer den Versand ausgeloest hat - bekommt die Abschlussmeldung.
+  userId       Int?      @map("user_id")
+  vorlage      String
+  betreff      String
+  text         String
+  /// all | shifts | users - fuer den Aufruf-Protokolleintrag beim Abschluss,
+  /// siehe Aufruf.empfaenger.
+  empfaengerModus String @default("all") @map("empfaenger_modus")
+  /// Push ist synchron und laeuft schon beim Anlegen - hier nur gemerkt,
+  /// damit der Aufruf-Protokolleintrag beim Abschluss (der ausschliesslich
+  /// die Mailseite betrifft) trotzdem die vollstaendige Push-Zahl zeigt.
+  pushErreicht Int       @default(0) @map("push_erreicht")
+  /// "push,mail" oder "mail" - wie in Aufruf.kanaele, fuer denselben
+  /// Protokolleintrag beim Abschluss.
+  kanaele      String    @default("mail")
+  /// laufend | abgeschlossen | abgebrochen
+  status       String    @default("laufend")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  completedAt  DateTime? @map("completed_at")
+
+  tournament Tournament?                @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  user       User?                      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  empfaenger VersandauftragEmpfaenger[]
+
+  @@index([status, createdAt])
+  @@map("versandauftraege")
+}
+
+/// Eine Person innerhalb eines Versandauftrags - mit eigenem Fortschritt,
+/// damit ein Tick genau da weitermacht, wo der vorherige aufgehoert hat.
+model VersandauftragEmpfaenger {
+  id         Int       @id @default(autoincrement())
+  auftragId  Int       @map("auftrag_id")
+  userId     Int       @map("user_id")
+  /// offen | gesendet | fehlgeschlagen | uebersprungen | abgebrochen
+  status     String    @default("offen")
+  /// Nur bei "uebersprungen" gefuellt, z.B. "ohneOffeneBewertung".
+  grund      String?
+  gesendetAm DateTime? @map("gesendet_am")
+
+  auftrag Versandauftrag @relation(fields: [auftragId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([auftragId, status])
+  @@map("versandauftrag_empfaenger")
+}
+
+/// Wie viele Mails an einem Kalendertag (UTC - Resends eigene Reset-Grenze)
+/// schon ueber sendeEinzelmail() rausgegangen sind. EIN gemeinsamer Zaehler
+/// fuer alle Absender-Pfade (Versandauftraege, Erinnerungen, Bestaetigungen),
+/// weil das Tageskontingent bei Resend genauso ein einziges, geteiltes Konto
+/// ist - nicht eines je Feature.
+model Mailkontingent {
+  /// "YYYY-MM-DD" in UTC.
+  tag    String @id
+  anzahl Int    @default(0)
+
+  @@map("mailkontingent")
 }

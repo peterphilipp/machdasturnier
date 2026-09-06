@@ -10,49 +10,10 @@ import { ensureTournamentMembership } from '../utils/tournamentMembership.js';
 import { describeUserAgent } from '../utils/userAgent.js';
 import { normalizeRoles, highestRole } from '../utils/roles.js';
 import { setUserRoles, getUserRoles } from '../utils/userRoles.js';
-import { ermittleMarke, versendeMails, VersandErgebnis } from '../utils/mailVersand.js';
-import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
+import { ermittleMarke, versendeMails, ermittleDankeZahlen, VersandErgebnis } from '../utils/mailVersand.js';
 import { VORLAGEN, vorlagenZeitpunkt, turnierIstVorbei } from '../utils/mailVorlagen.js';
-import type { DankeZahlen } from '../utils/mailVorlagen.js';
 
 import { sanitizeChildrenInput } from '../utils/sanitizeChildren.js';
-
-/**
- * Die Zahlen fuer die Dankesmail.
- *
- * Bewusst aus berechneTurnierStatistik() und nicht hier nachgerechnet: Die
- * Mail soll dieselben Zahlen nennen wie die Statistikansicht und der
- * Turnierabschluss. Zwei Rechnungen waeren zwei Wahrheiten, und ein Verein,
- * dem per Mail andere Zahlen genannt werden als im Bericht, glaubt am Ende
- * keiner von beiden.
- */
-async function ermittleDankeZahlen(tournamentId: number): Promise<DankeZahlen | null> {
-  const [shifts, einplanungen, turnier, mitglieder, spenden] = await Promise.all([
-    prisma.shift.findMany({ where: { tournamentId }, include: { daySlot: true, day: true, workArea: true } }),
-    prisma.volunteerShift.findMany({
-      where: { tournamentId },
-      include: { user: { select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
-    }),
-    prisma.tournament.findUnique({ where: { id: tournamentId }, include: { yearGroups: true } }),
-    prisma.user.findMany({
-      where: { OR: [{ tournamentMemberships: { some: { tournamentId } } }, { tournamentId }] },
-      select: { id: true, name: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } }
-    }),
-    prisma.foodDonation.findMany({
-      where: { tournamentId },
-      select: { userId: true, user: { select: { id: true, children: { select: { childYear: true } }, trainedYearGroups: { select: { id: true } } } } }
-    })
-  ]);
-  if (!turnier) return null;
-
-  const s = berechneTurnierStatistik(shifts, einplanungen, turnier.yearGroups, mitglieder, spenden);
-  return {
-    beteiligte: s.eckdaten.beteiligte,
-    stunden: s.eckdaten.stunden,
-    schichten: s.eckdaten.schichten,
-    spenden: s.eckdaten.spenden
-  };
-}
 
 // Gleiche Jahrgangs-Grenzen wie bei den Turnier-Jahrgängen selbst (Jahrgaenge.tsx),
 // da genau darüber (childYear innerhalb YearGroup.birthYearStart/-End) die
@@ -402,13 +363,20 @@ export const broadcastPush = async (req: Request, res: Response) => {
    * Kontaktperson. Diese Kette hier nachzubauen waere eine zweite Wahrheit
    * neben notifyUser() - die Adressauswahl bleibt deshalb schlicht "wer eine
    * eigene Adresse hat".
+   *
+   * Ein Testversand ("nur an mich", immer genau EIN Empfaenger) laeuft nach
+   * wie vor synchron - dafuer auf den naechsten Scheduler-Tick zu warten,
+   * waere fuer eine Vorschau nur laestig. Ein echter Versand dagegen wird ein
+   * Versandauftrag: Resends Tageskontingent (100 Mails, siehe
+   * sendeEinzelmail) reicht sonst nicht mehr, sobald der Verein waechst - ein
+   * echter Fall erreichte deshalb nur 6 von 53 Empfaengern (siehe v1.40.6).
+   * Ein Versandauftrag laesst den Scheduler-Tick das ueber so viele Tage
+   * verteilen, wie noetig, statt es in einem Request zu erzwingen.
    */
-  // Ausdruecklich getypt und nicht aus dem Startwert abgeleitet: Sonst
-  // verschwindet ein spaeter ergaenztes Feld aus VersandErgebnis stillschweigend
-  // aus der Antwort, weil das Zuweisen zusaetzlicher Felder erlaubt ist.
-  let mailErgebnis: VersandErgebnis = {
-    gesendet: 0, fehlgeschlagen: 0, ohneAdresse: 0, ohneOffeneBewertung: 0
-  };
+  let mailErgebnis: VersandErgebnis | null = null;
+  let auftragId: number | null = null;
+  let mailKandidatenAnzahl = 0;
+
   if (kanaele.includes('mail')) {
     const kandidaten = await prisma.user.findMany({
       where: { id: { in: uniqueIds }, ohneZugang: false },
@@ -417,36 +385,48 @@ export const broadcastPush = async (req: Request, res: Response) => {
     const mitAdresse = kandidaten.filter(
       (k): k is { id: number; name: string; email: string } => !!k.email?.trim()
     );
+    mailKandidatenAnzahl = mitAdresse.length;
 
-    const marke = await ermittleMarke(tournamentId ? Number(tournamentId) : null);
-    const zahlen = vorlage === 'danke' && tournamentId
-      ? await ermittleDankeZahlen(Number(tournamentId))
-      : null;
+    if (req.body.nurAnMich) {
+      const marke = await ermittleMarke(tournamentId ? Number(tournamentId) : null);
+      const zahlen = vorlage === 'danke' && tournamentId
+        ? await ermittleDankeZahlen(Number(tournamentId))
+        : null;
 
-    mailErgebnis = await versendeMails(
-      mitAdresse,
-      vorlage,
-      // Das Turnier wird mitgegeben, weil die Bewertungsvorlage je Empfaenger
-      // die zu bewertende Schicht braucht - siehe mailVersand.ts.
-      {
-        betreff: title,
-        text: body,
-        zahlen,
-        tournamentId: tournamentId ? Number(tournamentId) : null,
-        istTestversand: !!req.body.nurAnMich
-      },
-      marke
-    );
-    mailErgebnis.ohneAdresse = kandidaten.length - mitAdresse.length;
-  }
-
-  // Den Aufruf festhalten, damit spaeter nachvollziehbar ist, was er bewirkt
-  // hat. Ohne diesen Eintrag zeigt die Verlaufskurve nur Ausschlaege, aber
-  // keinen Anlass. Festgehalten wird die erreichte Zahl, nicht die
-  // angepeilte: Push kommt nur bei denen an, die es erlaubt haben.
-  // Ein Testversand an einen selbst ist kein Aufruf an den Verein - er wuerde
-  // die Verlaufskurve mit Ausschlaegen fuellen, die niemanden erreicht haben.
-  if (tournamentId && !req.body.nurAnMich) {
+      mailErgebnis = await versendeMails(
+        mitAdresse,
+        vorlage,
+        // Das Turnier wird mitgegeben, weil die Bewertungsvorlage je Empfaenger
+        // die zu bewertende Schicht braucht - siehe mailVersand.ts.
+        { betreff: title, text: body, zahlen, tournamentId: tournamentId ? Number(tournamentId) : null, istTestversand: true },
+        marke
+      );
+      mailErgebnis.ohneAdresse = kandidaten.length - mitAdresse.length;
+    } else if (mitAdresse.length > 0) {
+      const auftrag = await prisma.versandauftrag.create({
+        data: {
+          tournamentId: tournamentId ? Number(tournamentId) : null,
+          userId: eigeneId,
+          vorlage,
+          betreff: title,
+          text: body,
+          empfaengerModus: mode,
+          pushErreicht: sentCount,
+          kanaele: kanaele.join(','),
+          empfaenger: {
+            create: mitAdresse.map(k => ({ userId: k.id }))
+          }
+        },
+        select: { id: true }
+      });
+      auftragId = auftrag.id;
+    }
+  } else if (tournamentId && !req.body.nurAnMich) {
+    /**
+     * Nur Push, kein Mailkanal: kein Versandauftrag noetig (Push ist schon
+     * synchron durch), also den Aufruf sofort protokollieren - sonst gaebe es
+     * dafuer nie einen Protokolleintrag.
+     */
     try {
       await prisma.aufruf.create({
         data: {
@@ -456,13 +436,11 @@ export const broadcastPush = async (req: Request, res: Response) => {
           text: body,
           empfaenger: mode,
           erreicht: sentCount,
-          erreichtMail: mailErgebnis.gesendet,
+          erreichtMail: 0,
           kanaele: kanaele.join(',')
         }
       });
     } catch (err) {
-      // Ein misslungener Protokolleintrag darf den Versand nicht nachtraeglich
-      // als Fehler erscheinen lassen - die Nachricht ist raus.
       console.error('[broadcast] Aufruf konnte nicht protokolliert werden:', (err as Error).message);
     }
   }
@@ -471,7 +449,11 @@ export const broadcastPush = async (req: Request, res: Response) => {
     success: true,
     targetedUsers: uniqueIds.length,
     sentPushCount: sentCount,
+    // Testversand oder reiner Push-Versand: das Ergebnis steht schon fest.
     mail: mailErgebnis,
+    // Echter Mailversand: laeuft jetzt als Auftrag, kein Ergebnis heute schon.
+    auftragId,
+    mailKandidatenAnzahl,
     nurAnMich: !!req.body.nurAnMich
   });
 };
