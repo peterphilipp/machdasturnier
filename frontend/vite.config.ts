@@ -48,6 +48,13 @@ export default defineConfig({
         theme_color: '#198754',
         background_color: '#ffffff',
         display: 'standalone',
+        // Ohne das hier holt ein Tap auf einen Mail-Link (z.B. /bewerten?t=...)
+        // nur das schon laufende App-Fenster nach vorn, OHNE es zur neuen URL
+        // zu navigieren - der Standardfall bei den meisten Browsern, wenn die
+        // App schon offen ist. Der Nutzer landet dann auf dem alten Bildschirm
+        // und die Mail wirkt kaputt, obwohl die Bewertungsseite selbst
+        // einwandfrei funktioniert (siehe BewertungsLinkView).
+        launch_handler: { client_mode: 'navigate-existing' },
         version: resolveVersion(),
         icons: [
           {
