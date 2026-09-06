@@ -286,52 +286,45 @@ function bewertungsBlock(
   marke: Marke,
   absaetze: string[]
 ): string {
-  const erste = schichten[0];
-  const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(erste.token)}`;
+  /**
+   * Jede Schicht traegt ihr eigenes Token (siehe ermittleBewertungsSchichten)
+   * - deshalb bekommt hier jede ihr eigenes Sternefeld, nicht nur die erste.
+   * Vorher gab es nur fuer die erste Schicht klickbare Sterne; ab der zweiten
+   * kam ein blosser "Bewerten"-Knopf, der in die App fuehrte statt direkt in
+   * der Mail zu bewerten - genau das, was diese Funktion eigentlich anbieten
+   * soll.
+   */
+  return schichten.map((s, i) => {
+    const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`;
 
-  const reihen = FRAGEN.map(f => sterneReihe({
-    frage: f.frage,
-    hinweis: f.hinweis,
-    basisUrl: basis,
-    feld: f.feld,
-    symbole: f.symbole,
-    skala: f.skala,
-    farbe: marke.farbe
-  })).join('');
+    const reihen = FRAGEN.map(f => sterneReihe({
+      frage: f.frage,
+      hinweis: f.hinweis,
+      basisUrl: basis,
+      feld: f.feld,
+      symbole: f.symbole,
+      skala: f.skala,
+      farbe: marke.farbe
+    })).join('');
 
-  let html = kasten(
-    `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
-    + `letter-spacing:0.6px;margin-bottom:2px;">Deine Schicht</div>`
-    + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
-    + `${maskiere(erste.icon)} ${maskiere(erste.bereich)}</div>`
-    + `<div style="font-size:13px;color:#475569;margin:2px 0 18px;">`
-    + `${maskiere(erste.datum)} · ${maskiere(erste.slot)}</div>`
-    + reihen,
-    marke.farbe
-  );
+    const ueberschrift = schichten.length > 1
+      ? `Deine Schicht ${i + 1} von ${schichten.length}`
+      : 'Deine Schicht';
 
-  absaetze.push(`Deine Schicht: ${erste.bereich}, ${erste.datum}, ${erste.slot}.`);
-  absaetze.push(`Bewerten: ${basis}`);
+    absaetze.push(`${ueberschrift}: ${s.bereich}, ${s.datum}, ${s.slot}.`);
+    absaetze.push(`Bewerten: ${basis}`);
 
-  const weitere = schichten.slice(1);
-  if (weitere.length > 0) {
-    html += `<div style="font-size:14px;font-weight:700;color:#0f172a;margin:6px 0 8px;">`
-      + `${weitere.length === 1 ? 'Du hattest noch eine Schicht:' : `Du hattest noch ${weitere.length} Schichten:`}`
-      + `</div>`;
-    html += schichtListe(weitere.map(s => ({
-      icon: s.icon,
-      bereich: s.bereich,
-      wann: `${s.datum} · ${s.slot}`,
-      url: `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`
-    })), marke.farbe, 'Bewerten');
-
-    for (const s of weitere) {
-      absaetze.push(`${s.bereich}, ${s.datum}, ${s.slot} bewerten: `
-        + `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`);
-    }
-  }
-
-  return html;
+    return kasten(
+      `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
+      + `letter-spacing:0.6px;margin-bottom:2px;">${maskiere(ueberschrift)}</div>`
+      + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
+      + `${maskiere(s.icon)} ${maskiere(s.bereich)}</div>`
+      + `<div style="font-size:13px;color:#475569;margin:2px 0 18px;">`
+      + `${maskiere(s.datum)} · ${maskiere(s.slot)}</div>`
+      + reihen,
+      marke.farbe
+    );
+  }).join('');
 }
 
 /**

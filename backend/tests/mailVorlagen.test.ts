@@ -209,30 +209,37 @@ describe('Sterne in der Bewertungsmail', () => {
   });
 
   /**
-   * Mehrere Schichten: Die erste bekommt die Fragen, die weiteren je einen
-   * eigenen Link mit eigenem Token. Waeren es dieselben Token, landete die
-   * zweite Bewertung auf der ersten Schicht - ein Fehler, den niemand sieht,
-   * weil die Seite dann einfach die erste Schicht zeigt.
+   * Mehrere Schichten: JEDE bekommt ihre eigenen drei Fragen mit eigenem
+   * Token, nicht nur die erste. Vorher bekamen weitere Schichten nur einen
+   * "Bewerten"-Knopf in die App statt klickbarer Sterne - genau das Problem,
+   * das ein Anwender live gemeldet hat ("kann sie nicht in der Mail
+   * bewerten"). Waeren es dieselben Token, landete die zweite Bewertung auf
+   * der ersten Schicht - ein Fehler, den niemand sieht, weil die Seite dann
+   * einfach die erste Schicht zeigt.
    */
-  it('verlinkt weitere Schichten mit ihrem eigenen Token', () => {
+  it('gibt jeder Schicht ihre eigenen Fragen mit eigenem Token', () => {
     const m = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite] }, MARKE);
-    expect(m.html).toContain('Du hattest noch eine Schicht:');
+    expect(m.html).toContain('Deine Schicht 1 von 2');
+    expect(m.html).toContain('Deine Schicht 2 von 2');
     expect(m.html).toContain('Kuchentheke');
     expect(m.html).toContain('https://beispiel.test/bewerten?t=zweites.token');
     expect(m.text).toContain('https://beispiel.test/bewerten?t=zweites.token');
-    // Die Fragen gibt es nur einmal - drei Reihen, nicht sechs.
-    expect(m.html.match(/Stress &amp; Auslastung/g)).toHaveLength(1);
+    // Die Fragen gibt es fuer jede Schicht einmal - zwei Schichten, zwei Reihen.
+    expect(m.html.match(/Stress &amp; Auslastung/g)).toHaveLength(2);
   });
 
-  it('zählt bei mehr als zwei Schichten richtig', () => {
+  it('nummeriert bei mehr als zwei Schichten richtig', () => {
     const dritte = { ...zweite, token: 'drittes.token', bereich: 'Kasse' };
     const html = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite, dritte] }, MARKE).html;
-    expect(html).toContain('Du hattest noch 2 Schichten:');
+    expect(html).toContain('Deine Schicht 1 von 3');
+    expect(html).toContain('Deine Schicht 3 von 3');
+    expect(html.match(/Stress &amp; Auslastung/g)).toHaveLength(3);
   });
 
-  it('erwähnt weitere Schichten nur, wenn es welche gibt', () => {
+  it('nummeriert bei genau einer Schicht nicht', () => {
     const eine = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
-    expect(eine).not.toContain('Du hattest');
+    expect(eine).toContain('Deine Schicht');
+    expect(eine).not.toContain('von 1');
   });
 
   it('maskiert das Token, statt es ins HTML zu spucken', () => {
