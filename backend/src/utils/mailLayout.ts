@@ -112,8 +112,8 @@ export function kennzahlen(werte: { wert: string; label: string }[], farbe: stri
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
              style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
         <tr><td align="center" style="padding:14px 8px;">
-          <div style="font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</div>
-          <div style="font-size:12px;color:#475569;margin-top:4px;">${maskiere(k.label)}</div>
+          <div style="text-align:center;font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</div>
+          <div style="text-align:center;font-size:12px;color:#475569;margin-top:4px;">${maskiere(k.label)}</div>
         </td></tr>
       </table>
     </td>`);
@@ -252,8 +252,17 @@ export function jubelBand(o: { symbole: string; text: string; farbe: string }): 
       <tr><td align="center" bgcolor="${o.farbe}" style="padding:22px 18px;border-radius:14px;
               background:${o.farbe};
               background-image:linear-gradient(135deg, ${o.farbe} 0%, ${dunkler(o.farbe, 0.3)} 100%);">
-        <div style="font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</div>
-        <div style="font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;margin-top:8px;">
+        <!--
+          text-align:center auf JEDEM div, nicht nur align="center" auf der
+          Zelle: Ein <div> ist ein Blockelement und fuellt seinen Container
+          automatisch auf volle Breite - das zentriert die Zelle dann selbst
+          nicht mehr sichtbar (der Div fuellt sie ja schon), aber der TEXT
+          darin bleibt ohne eigene Ausrichtung linksbuendig. Auf dem Handy war
+          das gut sichtbar: die Emoji-Zeile klebte links, obwohl die Box um sie
+          herum die volle Breite hatte.
+        -->
+        <div style="text-align:center;font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</div>
+        <div style="text-align:center;font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;margin-top:8px;">
           ${maskiere(o.text)}
         </div>
       </td></tr>
@@ -299,7 +308,7 @@ export function baueMail(o: LayoutOptionen): string {
            </table>
          </td></tr>
          <tr><td align="center" style="padding:10px 0 16px;">
-           <div style="font-size:11px;line-height:1.5;color:#94a3b8;word-break:break-all;">
+           <div style="text-align:center;font-size:11px;line-height:1.5;color:#94a3b8;word-break:break-all;">
              Falls der Knopf nicht funktioniert:<br />${maskiere(o.aktion.url)}
            </div>
          </td></tr>

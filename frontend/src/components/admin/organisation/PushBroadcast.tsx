@@ -294,7 +294,12 @@ export default function PushBroadcast({ selectedTournament, tournaments = [] }: 
             <label className="nachricht-label" htmlFor="nachricht-vorlage">📄 Vorlage</label>
             <select
               id="nachricht-vorlage"
-              style={{ ...inputStyle, marginBottom: 6 }}
+              /* Ein <select> sizet sich sonst nach der breitesten Option
+                 ("Aufruf: Verpflegung – Vor dem Turnier – verweist auf die
+                 offenen Verpflegungsspenden"), nicht nach dem verfuegbaren
+                 Platz - anders als ein <input>. Ohne width:100% ragte das
+                 Feld auf dem Handy ueber den Bildschirmrand hinaus. */
+              style={{ ...inputStyle, width: '100%', maxWidth: '100%', boxSizing: 'border-box', marginBottom: 6 }}
               value={vorlage}
               onChange={e => {
                 const id = e.target.value as VorlagenId;
