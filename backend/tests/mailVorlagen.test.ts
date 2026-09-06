@@ -375,36 +375,37 @@ describe('Dankesmail', () => {
   });
 
   /**
-   * Drei Anlaeufe, weil zwei in echtem Gmail nachweislich versagt haben:
-   * text-align:center auf einem <div> zentrierte auf dem Handy nicht (per
-   * Screenshot bestaetigt, mit korrektem CSS), eine inhaltsbreite Tabelle mit
-   * align="center" auf der Zelle danach auch nicht (Anwender bestaetigte:
-   * "Das Problem ist nur in Gmail sichtbar", trotz korrekt gemessener
-   * Zentrierung in Chrome). Jetzt steckt zusaetzlich ein <center>-Element
-   * darum - das aelteste und am weitesten unterstuetzte Zentrierungsmittel,
-   * das selbst rudimentaere Mail-Renderer noch einhalten. Betraf Jubelband
-   * und Kennzahlen-Kacheln gleich.
+   * Drei verschachtelte Anlaeufe sind an echtem Gmail nachweislich
+   * gescheitert: text-align:center auf einem <div>, eine inhaltsbreite
+   * Tabelle mit align="center", und zusaetzlich ein <center>-Element darum -
+   * alle auf derselben Verschachtelungstiefe, alle in Chrome nachweislich
+   * korrekt zentriert, keins in Gmails App. Der gemeinsame Nenner war
+   * vermutlich die Tiefe, nicht das Mittel. Jetzt keine Tabelle, kein Div,
+   * kein <center> mehr an dieser Stelle - nur <span> (inline) direkt in der
+   * einen aeusseren Zelle mit align="center", die einzige und flachste
+   * beteiligte Ausrichtung. Betraf Jubelband und Kennzahlen-Kacheln gleich.
    */
-  it('zentriert Emoji und Text im Jubelband ueber center-Element und inhaltsbreite Tabelle', () => {
+  it('zentriert Emoji und Text im Jubelband ueber die aeusserste Zelle, ohne Div oder Tabelle darin', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const bandStelle = html.indexOf('Danke fürs Mithelfen!');
-    const tdDavor = html.lastIndexOf('<td', bandStelle);
+    const spanDavor = html.lastIndexOf('<span', bandStelle);
+    expect(spanDavor).toBeGreaterThan(-1);
+    const tdDavor = html.lastIndexOf('<td', spanDavor);
     expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
-    const tableDavor = html.lastIndexOf('<table', tdDavor);
-    expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
-    const centerDavor = html.lastIndexOf('<center>', tableDavor);
-    expect(centerDavor).toBeGreaterThan(-1);
+    // Zwischen der Zelle und dem Text darf kein div/table/center mehr stecken
+    // (der Kommentar selbst nennt diese Tags als Text, deshalb erst raus damit).
+    const ohneKommentar = html.slice(tdDavor, bandStelle).replace(/<!--[\s\S]*?-->/g, '');
+    expect(ohneKommentar).not.toMatch(/<(div|table|center)[\s>]/);
   });
 
-  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln ueber center-Element und inhaltsbreite Tabelle', () => {
+  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln ueber die aeusserste Zelle, ohne Div oder Tabelle darin', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const zahlStelle = html.indexOf('74');
-    const tdDavor = html.lastIndexOf('<td', zahlStelle);
+    const spanDavor = html.lastIndexOf('<span', zahlStelle);
+    expect(spanDavor).toBeGreaterThan(-1);
+    const tdDavor = html.lastIndexOf('<td', spanDavor);
     expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
-    const tableDavor = html.lastIndexOf('<table', tdDavor);
-    expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
-    const centerDavor = html.lastIndexOf('<center>', tableDavor);
-    expect(centerDavor).toBeGreaterThan(-1);
+    expect(html.slice(tdDavor, zahlStelle)).not.toMatch(/<(div|table|center)[\s>]/);
   });
 
   /**

@@ -112,14 +112,8 @@ export function kennzahlen(werte: { wert: string; label: string }[], farbe: stri
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
              style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
         <tr><td align="center" style="padding:14px 8px;">
-          <center>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
-            <td align="center" style="font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</td>
-          </tr></table>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:4px;"><tr>
-            <td align="center" style="font-size:12px;color:#475569;">${maskiere(k.label)}</td>
-          </tr></table>
-          </center>
+          <span style="font-size:26px;font-weight:800;color:${farbe};line-height:1.1;">${maskiere(k.wert)}</span><br />
+          <span style="font-size:12px;color:#475569;">${maskiere(k.label)}</span>
         </td></tr>
       </table>
     </td>`);
@@ -259,23 +253,21 @@ export function jubelBand(o: { symbole: string; text: string; farbe: string }): 
               background:${o.farbe};
               background-image:linear-gradient(135deg, ${o.farbe} 0%, ${dunkler(o.farbe, 0.3)} 100%);">
         <!--
-          Drei Schichten fuer die Zentrierung, weil zwei davon in Gmail
-          nachweislich versagt haben: text-align:center auf einem <div>
-          zentrierte auf dem Handy nicht (Bug 1), eine inhaltsbreite Tabelle
-          mit align="center" auf der Zelle auch nicht (Bug 2, vermutlich
-          uebersteuert Gmails eigenes Stylesheet das Attribut). Das <center>
-          Element ist aelter als beides und wird selbst von den einfachsten
-          Mail-Renderern noch beachtet - deshalb jetzt zusaetzlich zu den
-          anderen beiden Schichten, nicht statt ihnen.
+          Drei verschachtelte Versuche sind an Gmails Handy-App nachweislich
+          gescheitert: text-align:center auf einem <div>, eine inhaltsbreite
+          Tabelle mit align="center", und ein zusaetzliches <center> darum -
+          alle auf derselben Verschachtelungstiefe (4 Ebenen unter der
+          aeussersten Zelle). Der gemeinsame Nenner war nicht das Mittel,
+          sondern die Tiefe: Gmails App rendert Mails vermutlich nicht mit
+          einer vollen HTML/CSS-Engine, sondern mit einem vereinfachten
+          Renderer, der Ausrichtung jenseits weniger Ebenen verliert. Deshalb
+          jetzt das Gegenteil: keine Tabelle, kein Div, kein <center> mehr
+          hier drin - nur <span> (inline, kein Blockelement, das die Zelle
+          fuellen koennte) direkt in der einen Zelle, deren align="center"
+          dann die einzige und flachste beteiligte Ausrichtung ist.
         -->
-        <center>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
-          <td align="center" style="font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</td>
-        </tr></table>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin-top:8px;"><tr>
-          <td align="center" style="font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;">${maskiere(o.text)}</td>
-        </tr></table>
-        </center>
+        <span style="font-size:34px;line-height:1.2;letter-spacing:4px;">${maskiere(o.symbole)}</span><br />
+        <span style="font-size:19px;font-weight:800;color:#ffffff;line-height:1.3;">${maskiere(o.text)}</span>
       </td></tr>
     </table>`;
 }

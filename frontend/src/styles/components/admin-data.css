@@ -526,14 +526,17 @@
 .push-broadcast-footer {
   border-top: 1px solid #e9ecef;
   padding-top: 20px;
+  display: flex;
+  gap: 12px;
 }
 
 .push-broadcast-footer-mobile {
-  text-align: center;
+  flex-direction: column;
+  align-items: center;
 }
 
 .push-broadcast-footer-desktop {
-  text-align: right;
+  justify-content: flex-end;
 }
 
 .push-broadcast-submit-btn {
