@@ -240,6 +240,23 @@ async function ladeSicher<T>(
  * zwei Kopien dieser Logik wuerden bei der naechsten Aenderung garantiert
  * auseinanderlaufen.
  */
+function warte(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Verschickt eine Mail - mit Geduld gegenueber Resends Ratenlimit.
+ *
+ * Aufgefallen bei einem echten Versand an ueber 50 Empfaenger: Nur die ersten
+ * paar kamen an, der Rest verschwand spurlos - nicht einmal als Fehlschlag im
+ * Resend-Dashboard, weil eine per Ratenlimit ABGELEHNTE Anfrage dort nie zu
+ * einer E-Mail wird, ueber die man etwas nachsehen koennte. Resends Standard-
+ * Ratenlimit liegt bei wenigen Anfragen pro Sekunde; unser Versand feuerte
+ * bisher ohne jede Pause, also sofort dagegen. Zwei Gegenmassnahmen: eine
+ * Pause zwischen JEDER Mail (siehe versendeMails, WARTE_ZWISCHEN_MAILS_MS),
+ * und hier zusaetzlich ein paar Versuche mit steigender Wartezeit, falls es
+ * trotzdem knapp wird - Resends Fehlercode dafuer ist "rate_limit_exceeded".
+ */
 export async function sendeEinzelmail(
   empfaenger: { id: number; email: string },
   mail: Mailinhalt
@@ -250,29 +267,44 @@ export async function sendeEinzelmail(
     return false;
   }
 
-  try {
-    const resend = new Resend(schluessel);
-    const antwort = await resend.emails.send({
-      from: resolveEmailFrom(),
-      to: empfaenger.email,
-      subject: mail.betreff,
-      html: mail.html,
-      text: mail.text
-    });
-    if (antwort.error) throw new Error(antwort.error.message);
-    return true;
-  } catch (err) {
-    // Die Adresse mitloggen, nicht den Inhalt: Beim Nachsehen will man
-    // wissen, WER nicht erreicht wurde.
-    console.error(JSON.stringify({
-      event: 'MAIL_SEND_FAILED',
-      to: empfaenger.email,
-      userId: empfaenger.id,
-      error: (err as Error).message,
-      timestamp: new Date().toISOString()
-    }));
-    return false;
+  const resend = new Resend(schluessel);
+  const MAX_VERSUCHE = 4;
+
+  for (let versuch = 1; versuch <= MAX_VERSUCHE; versuch++) {
+    try {
+      const antwort = await resend.emails.send({
+        from: resolveEmailFrom(),
+        to: empfaenger.email,
+        subject: mail.betreff,
+        html: mail.html,
+        text: mail.text
+      });
+      if (antwort.error) {
+        if (antwort.error.name === 'rate_limit_exceeded' && versuch < MAX_VERSUCHE) {
+          await warte(versuch * 1000);
+          continue;
+        }
+        throw new Error(antwort.error.message);
+      }
+      return true;
+    } catch (err) {
+      if (versuch < MAX_VERSUCHE) {
+        await warte(versuch * 1000);
+        continue;
+      }
+      // Die Adresse mitloggen, nicht den Inhalt: Beim Nachsehen will man
+      // wissen, WER nicht erreicht wurde.
+      console.error(JSON.stringify({
+        event: 'MAIL_SEND_FAILED',
+        to: empfaenger.email,
+        userId: empfaenger.id,
+        error: (err as Error).message,
+        timestamp: new Date().toISOString()
+      }));
+      return false;
+    }
   }
+  return false;
 }
 
 export interface VersandErgebnis {
@@ -367,9 +399,22 @@ export async function versendeMails(
     'ermittleVerpflegungListen'
   );
 
+  /**
+   * Abstand zwischen zwei Anfragen an Resend.
+   *
+   * Ohne diese Pause feuerte der Versand so schnell hintereinander, wie
+   * Node es zulaesst - bei einem echten Versand an ueber 50 Empfaenger kamen
+   * nur die ersten paar an, der Rest scheiterte an Resends Ratenlimit (siehe
+   * sendeEinzelmail). 600ms sind bei Vereinsgroesse (siehe Kommentar oben)
+   * kein spuerbarer Unterschied, halten den Versand aber sicher unter
+   * ueblichen Ratenlimits von wenigen Anfragen pro Sekunde.
+   */
+  const WARTE_ZWISCHEN_MAILS_MS = 600;
+
   let gesendet = 0;
   let fehlgeschlagen = 0;
   let ohneOffeneBewertung = 0;
+  let versandVersuche = 0;
 
   for (const e of empfaenger) {
     const unbewertet = schichten.get(e.id) ?? [];
@@ -390,6 +435,9 @@ export async function versendeMails(
       ohneOffeneBewertung++;
       continue;
     }
+
+    if (versandVersuche > 0) await warte(WARTE_ZWISCHEN_MAILS_MS);
+    versandVersuche++;
 
     try {
       /**
