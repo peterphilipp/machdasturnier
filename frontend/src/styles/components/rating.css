@@ -1,0 +1,62 @@
+/**
+ * Die Bewertungsskala.
+ *
+ * Aus dashboard.css herausgezogen, weil es die Skala inzwischen an zwei
+ * Stellen gibt: im Dialog der angemeldeten App und auf der oeffentlichen
+ * Seite, auf der man aus der Mail landet. Zwei Kopien desselben Aussehens
+ * driften auseinander - und dann sieht die Bewertung aus der Mail aus wie
+ * eine andere Anwendung.
+ */
+
+.rating-feld {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+.rating-feld-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-main);
+}
+/* Die gewaehlte Stufe im Klartext - eine nackte Zahl von 1 bis 5 sagt nicht,
+   ob 5 gut oder schlecht gemeint ist. */
+.rating-feld-stufe {
+  font-weight: var(--font-weight-regular);
+  color: #666;
+}
+
+.rating-skala {
+  display: flex;
+  gap: var(--spacing-2);
+}
+.rating-skala-btn {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border-color);
+  background: var(--bg-surface);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-md);
+  cursor: pointer;
+  /* Touch-Ziel: die Skala wird fast nur auf dem Handy bedient. */
+  min-height: 44px;
+}
+.rating-skala-btn--aktiv {
+  border-color: var(--club-primary);
+  background: color-mix(in srgb, var(--club-primary) 12%, transparent);
+}
+
+.rating-kommentar {
+  width: 100%;
+  padding: 10px;
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+}
+.rating-kommentar:focus {
+  border-color: var(--club-primary);
+}

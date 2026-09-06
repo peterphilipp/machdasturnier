@@ -380,7 +380,14 @@ export const broadcastPush = async (req: Request, res: Response) => {
       ? await ermittleDankeZahlen(Number(tournamentId))
       : null;
 
-    mailErgebnis = await versendeMails(mitAdresse, vorlage, { betreff: title, text: body, zahlen }, marke);
+    mailErgebnis = await versendeMails(
+      mitAdresse,
+      vorlage,
+      // Das Turnier wird mitgegeben, weil die Bewertungsvorlage je Empfaenger
+      // die zu bewertende Schicht braucht - siehe mailVersand.ts.
+      { betreff: title, text: body, zahlen, tournamentId: tournamentId ? Number(tournamentId) : null },
+      marke
+    );
     mailErgebnis.ohneAdresse = kandidaten.length - mitAdresse.length;
   }
 

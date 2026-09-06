@@ -2,7 +2,8 @@ import { Resend } from 'resend';
 import prisma from '../config/prisma.js';
 import { resolveEmailFrom, resolveFrontendUrl } from './mailAbsender.js';
 import { ermittleUmgebung } from './umgebung.js';
-import { baueVorlage, Marke, VorlagenId, DankeZahlen } from './mailVorlagen.js';
+import { baueVorlage, Marke, VorlagenId, DankeZahlen, BewertungsSchicht } from './mailVorlagen.js';
+import { baueBewertungsToken } from './bewertungsLink.js';
 
 /**
  * Der eigentliche Mailversand an eine Gruppe.
@@ -52,6 +53,69 @@ export interface VersandEmpfaenger {
   email: string;
 }
 
+const DATUM_LANG = new Intl.DateTimeFormat('de-DE', {
+  weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Berlin'
+});
+
+/**
+ * Sucht je Empfaenger die Schicht, um die die Bewertungsmail bitten soll.
+ *
+ * Eine Abfrage fuer alle statt eine je Person: Bei achtzig Empfaengern waeren
+ * das sonst achtzig Abfragen fuer eine Mail.
+ *
+ * Genommen wird die frueheste noch unbewertete Schicht. "Unbewertet" heisst:
+ * keine der drei Sternefragen beantwortet - wer schon etwas abgegeben hat,
+ * soll nicht dieselbe Schicht noch einmal vorgelegt bekommen. Wer gar keine
+ * offene Schicht mehr hat, bekommt in der Mail den Verweis in die App und
+ * keine Sterne; ausgelassen wird niemand, weil der Organisator entscheidet,
+ * wer die Mail bekommt, nicht diese Funktion.
+ */
+async function ermittleBewertungsSchichten(
+  tournamentId: number | null,
+  userIds: number[]
+): Promise<Map<number, BewertungsSchicht>> {
+  const treffer = new Map<number, BewertungsSchicht>();
+  if (userIds.length === 0) return treffer;
+
+  const offene = await prisma.volunteerShift.findMany({
+    where: {
+      userId: { in: userIds },
+      ...(tournamentId ? { tournamentId } : {}),
+      ratingWorkload: null,
+      ratingOrganization: null,
+      ratingFun: null
+    },
+    select: {
+      id: true, userId: true, date: true, slot: true, role: true,
+      shift: { select: { workArea: { select: { name: true } }, day: { select: { date: true } } } }
+    },
+    orderBy: [{ date: 'asc' }, { slot: 'asc' }]
+  });
+
+  // Erst zaehlen, dann die erste je Person nehmen - die Anzahl steht in der
+  // Mail ("Du hattest 3 Schichten"), und die haengt an allen, nicht an der
+  // ausgewaehlten.
+  const anzahl = new Map<number, number>();
+  for (const vs of offene) {
+    if (vs.userId == null) continue;
+    anzahl.set(vs.userId, (anzahl.get(vs.userId) ?? 0) + 1);
+  }
+
+  for (const vs of offene) {
+    if (vs.userId == null || treffer.has(vs.userId)) continue;
+    const datum = vs.shift?.day?.date ?? vs.date;
+    treffer.set(vs.userId, {
+      token: baueBewertungsToken({ volunteerShiftId: vs.id, userId: vs.userId }),
+      bereich: vs.shift?.workArea?.name || vs.role,
+      datum: DATUM_LANG.format(new Date(datum)),
+      slot: vs.slot,
+      offen: anzahl.get(vs.userId) ?? 1
+    });
+  }
+
+  return treffer;
+}
+
 export interface VersandErgebnis {
   gesendet: number;
   fehlgeschlagen: number;
@@ -73,7 +137,7 @@ export interface VersandErgebnis {
 export async function versendeMails(
   empfaenger: VersandEmpfaenger[],
   vorlage: VorlagenId,
-  eingabe: { betreff: string; text: string; zahlen?: DankeZahlen | null },
+  eingabe: { betreff: string; text: string; zahlen?: DankeZahlen | null; tournamentId?: number | null },
   marke: Marke
 ): Promise<VersandErgebnis> {
   const schluessel = process.env.RESEND_API_KEY;
@@ -81,6 +145,12 @@ export async function versendeMails(
     console.warn('[mail] RESEND_API_KEY fehlt - es wird nichts versendet.');
     return { gesendet: 0, fehlgeschlagen: empfaenger.length, ohneAdresse: 0 };
   }
+
+  // Nur fuer die Bewertungsmail: Jede andere Vorlage braucht keine Schichten,
+  // und eine Abfrage, die nichts beitraegt, soll nicht laufen.
+  const schichten = vorlage === 'bewertung'
+    ? await ermittleBewertungsSchichten(eingabe.tournamentId ?? null, empfaenger.map(e => e.id))
+    : new Map<number, BewertungsSchicht>();
 
   const resend = new Resend(schluessel);
   const from = resolveEmailFrom();
@@ -94,7 +164,8 @@ export async function versendeMails(
       // Nur der Vorname: "Hallo Anja" liest sich wie von einem Menschen,
       // "Hallo Anja Petersen" wie von einem Serienbrief.
       anrede: e.name.trim().split(/\s+/)[0] || e.name,
-      zahlen: eingabe.zahlen ?? null
+      zahlen: eingabe.zahlen ?? null,
+      schicht: schichten.get(e.id) ?? null
     }, marke);
 
     try {

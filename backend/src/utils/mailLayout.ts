@@ -45,6 +45,29 @@ export interface LayoutOptionen {
   farbe: string;
   /** Steht klein unter dem Inhalt - etwa warum diese Mail kommt. */
   fusszeile: string;
+  /** Basis-URL der App - fuer den Verweis in der Fusszeile. */
+  appUrl?: string | null;
+}
+
+/**
+ * Eine dunklere Variante der Vereinsfarbe.
+ *
+ * Rechnerisch und nicht als zweite Farbe im Datenmodell: Ein Verlauf im
+ * Mailkopf ist in Outlook nicht darstellbar, zwei abgesetzte Flaechen schon.
+ * Die zweite Farbe soll dabei nicht gepflegt werden muessen - sie ist immer
+ * dieselbe Farbe, nur dunkler.
+ */
+export function dunkler(farbe: string, anteil = 0.22): string {
+  const h = /^#?([0-9a-f]{6})$/i.exec(String(farbe).trim());
+  // Bei allem, was nicht wie ein Sechser-Hex aussieht (z.B. "rebeccapurple"
+  // oder rgb()), lieber die Ausgangsfarbe zurueckgeben als Schwarz.
+  if (!h) return farbe;
+  const n = parseInt(h[1], 16);
+  const kanal = (v: number) => Math.max(0, Math.round(v * (1 - anteil)));
+  const r = kanal((n >> 16) & 255);
+  const g = kanal((n >> 8) & 255);
+  const b = kanal(n & 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
 /** Damit Nutzertext nichts am Layout kaputtmacht - und kein HTML einschmuggelt. */
@@ -99,26 +122,124 @@ export function kennzahlen(werte: { wert: string; label: string }[], farbe: stri
                  style="margin:4px 0 18px;">${reihen.join('')}</table>`;
 }
 
+/**
+ * Eine Sternereihe zum Anklicken - fuer die Bewertung direkt aus der Mail.
+ *
+ * Fuenf einzelne Links, jeder mit seinem Wert. Als Text-Sterne und nicht als
+ * Bilder: Wer Bilder blockiert (Standard in Outlook und bei vielen
+ * Gmail-Konten), saehe sonst fuenf leere Rahmen statt einer Frage.
+ *
+ * Jeder Link fuehrt auf die Bewertungsseite, nicht direkt in die Datenbank -
+ * Mailprogramme und Sicherheitsscanner rufen Links teilweise von sich aus ab,
+ * und ein schreibender Link waere damit abgegeben, bevor der Empfaenger die
+ * Mail geoeffnet hat.
+ */
+export function sterneReihe(o: {
+  frage: string;
+  hinweis: string;
+  basisUrl: string;
+  feld: string;
+  /**
+   * Die fuenf Symbole - dieselben wie in der App (RATING_FRAGEN im Frontend).
+   * Eine Mail, die andere Symbole zeigt als die Seite, auf der man landet,
+   * sieht nach zwei verschiedenen Fragen aus.
+   */
+  symbole: string[];
+  /** Beschriftung fuer 1 und 5 - "wenig zu tun" bis "zu viel". */
+  skala: [string, string];
+  farbe: string;
+}): string {
+  const sterne = [1, 2, 3, 4, 5].map(n => `
+    <td align="center" style="padding:0 3px;">
+      <a href="${maskiere(`${o.basisUrl}&${o.feld}=${n}`)}"
+         title="${maskiere(String(n))}"
+         style="display:block;width:46px;line-height:46px;text-align:center;text-decoration:none;
+                font-size:22px;color:${o.farbe};background:#ffffff;border:2px solid #e2e8f0;
+                border-radius:10px;font-weight:700;">${maskiere(o.symbole[n - 1] ?? String(n))}</a>
+    </td>`).join('');
+
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+           style="margin:0 0 18px;">
+      <tr><td style="padding-bottom:6px;">
+        <div style="font-size:14px;font-weight:700;color:#0f172a;">${maskiere(o.frage)}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:2px;">${maskiere(o.hinweis)}</div>
+      </td></tr>
+      <tr><td>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${sterne}</tr></table>
+      </td></tr>
+      <tr><td style="padding-top:6px;">
+        <table role="presentation" width="260" cellpadding="0" cellspacing="0" border="0" style="width:260px;">
+          <tr>
+            <td align="left" style="font-size:11px;color:#94a3b8;">${maskiere(o.skala[0])}</td>
+            <td align="right" style="font-size:11px;color:#94a3b8;">${maskiere(o.skala[1])}</td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>`;
+}
+
+/** Ein abgesetzter Kasten - hebt einen Block vom Fliesstext ab. */
+export function kasten(inhalt: string, farbe: string): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                 style="margin:0 0 18px;background:#f8fafc;border-left:4px solid ${farbe};
+                        border-radius:0 10px 10px 0;">
+            <tr><td style="padding:16px 18px;">${inhalt}</td></tr>
+          </table>`;
+}
+
 /** Setzt Kopf, Inhalt und Fuss zu einer versandfertigen Mail zusammen. */
 export function baueMail(o: LayoutOptionen): string {
+  const akzent = dunkler(o.farbe);
+
+  /**
+   * Der Knopf - mit sichtbarer Ausweichadresse darunter.
+   *
+   * Die ausgeschriebene URL ist kein Schoenheitsfehler, sondern der Grund,
+   * warum die Mail funktioniert, wenn der Knopf es nicht tut: In manchen
+   * Firmen-Mailclients werden gestylte Links abgeschnitten oder umgeschrieben,
+   * und dann steht der Empfaenger vor einer Mail ohne Ausweg.
+   */
   const knopf = o.aktion
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 18px;">
-         <tr><td align="center" bgcolor="${o.farbe}" style="border-radius:8px;">
-           <a href="${maskiere(o.aktion.url)}"
-              style="display:inline-block;padding:14px 28px;font-size:16px;font-weight:700;
-                     color:#ffffff;text-decoration:none;border-radius:8px;">
-             ${maskiere(o.aktion.text)}
-           </a>
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+              style="margin:4px 0 6px;">
+         <tr><td align="center">
+           <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+             <tr><td align="center" bgcolor="${o.farbe}" style="border-radius:10px;">
+               <a href="${maskiere(o.aktion.url)}"
+                  style="display:inline-block;padding:15px 34px;font-size:16px;font-weight:700;
+                         color:#ffffff;text-decoration:none;border-radius:10px;
+                         border-bottom:3px solid ${akzent};">
+                 ${maskiere(o.aktion.text)}
+               </a>
+             </td></tr>
+           </table>
+         </td></tr>
+         <tr><td align="center" style="padding:10px 0 16px;">
+           <div style="font-size:11px;line-height:1.5;color:#94a3b8;word-break:break-all;">
+             Falls der Knopf nicht funktioniert:<br />${maskiere(o.aktion.url)}
+           </div>
          </td></tr>
        </table>`
     : '';
 
+  // Das Logo auf weisser Flaeche: Vereinslogos sind fuer weissen Grund
+  // gemacht, und ein dunkles Logo auf dunkler Vereinsfarbe verschwindet.
   const logo = o.logoUrl
-    ? `<img src="${maskiere(o.logoUrl)}" alt="${maskiere(o.vereinsname)}" width="56"
-            style="display:block;border:0;width:56px;height:auto;border-radius:8px;" />`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0"
+              style="background:#ffffff;border-radius:10px;">
+         <tr><td align="center" style="padding:6px;">
+           <img src="${maskiere(o.logoUrl)}" alt="${maskiere(o.vereinsname)}" width="48"
+                style="display:block;border:0;width:48px;height:auto;border-radius:6px;" />
+         </td></tr>
+       </table>`
     // Ohne Logo bleibt der Kopf trotzdem erkennbar - eine leere Zelle sieht
     // nach Fehler aus.
-    : `<div style="font-size:30px;line-height:1;">🏆</div>`;
+    : `<table role="presentation" cellpadding="0" cellspacing="0" border="0"
+              style="background:#ffffff;border-radius:10px;">
+         <tr><td align="center" width="60" height="60"
+                 style="width:60px;height:60px;font-size:30px;line-height:60px;">🏆</td></tr>
+       </table>`;
 
   /**
    * Das Testband. In der App ist es ein Streifenmuster; hier ist es eine
@@ -149,37 +270,70 @@ export function baueMail(o: LayoutOptionen): string {
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${maskiere(o.titel)}</div>
 
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#eef2f7;">
-<tr><td align="center" style="padding:24px 12px;">
+<tr><td align="center" style="padding:28px 12px;">
 
   <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
-         style="width:600px;max-width:100%;background:#ffffff;border-radius:14px;overflow:hidden;
+         style="width:600px;max-width:100%;background:#ffffff;border-radius:16px;overflow:hidden;
+                border:1px solid #dfe6f0;
                 font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
 
     ${testband}
 
-    <tr><td style="background:${o.farbe};padding:18px 24px;">
+    <tr><td style="background:${o.farbe};padding:22px 26px 20px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
-        <td width="64" valign="middle" style="padding-right:12px;">${logo}</td>
+        <td width="72" valign="top" style="padding-right:14px;">${logo}</td>
         <td valign="middle">
-          <div style="font-size:12px;font-weight:700;color:rgba(255,255,255,0.85);
-                      text-transform:uppercase;letter-spacing:0.6px;">${maskiere(o.vereinsname)}</div>
-          <div style="font-size:20px;font-weight:800;color:#ffffff;line-height:1.25;margin-top:2px;">
+          <div style="font-size:11px;font-weight:700;color:#ffffff;opacity:0.82;
+                      text-transform:uppercase;letter-spacing:1px;">${maskiere(o.vereinsname)}</div>
+          <div style="font-size:22px;font-weight:800;color:#ffffff;line-height:1.25;margin-top:4px;">
             ${maskiere(o.titel)}
           </div>
         </td>
       </tr></table>
     </td></tr>
 
-    <tr><td style="padding:24px;">
+    <!-- Schmaler dunklerer Streifen: gibt dem Kopf eine Kante, ohne einen
+         Farbverlauf zu brauchen, den Outlook nicht darstellt. -->
+    <tr><td bgcolor="${akzent}" height="5" style="background:${akzent};height:5px;
+            font-size:0;line-height:5px;">&nbsp;</td></tr>
+
+    <tr><td style="padding:26px 26px 8px;">
       ${o.inhalt}
       ${knopf}
     </td></tr>
 
-    <tr><td style="padding:16px 24px 22px;border-top:1px solid #e9eef5;">
-      <div style="font-size:11px;line-height:1.6;color:#7c8797;">${maskiere(o.fusszeile)}</div>
+    <tr><td style="padding:0 26px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr><td bgcolor="#e9eef5" height="1" style="background:#e9eef5;height:1px;
+                font-size:0;line-height:1px;">&nbsp;</td></tr>
+      </table>
+    </td></tr>
+
+    <tr><td style="padding:18px 26px 24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+        <td valign="top">
+          <div style="font-size:12px;font-weight:700;color:#475569;">🏆 Mach das Turnier!</div>
+          <div style="font-size:11px;line-height:1.6;color:#8a95a5;margin-top:4px;">
+            ${maskiere(o.fusszeile)}
+          </div>
+        </td>
+        ${o.appUrl
+          ? `<td valign="top" align="right" style="padding-left:14px;white-space:nowrap;">
+               <a href="${maskiere(o.appUrl)}"
+                  style="font-size:11px;font-weight:700;color:${o.farbe};text-decoration:none;">
+                 App öffnen →
+               </a>
+             </td>`
+          : ''}
+      </tr></table>
     </td></tr>
 
   </table>
+
+  <div style="font-size:10px;color:#a3adbb;margin-top:14px;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    ${maskiere(o.vereinsname)}
+  </div>
 
 </td></tr>
 </table>

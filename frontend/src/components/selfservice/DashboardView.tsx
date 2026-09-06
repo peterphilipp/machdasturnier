@@ -8,6 +8,7 @@ import { btnStyle } from '../admin/shared';
 import { useUser, VolunteerData } from '../../context/UserContext';
 import { apiFetch, apiPost, apiDelete } from '../../api';
 import { Ladefehler } from '../Verbindung';
+import { RatingSkala, RATING_FRAGEN } from '../RatingSkala';
 import '../../styles/components/dashboard.css';
 
 interface Shift { id: number; date: string; slot: string; startMin?: number | null; endMin?: number | null; zeitslot: { name: string; startTime: string; endTime: string; color: string; order?: number } | null; arbeitsbereich: { name: string; icon: string; color: string; order?: number } | null; arbeitsbereichId: number | null; maxVolunteers: number; }
@@ -32,46 +33,6 @@ interface LayoutContext {
   selectedTournamentId: number | null;
   setSelectedTournamentId: (id: number | null) => void;
   setTournamentName: (name: string) => void;
-}
-
-/**
- * Eine Bewertungsstufe von 1 bis 5.
- *
- * Die Zahl allein sagt nicht, in welche Richtung sie zeigt - bei "Stress" ist
- * 5 das Warnsignal, bei "Spass" das Lob. Deshalb steht die gewaehlte Stufe
- * immer ausgeschrieben daneben, und jeder Knopf traegt seine Bedeutung als
- * title (fuer Maus und Screenreader).
- */
-function RatingSkala({ frage, stufen, symbole, wert, onChange }: {
-  frage: string;
-  stufen: string[];
-  symbole: string[];
-  wert: number | null;
-  onChange: (stufe: number) => void;
-}) {
-  return (
-    <div className="rating-feld">
-      <label className="rating-feld-label">
-        {frage}
-        {wert != null && <span className="rating-feld-stufe"> — {stufen[wert - 1]}</span>}
-      </label>
-      <div className="rating-skala" role="group" aria-label={frage}>
-        {[1, 2, 3, 4, 5].map(stufe => (
-          <button
-            key={stufe}
-            type="button"
-            onClick={() => onChange(stufe)}
-            aria-pressed={wert === stufe}
-            aria-label={`${stufe}: ${stufen[stufe - 1]}`}
-            title={stufen[stufe - 1]}
-            className={`rating-skala-btn${wert === stufe ? ' rating-skala-btn--aktiv' : ''}`}
-          >
-            {symbole[stufe - 1]}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 export default function DashboardView() {
@@ -1529,27 +1490,32 @@ export default function DashboardView() {
             </div>
 
             <div className="feedback-modal-body">
-              <RatingSkala
-                frage="1. Stress & Auslastung"
-                stufen={['Viel zu ruhig', 'Eher ruhig', 'Genau richtig', 'Stressig', 'Überlastet / zu wenig Helfer']}
-                symbole={['😴', '🙂', '😊', '🥵', '🚨']}
-                wert={rateWorkload}
-                onChange={setRateWorkload}
-              />
-              <RatingSkala
-                frage="2. Organisation & Einweisung"
-                stufen={['Chaotisch', 'Lückenhaft', 'Okay', 'Gut', 'Perfekt organisiert']}
-                symbole={['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣']}
-                wert={rateOrganization}
-                onChange={setRateOrganization}
-              />
-              <RatingSkala
-                frage="3. Spaß & Stimmung"
-                stufen={['Kein Spaß', 'Eher zäh', 'In Ordnung', 'Gut', 'Super Stimmung!']}
-                symbole={['😞', '😐', '🙂', '😄', '🤩']}
-                wert={rateFun}
-                onChange={setRateFun}
-              />
+              {/* Fragen und Skalen kommen aus RATING_FRAGEN - dieselbe Quelle
+                  wie auf der oeffentlichen Seite, die aus der Mail aufgerufen
+                  wird. Nur die Nummerierung entsteht hier, weil sie zur
+                  Reihenfolge im Dialog gehoert und nicht zur Frage. */}
+              {RATING_FRAGEN.map((f, i) => {
+                const werte = {
+                  ratingWorkload: rateWorkload,
+                  ratingOrganization: rateOrganization,
+                  ratingFun: rateFun
+                };
+                const setzer = {
+                  ratingWorkload: setRateWorkload,
+                  ratingOrganization: setRateOrganization,
+                  ratingFun: setRateFun
+                };
+                return (
+                  <RatingSkala
+                    key={f.feld}
+                    frage={`${i + 1}. ${f.frage}`}
+                    stufen={f.stufen}
+                    symbole={f.symbole}
+                    wert={werte[f.feld]}
+                    onChange={setzer[f.feld]}
+                  />
+                );
+              })}
 
 
               <div className="rating-feld">

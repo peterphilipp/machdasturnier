@@ -147,3 +147,20 @@ export const pinResetLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Zu viele Fehlversuche mit der Helfer-PIN. Bitte warte eine Stunde oder nutze den E-Mail-Reset.' }
 });
+
+/**
+ * Bewerten per Link aus der Mail - ohne Anmeldung.
+ *
+ * Ein Limit ist hier das Einzige, was gegen das Durchprobieren von Signaturen
+ * hilft: Der Endpunkt ist oeffentlich, weil der Empfaenger einer Mail nicht
+ * angemeldet ist. Grosszuegig gesetzt, weil eine Familie mit mehreren
+ * Helfern hinter derselben Adresse sitzt und mehrere Schichten nacheinander
+ * bewerten koennen soll.
+ */
+export const bewertungsLinkLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Zu viele Versuche. Bitte später erneut probieren.' }
+});

@@ -1,4 +1,6 @@
-import { baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere } from './mailLayout.js';
+import {
+  baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, sterneReihe, kasten
+} from './mailLayout.js';
 
 /**
  * Die Vorlagen fuer den Nachrichtenversand.
@@ -44,6 +46,16 @@ export interface VorlagenBeschreibung {
 }
 
 const FUSS_STANDARD = 'Du bekommst diese Mail, weil du beim TSV Holm als Helfer für dieses Turnier hinterlegt bist.';
+
+/**
+ * Die Symbole der Spass-Skala, wie sie auch die App zeigt.
+ *
+ * Doppelt gepflegt (hier und in RATING_FRAGEN im Frontend), weil Backend und
+ * Frontend keinen gemeinsamen Code teilen. Wenn sich die Skala aendert, muss
+ * es an beiden Stellen passieren - sonst zeigt die Mail andere Gesichter als
+ * die Seite, auf der man nach dem Klick landet.
+ */
+const SPASS_SYMBOLE = ['😞', '😐', '🙂', '😄', '🤩'];
 
 /**
  * Was im Auswahlfeld steht. Betreff und Text sind Vorbelegungen, die der
@@ -99,6 +111,24 @@ export interface DankeZahlen {
 }
 
 /**
+ * Die Schicht, um die es in der Bewertungsmail geht - je Empfaenger anders.
+ *
+ * Ohne diese Angabe faellt die Vorlage auf einen Verweis in die App zurueck.
+ * Das ist der Fall in der Vorschau: Dort gibt es keinen Empfaenger, und ein
+ * echtes Token in einer Vorschau waere ein Token, das man nicht braucht.
+ */
+export interface BewertungsSchicht {
+  /** Signiertes Token aus bewertungsLink.ts - traegt die Berechtigung. */
+  token: string;
+  bereich: string;
+  /** Schon lesbar formatiert, z.B. "Samstag, 5. September". */
+  datum: string;
+  slot: string;
+  /** Wie viele Schichten dieser Person noch unbewertet sind - inklusive dieser. */
+  offen: number;
+}
+
+/**
  * Baut die versandfertige Mail.
  *
  * `anrede` ist bewusst ein Parameter und nicht fest "Hallo": Beim Versand an
@@ -108,7 +138,13 @@ export interface DankeZahlen {
  */
 export function baueVorlage(
   id: VorlagenId,
-  eingabe: { betreff: string; text: string; anrede: string; zahlen?: DankeZahlen | null },
+  eingabe: {
+    betreff: string;
+    text: string;
+    anrede: string;
+    zahlen?: DankeZahlen | null;
+    schicht?: BewertungsSchicht | null;
+  },
   marke: Marke
 ): Mailinhalt {
   const titel = eingabe.betreff.trim() || 'Nachricht vom TSV Holm';
@@ -126,15 +162,51 @@ export function baueVorlage(
     aktion = { text: 'Offene Schichten ansehen', url: `${marke.appUrl}/` };
   }
 
-  if (id === 'bewertung') {
-    // Der Weg fuehrt in die App, nicht direkt in die Mail: Eine Bewertung aus
-    // der Mail heraus braeuchte einen Link, der fuer sich schon die
-    // Berechtigung traegt, im Namen dieser Person zu bewerten. Das ist
-    // machbar, aber eine eigene Entscheidung - solange es die nicht gibt,
-    // fuehrt der Knopf dorthin, wo die Anmeldung schuetzt.
+  if (id === 'bewertung' && eingabe.schicht) {
+    /**
+     * Die erste Frage steht in der Mail, die zwei anderen auf der Seite.
+     *
+     * Nicht alle drei hier: Der erste Klick verlaesst die Mail ohnehin, mehr
+     * Sterne in der Mail brauchen also niemand - sie machen sie nur laenger.
+     * Und es ist bewusst die Spass-Frage: Sie ist die, die man ohne
+     * Nachdenken beantwortet, und genau das ist die Huerde, an der die letzte
+     * Runde gescheitert ist (eine einzige Bewertung im ganzen Turnier).
+     */
+    const s = eingabe.schicht;
+    const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`;
+
+    inhalt += kasten(
+      `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
+      + `letter-spacing:0.6px;margin-bottom:2px;">Deine Schicht</div>`
+      + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
+      + `${maskiere(s.bereich)}</div>`
+      + `<div style="font-size:13px;color:#475569;margin:2px 0 16px;">`
+      + `${maskiere(s.datum)} · ${maskiere(s.slot)}</div>`
+      + sterneReihe({
+        frage: 'Spaß & Stimmung',
+        hinweis: 'Ein Klick genügt – die beiden anderen Fragen kommen danach.',
+        basisUrl: basis,
+        feld: 'f',
+        symbole: SPASS_SYMBOLE,
+        skala: ['Kein Spaß', 'Super Stimmung!'],
+        farbe: marke.farbe
+      }),
+      marke.farbe
+    );
+
+    if (s.offen > 1) {
+      inhalt += `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#64748b;">`
+        + `Du hattest ${s.offen} Schichten – die anderen kannst du direkt danach `
+        + `mitbewerten.</p>`;
+    }
+
+    aktion = { text: 'Alle drei Fragen beantworten', url: basis };
+    absaetze.push(`Deine Schicht: ${s.bereich}, ${s.datum}, ${s.slot}.`);
+  } else if (id === 'bewertung') {
+    // Ohne Schicht - also in der Vorschau - fuehrt der Knopf in die App.
     aktion = { text: 'Schicht bewerten', url: `${marke.appUrl}/` };
     inhalt += `<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#64748b;">`
-      + `Du findest die Bewertung in der App unter „Deine Jobs".</p>`;
+      + `In der echten Mail stehen hier die Sterne zur eigenen Schicht.</p>`;
   }
 
   if (id === 'danke' && eingabe.zahlen) {
@@ -161,6 +233,7 @@ export function baueVorlage(
       vereinsname: marke.vereinsname,
       farbe: marke.farbe,
       fusszeile: FUSS_STANDARD,
+      appUrl: marke.appUrl,
       testumgebung: marke.testumgebung
     }),
     text: baueText({ titel, absaetze, aktion, fusszeile: FUSS_STANDARD, testumgebung: marke.testumgebung })

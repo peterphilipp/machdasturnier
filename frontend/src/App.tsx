@@ -7,6 +7,7 @@ import { Verbindungsband } from './components/Verbindung';
 // --- SelfService & Public ---
 import Privacy from './components/Privacy';
 import Impressum from './components/Impressum';
+import BewertungsLinkView from './components/BewertungsLinkView';
 import SelfServiceLayout from './components/selfservice/SelfServiceLayout';
 import LoginView from './components/selfservice/LoginView';
 import RegisterView from './components/selfservice/RegisterView';
@@ -72,6 +73,9 @@ export default function App() {
           {/* Public / Static */}
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/impressum" element={<Impressum />} />
+          {/* Bewerten aus der Mail heraus - bewusst ohne Anmeldung und ohne
+              Layout, siehe BewertungsLinkView. */}
+          <Route path="/bewerten" element={<BewertungsLinkView />} />
 
           {/* Self Service (Volunteers) */}
           <Route element={<SelfServiceLayout />}>

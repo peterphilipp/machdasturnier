@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { baueVorlage, VORLAGEN } from '../src/utils/mailVorlagen.js';
-import { maskiere, alsAbsaetze, kennzahlen } from '../src/utils/mailLayout.js';
+import { maskiere, alsAbsaetze, kennzahlen, dunkler } from '../src/utils/mailLayout.js';
 
 const MARKE = {
   vereinsname: 'TSV Holm',
@@ -105,10 +105,12 @@ describe('baueVorlage', () => {
     expect(m.text).toContain('https://beispiel.test/');
   });
 
-  it('führt bei der Bewertung in die App, nicht in die Mail', () => {
+  it('führt bei der Bewertung ohne Schicht in die App', () => {
+    // Der Fall der Vorschau: Ohne Empfaenger gibt es keine Schicht und damit
+    // kein Token - dann darf die Vorlage nicht mit leeren Sternen dastehen.
     const m = baueVorlage('bewertung', basis, MARKE);
     expect(m.html).toContain('Schicht bewerten');
-    expect(m.html).toContain('Deine Jobs');
+    expect(m.html).toContain('https://beispiel.test/');
   });
 
   it('setzt in der Dankesmail die Zahlen als Kacheln UND in den Text', () => {
@@ -135,6 +137,80 @@ describe('baueVorlage', () => {
   it('fällt bei leerem Betreff auf einen brauchbaren Titel zurück', () => {
     const m = baueVorlage('frei', { ...basis, betreff: '   ' }, MARKE);
     expect(m.betreff).toBe('Nachricht vom TSV Holm');
+  });
+});
+
+describe('Sterne in der Bewertungsmail', () => {
+  const basis = { betreff: 'Wie war deine Schicht?', text: 'Zwei Minuten, bitte.', anrede: 'Anja' };
+  const schicht = {
+    token: 'nutzlast.signatur',
+    bereich: 'Grillstand',
+    datum: 'Samstag, 5. September',
+    slot: '14:00-16:00',
+    offen: 1
+  };
+
+  it('baut fünf Links mit je einem Wert', () => {
+    const html = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(html).toContain(`https://beispiel.test/bewerten?t=nutzlast.signatur&amp;f=${n}`);
+    }
+  });
+
+  it('nennt die Schicht, um die es geht - in HTML und im Text', () => {
+    const m = baueVorlage('bewertung', { ...basis, schicht }, MARKE);
+    expect(m.html).toContain('Grillstand');
+    expect(m.html).toContain('Samstag, 5. September');
+    expect(m.html).toContain('14:00-16:00');
+    expect(m.text).toContain('Grillstand');
+  });
+
+  it('führt den Knopf auf dieselbe Seite, aber ohne vorgegebenen Wert', () => {
+    const m = baueVorlage('bewertung', { ...basis, schicht }, MARKE);
+    expect(m.html).toContain('Alle drei Fragen beantworten');
+    expect(m.text).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
+  });
+
+  // Sonst liest man "Deine Schicht" und hatte drei - und weiss nicht, welche
+  // gemeint ist oder ob die anderen unter den Tisch fallen.
+  it('erwähnt weitere offene Schichten, aber nur wenn es welche gibt', () => {
+    const mehrere = baueVorlage('bewertung', { ...basis, schicht: { ...schicht, offen: 3 } }, MARKE).html;
+    expect(mehrere).toContain('Du hattest 3 Schichten');
+    const eine = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
+    expect(eine).not.toContain('Du hattest');
+  });
+
+  it('maskiert das Token, statt es ins HTML zu spucken', () => {
+    const boese = { ...schicht, token: 'a"><script>x</script>' };
+    const html = baueVorlage('bewertung', { ...basis, schicht: boese }, MARKE).html;
+    expect(html).not.toContain('<script>');
+  });
+
+  // Bildblockade ist in Outlook und bei vielen Gmail-Konten die
+  // Voreinstellung. Sterne als Bilder waeren dort fuenf leere Rahmen.
+  it('benutzt keine Bilder für die Sterne', () => {
+    const html = baueVorlage('bewertung', { ...basis, schicht }, MARKE).html;
+    const bilder = html.match(/<img/g) ?? [];
+    // Genau eines: das Logo im Kopf.
+    expect(bilder).toHaveLength(1);
+  });
+});
+
+describe('dunkler', () => {
+  it('macht die Farbe dunkler, nicht heller', () => {
+    expect(dunkler('#808080', 0.5)).toBe('#404040');
+  });
+
+  it('verträgt fehlendes # und Großschreibung', () => {
+    expect(dunkler('FFFFFF', 0.5)).toBe('#808080');
+  });
+
+  // Ein Verein koennte "red" oder "rgb(...)" hinterlegt haben. Dann ist die
+  // Ausgangsfarbe die richtige Antwort - Schwarz waere ein sichtbarer Fehler
+  // im Mailkopf.
+  it('gibt bei unverständlichen Farben die Eingabe zurück', () => {
+    expect(dunkler('rebeccapurple')).toBe('rebeccapurple');
+    expect(dunkler('#abc')).toBe('#abc');
   });
 });
 

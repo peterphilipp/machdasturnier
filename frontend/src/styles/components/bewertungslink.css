@@ -1,0 +1,133 @@
+/**
+ * Die oeffentliche Bewertungsseite (aus der Mail heraus).
+ *
+ * Eine eigene, schmale Seite ohne Navigation: Wer hier landet, ist nicht
+ * angemeldet und hat genau eine Aufgabe. Jede Kopfzeile, jedes Menue und
+ * jeder Verweis auf etwas anderes waere eine Gelegenheit, abzuspringen.
+ */
+
+.bewertung-seite {
+  min-height: 100vh;
+  background: var(--bg-main, #eef2f7);
+  padding: 24px 12px 48px;
+  box-sizing: border-box;
+}
+
+.bewertung-karte {
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-color, #dfe6f0);
+  border-radius: 16px;
+  padding: 22px;
+  box-sizing: border-box;
+}
+.bewertung-karte--zentriert {
+  text-align: center;
+}
+
+.bewertung-kopf {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  margin: -4px 0 18px;
+  background: color-mix(in srgb, var(--club-primary, #0d6efd) 7%, transparent);
+  border-left: 4px solid var(--club-primary, #0d6efd);
+  border-radius: 0 12px 12px 0;
+}
+.bewertung-kopf-symbol {
+  font-size: 30px;
+  line-height: 1;
+}
+.bewertung-kopf-label {
+  font-size: 11px;
+  font-weight: var(--font-weight-bold, 700);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.bewertung-kopf-bereich {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-main, #0f172a);
+  line-height: 1.3;
+}
+.bewertung-kopf-zeit {
+  font-size: 13px;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.bewertung-symbol {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+.bewertung-titel {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-main, #0f172a);
+  margin: 0 0 8px;
+}
+.bewertung-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #475569;
+  margin: 0 0 14px;
+}
+
+.bewertung-fragen {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 20px 0 4px;
+}
+
+.bewertung-knopf {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 12px 22px;
+  border: none;
+  border-radius: 10px;
+  background: var(--club-primary, #0d6efd);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  /* Touch-Ziel - die Seite wird fast nur auf dem Handy geoeffnet. */
+  min-height: 44px;
+}
+.bewertung-knopf:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.bewertung-bestaetigung {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #ecfdf3;
+  color: #16794c;
+  font-size: 14px;
+  font-weight: 700;
+}
+.bewertung-fehler {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bewertung-fuss {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #e9eef5);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8a95a5;
+}
