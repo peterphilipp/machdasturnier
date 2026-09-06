@@ -150,3 +150,40 @@ export const bewerteMitLink = async (req: Request, res: Response) => {
 
   return res.json({ success: true, bereits: aktualisiert });
 };
+
+/**
+ * Die Bewertung wieder zuruecknehmen - ein eigener, expliziter Weg statt
+ * einer Null in bewerteMitLink.
+ *
+ * Fair gegenueber dem Helfer: Wer sich anders entscheidet, soll seine
+ * Antwort loeschen koennen, nicht nur ueberschreiben. Absichtlich ein
+ * eigener Endpunkt und keine Null-Werte im normalen Bewertungsweg oben -
+ * dort filtert `!= null` genau deshalb jedes `null` heraus, damit ein
+ * unvollstaendig ausgefuelltes Formular nicht aus Versehen loescht, was
+ * schon beantwortet war. Ein Zuruecknehmen muss eindeutig gewollt sein.
+ *
+ * Token im Query-Parameter, nicht im Body - wie bei getBewertungsKontext,
+ * und passend zu DELETE als Methode. `pruefeBewertungsToken` faengt jeden
+ * Unsinn ab, eine eigene Zod-Pruefung braucht es dafuer nicht.
+ */
+export const bewertungZurueckziehen = async (req: Request, res: Response) => {
+  const anspruch = pruefeBewertungsToken(String(req.query.token || ''));
+  if (!anspruch) {
+    return res.status(410).json({ error: 'Dieser Link ist nicht mehr gültig.' });
+  }
+
+  const vs = await prisma.volunteerShift.findUnique({ where: { id: anspruch.volunteerShiftId } });
+  if (!vs || vs.userId !== anspruch.userId) {
+    return res.status(410).json({ error: 'Dieser Link ist nicht mehr gültig.' });
+  }
+
+  const zurueckgesetzt = await prisma.volunteerShift.update({
+    where: { id: anspruch.volunteerShiftId },
+    data: {
+      ratingWorkload: null, ratingOrganization: null, ratingFun: null, ratingComment: null
+    },
+    select: { ratingWorkload: true, ratingOrganization: true, ratingFun: true, ratingComment: true }
+  });
+
+  return res.json({ success: true, bereits: zurueckgesetzt });
+};

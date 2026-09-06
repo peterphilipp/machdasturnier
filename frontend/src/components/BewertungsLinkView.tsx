@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiFetch, apiPost } from '../api';
+import { apiFetch, apiPost, apiDelete } from '../api';
 import { RatingSkala, RATING_FRAGEN } from './RatingSkala';
 import '../styles/components/bewertungslink.css';
 
@@ -64,6 +64,9 @@ export default function BewertungsLinkView() {
   const [speichert, setSpeichert] = useState(false);
   const [gespeichert, setGespeichert] = useState(false);
   const [kommentarGespeichert, setKommentarGespeichert] = useState(false);
+  const [zurueckziehenBestaetigen, setZurueckziehenBestaetigen] = useState(false);
+  const [ziehtZurueck, setZiehtZurueck] = useState(false);
+  const [zurueckgenommen, setZurueckgenommen] = useState(false);
 
   /**
    * Der Wert aus der Mail darf nur einmal abgeschickt werden.
@@ -148,6 +151,33 @@ export default function BewertungsLinkView() {
     if (ok) setKommentarGespeichert(true);
   };
 
+  /**
+   * Ein eigener Endpunkt (DELETE), keine Sterne auf null setzen.
+   *
+   * `speichere()` schickt nur an, was sich gerade aendert - ein Aufruf mit
+   * lauter null wuerde von der Serverseite als "nichts angegeben" verworfen
+   * (siehe bewertungsLink.controller.ts), und selbst wenn nicht, waere ein
+   * pauschales null-Setzen ueber denselben Weg wie das Speichern zu leicht
+   * aus Versehen ausloesbar. Das Zuruecknehmen ist deshalb ein bewusster,
+   * eigener Schritt mit Bestaetigung davor.
+   */
+  const nimmZurueck = async () => {
+    setZiehtZurueck(true);
+    try {
+      await apiDelete(`/api/bewertung-link?token=${encodeURIComponent(token)}`);
+      setWerte({ ratingWorkload: null, ratingOrganization: null, ratingFun: null });
+      setKommentar('');
+      setKommentarGespeichert(false);
+      setGespeichert(false);
+      setZurueckziehenBestaetigen(false);
+      setZurueckgenommen(true);
+    } catch (err) {
+      setFehler((err as Error).message || 'Die Bewertung konnte nicht zurückgenommen werden.');
+    } finally {
+      setZiehtZurueck(false);
+    }
+  };
+
   if (fehler && !kontext) {
     return (
       <div className="bewertung-seite">
@@ -175,6 +205,7 @@ export default function BewertungsLinkView() {
   }
 
   const alleBeantwortet = RATING_FRAGEN.every(f => werte[f.feld] != null);
+  const etwasVorhanden = RATING_FRAGEN.some(f => werte[f.feld] != null) || kommentar.trim() !== '';
 
   return (
     // Die Vereinsfarbe als CSS-Variable: Dieselbe Variable benutzt die
@@ -255,6 +286,39 @@ export default function BewertungsLinkView() {
                 : '✓ Alles gespeichert – das war’s. Danke!'
               : '✓ Gespeichert. Die restlichen Fragen kannst du noch beantworten.'}
           </p>
+        )}
+
+        {zurueckgenommen && !fehler && (
+          <p className="bewertung-bestaetigung">
+            ✓ Zurückgenommen. Die Sterne oben sind wieder leer – du kannst jederzeit neu bewerten.
+          </p>
+        )}
+
+        {/* Nur anbieten, wenn es ueberhaupt etwas zurueckzunehmen gibt - sonst
+            stuende ein Knopf da, der nichts tut. Zwischenschritt statt eines
+            einzelnen Klicks: Das loescht alle drei Antworten und die Notiz
+            auf einmal, das soll nicht aus Versehen passieren. */}
+        {etwasVorhanden && !zurueckziehenBestaetigen && (
+          <button
+            type="button"
+            className="bewertung-zuruecknehmen-link"
+            onClick={() => setZurueckziehenBestaetigen(true)}
+          >
+            Bewertung zurücknehmen
+          </button>
+        )}
+        {zurueckziehenBestaetigen && (
+          <div className="bewertung-zuruecknehmen-bestaetigung">
+            <p>Wirklich zurücknehmen? Alle drei Antworten und deine Notiz werden gelöscht.</p>
+            <div className="bewertung-zuruecknehmen-aktionen">
+              <button type="button" className="bewertung-knopf-sekundaer" onClick={() => setZurueckziehenBestaetigen(false)}>
+                Doch nicht
+              </button>
+              <button type="button" className="bewertung-knopf-gefahr" onClick={nimmZurueck} disabled={ziehtZurueck}>
+                {ziehtZurueck ? 'Wird zurückgenommen …' : 'Ja, zurücknehmen'}
+              </button>
+            </div>
+          </div>
         )}
 
         {/* Der Weg zur naechsten Schicht steht immer da, nicht erst nach dem

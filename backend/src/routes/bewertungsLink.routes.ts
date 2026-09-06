@@ -4,7 +4,8 @@ import { bewertungsLinkLimiter } from '../middleware/security.js';
 import {
   getBewertungsKontext,
   bewerteMitLink,
-  bewertungsLinkSchema
+  bewertungsLinkSchema,
+  bewertungZurueckziehen
 } from '../controllers/bewertungsLink.controller.js';
 
 /**
@@ -19,5 +20,6 @@ const router = Router();
 
 router.get('/kontext', bewertungsLinkLimiter, getBewertungsKontext);
 router.post('/', bewertungsLinkLimiter, validate(bewertungsLinkSchema), bewerteMitLink);
+router.delete('/', bewertungsLinkLimiter, bewertungZurueckziehen);
 
 export default router;

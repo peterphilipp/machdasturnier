@@ -830,6 +830,44 @@ export default function DashboardView() {
     }
   };
 
+  /**
+   * Eine abgegebene Bewertung wieder loeschen.
+   *
+   * Fair gegenueber dem Helfer: Wer sich anders entscheidet, soll seine
+   * Antwort zuruecknehmen koennen, nicht nur ueberschreiben muessen. Derselbe
+   * Endpunkt wie beim Speichern - er ueberschreibt ohnehin unbedingt alle
+   * vier Felder (siehe rateShift in self.controller.ts), lauter `null` loescht
+   * also einfach alles.
+   */
+  const zieheRatingZurueck = async () => {
+    if (!ratingModalVs || busy) return;
+    const bestaetigt = await modal.confirm({
+      title: 'Bewertung zurücknehmen?',
+      message: 'Alle drei Antworten und deine Notiz zu dieser Schicht werden gelöscht.',
+      variant: 'danger'
+    });
+    if (!bestaetigt) return;
+
+    setBusy(true);
+    try {
+      await apiFetch(`/api/self/shifts/${ratingModalVs.id}/rating`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ratingWorkload: null, ratingOrganization: null, ratingFun: null, ratingComment: null
+        })
+      });
+      setRatingModalVs(null);
+      await loadAvailable();
+      queryClient.invalidateQueries({ queryKey: ['volunteerShifts'] });
+    } catch (err: unknown) {
+      const e = err as Error;
+      await modal.alert({ title: 'Fehler', message: e.message || 'Bewertung konnte nicht zurückgenommen werden.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Das Dankeschoen verabschiedet sich von selbst - wer will, tippt vorher
   // "Fertig". Der Timer wird aufgeraeumt, falls genau das passiert.
   useEffect(() => {
@@ -1829,6 +1867,18 @@ export default function DashboardView() {
               >
                 Abbrechen
               </button>
+              {/* Nur anbieten, wenn es ueberhaupt eine abgegebene Bewertung
+                  gibt - sonst stuende ein Knopf da, der nichts loeschen kann. */}
+              {bereitsBewertet(ratingModalVs) && (
+                <button
+                  onClick={zieheRatingZurueck}
+                  disabled={busy}
+                  className="feedback-modal-btn"
+                  style={{ background: '#fff', color: '#dc3545', border: '1px solid #dc3545' }}
+                >
+                  Zurücknehmen
+                </button>
+              )}
               <button onClick={saveRating} disabled={busy} className="feedback-modal-btn">
                 {busy ? 'Speichert …' : 'Bewertung speichern'}
               </button>
