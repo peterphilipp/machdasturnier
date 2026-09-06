@@ -159,7 +159,7 @@ describe('baueVorlage', () => {
   });
 });
 
-describe('Sterne in der Bewertungsmail', () => {
+describe('Bewertungsmail', () => {
   const basis = { betreff: 'Wie war deine Schicht?', text: 'Zwei Minuten, bitte.', anrede: 'Anja' };
   const schicht = {
     token: 'nutzlast.signatur',
@@ -176,22 +176,21 @@ describe('Sterne in der Bewertungsmail', () => {
     slot: '10:00-12:00'
   };
 
-  // Alle drei Fragen mit je fuenf Stufen - der Empfaenger soll sehen, worauf
-  // er sich einlaesst, bevor er klickt.
-  it('baut für jede der drei Fragen fünf Links', () => {
+  /**
+   * Kein Sternefeld mehr direkt in der Mail: Ein Stern sah nach einer von 15
+   * unabhaengigen Antworten aus, war aber nur ein Link wie jeder andere - er
+   * verlaesst die Mail so oder so. Ein Anwender meldete live genau diese
+   * Verwirrung ("ich gaukle dann dem Anwender vor, er koennte hier auf der
+   * Seite was bewerten, kann er gar nicht"). Jetzt gibt es pro Schicht genau
+   * einen "Bewerten"-Knopf zur Bewertungsseite - dort laufen alle drei Fragen
+   * fuer alle Schichten aus der Mail (getBewertungsKontext filtert gleich).
+   */
+  it('baut pro Schicht genau einen Bewerten-Link, keine Sterne mit Werten', () => {
     const html = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
-    for (const feld of ['w', 'o', 'f']) {
-      for (const n of [1, 2, 3, 4, 5]) {
-        expect(html).toContain(`https://beispiel.test/bewerten?t=nutzlast.signatur&amp;${feld}=${n}`);
-      }
-    }
-  });
-
-  it('stellt alle drei Kriterien mit Namen dar', () => {
-    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
-    expect(html).toContain('Stress &amp; Auslastung');
-    expect(html).toContain('Organisation &amp; Einweisung');
-    expect(html).toContain('Spaß &amp; Stimmung');
+    expect(html).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
+    expect(html).toContain('Bewerten');
+    // Kein Link traegt einen Antwortwert (w=/o=/f=) im Query-String.
+    expect(html).not.toMatch(/bewerten\?t=[^"]*&amp;[wof]=\d/);
   });
 
   it('nennt die Schicht, um die es geht - in HTML und im Text', () => {
@@ -202,44 +201,25 @@ describe('Sterne in der Bewertungsmail', () => {
     expect(m.text).toContain('Grillstand');
   });
 
-  it('führt den Knopf auf dieselbe Seite, aber ohne vorgegebenen Wert', () => {
+  it('führt den Aufmacher-Knopf auf dieselbe Seite, aber ohne vorgegebenen Wert', () => {
     const m = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE);
     expect(m.html).toContain('Bewertung im Browser öffnen');
     expect(m.text).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
   });
 
   /**
-   * Mehrere Schichten: JEDE bekommt ihre eigenen drei Fragen mit eigenem
-   * Token, nicht nur die erste. Vorher bekamen weitere Schichten nur einen
-   * "Bewerten"-Knopf in die App statt klickbarer Sterne - genau das Problem,
-   * das ein Anwender live gemeldet hat ("kann sie nicht in der Mail
-   * bewerten"). Waeren es dieselben Token, landete die zweite Bewertung auf
-   * der ersten Schicht - ein Fehler, den niemand sieht, weil die Seite dann
-   * einfach die erste Schicht zeigt.
+   * Mehrere Schichten: JEDE bekommt ihren eigenen Bewerten-Link mit eigenem
+   * Token, nicht nur die erste. Waeren es dieselben Token, landete die zweite
+   * Bewertung auf der ersten Schicht - ein Fehler, den niemand sieht, weil
+   * die Seite dann einfach die erste Schicht zeigt.
    */
-  it('gibt jeder Schicht ihre eigenen Fragen mit eigenem Token', () => {
+  it('gibt jeder Schicht ihren eigenen Bewerten-Link mit eigenem Token', () => {
     const m = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite] }, MARKE);
-    expect(m.html).toContain('Deine Schicht 1 von 2');
-    expect(m.html).toContain('Deine Schicht 2 von 2');
     expect(m.html).toContain('Kuchentheke');
     expect(m.html).toContain('https://beispiel.test/bewerten?t=zweites.token');
     expect(m.text).toContain('https://beispiel.test/bewerten?t=zweites.token');
-    // Die Fragen gibt es fuer jede Schicht einmal - zwei Schichten, zwei Reihen.
-    expect(m.html.match(/Stress &amp; Auslastung/g)).toHaveLength(2);
-  });
-
-  it('nummeriert bei mehr als zwei Schichten richtig', () => {
-    const dritte = { ...zweite, token: 'drittes.token', bereich: 'Kasse' };
-    const html = baueVorlage('bewertung', { ...basis, schichten: [schicht, zweite, dritte] }, MARKE).html;
-    expect(html).toContain('Deine Schicht 1 von 3');
-    expect(html).toContain('Deine Schicht 3 von 3');
-    expect(html.match(/Stress &amp; Auslastung/g)).toHaveLength(3);
-  });
-
-  it('nummeriert bei genau einer Schicht nicht', () => {
-    const eine = baueVorlage('bewertung', { ...basis, schichten: [schicht] }, MARKE).html;
-    expect(eine).toContain('Deine Schicht');
-    expect(eine).not.toContain('von 1');
+    // Ein Bewerten-Knopf pro Schicht - zwei Schichten, zwei Knoepfe.
+    expect(m.html.match(/>\s*Bewerten\s*</g)).toHaveLength(2);
   });
 
   it('maskiert das Token, statt es ins HTML zu spucken', () => {
@@ -422,14 +402,14 @@ describe('Dankesmail', () => {
    */
   it('fragt nach einer Bewertung, wenn noch etwas offen ist', () => {
     const m = baueVorlage('danke', { ...basis, zahlen, schichten: [schicht] }, MARKE);
-    expect(m.html).toContain('Stress &amp; Auslastung');
+    expect(m.html).toContain('Grillstand');
     expect(m.html).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
     expect(m.text).toContain('https://beispiel.test/bewerten?t=nutzlast.signatur');
   });
 
   it('lässt die Bitte weg, wenn schon alles bewertet ist', () => {
     const m = baueVorlage('danke', { ...basis, zahlen, schichten: [] }, MARKE);
-    expect(m.html).not.toContain('Stress &amp; Auslastung');
+    expect(m.html).not.toContain('Grillstand');
     expect(m.html).not.toContain('/bewerten?t=');
     // Gedankt wird trotzdem - die Mail bleibt vollständig.
     expect(m.html).toContain('Danke fürs Mithelfen!');

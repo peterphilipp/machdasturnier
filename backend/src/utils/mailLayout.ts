@@ -131,63 +131,6 @@ export function kennzahlen(werte: { wert: string; label: string }[], farbe: stri
 }
 
 /**
- * Eine Sternereihe zum Anklicken - fuer die Bewertung direkt aus der Mail.
- *
- * Fuenf einzelne Links, jeder mit seinem Wert. Als Text-Sterne und nicht als
- * Bilder: Wer Bilder blockiert (Standard in Outlook und bei vielen
- * Gmail-Konten), saehe sonst fuenf leere Rahmen statt einer Frage.
- *
- * Jeder Link fuehrt auf die Bewertungsseite, nicht direkt in die Datenbank -
- * Mailprogramme und Sicherheitsscanner rufen Links teilweise von sich aus ab,
- * und ein schreibender Link waere damit abgegeben, bevor der Empfaenger die
- * Mail geoeffnet hat.
- */
-export function sterneReihe(o: {
-  frage: string;
-  hinweis: string;
-  basisUrl: string;
-  feld: string;
-  /**
-   * Die fuenf Symbole - dieselben wie in der App (RATING_FRAGEN im Frontend).
-   * Eine Mail, die andere Symbole zeigt als die Seite, auf der man landet,
-   * sieht nach zwei verschiedenen Fragen aus.
-   */
-  symbole: string[];
-  /** Beschriftung fuer 1 und 5 - "wenig zu tun" bis "zu viel". */
-  skala: [string, string];
-  farbe: string;
-}): string {
-  const sterne = [1, 2, 3, 4, 5].map(n => `
-    <td align="center" style="padding:0 3px;">
-      <a href="${maskiere(`${o.basisUrl}&${o.feld}=${n}`)}"
-         title="${maskiere(String(n))}"
-         style="display:block;width:46px;line-height:46px;text-align:center;text-decoration:none;
-                font-size:22px;color:${o.farbe};background:#ffffff;border:2px solid #e2e8f0;
-                border-radius:10px;font-weight:700;">${maskiere(o.symbole[n - 1] ?? String(n))}</a>
-    </td>`).join('');
-
-  return `
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-           style="margin:0 0 18px;">
-      <tr><td style="padding-bottom:6px;">
-        <div style="font-size:14px;font-weight:700;color:#0f172a;">${maskiere(o.frage)}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:2px;">${maskiere(o.hinweis)}</div>
-      </td></tr>
-      <tr><td>
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${sterne}</tr></table>
-      </td></tr>
-      <tr><td style="padding-top:6px;">
-        <table role="presentation" width="260" cellpadding="0" cellspacing="0" border="0" style="width:260px;">
-          <tr>
-            <td align="left" style="font-size:11px;color:#94a3b8;">${maskiere(o.skala[0])}</td>
-            <td align="right" style="font-size:11px;color:#94a3b8;">${maskiere(o.skala[1])}</td>
-          </tr>
-        </table>
-      </td></tr>
-    </table>`;
-}
-
-/**
  * Eine Liste von Schichten mit je einem Knopf - fuer den Helferaufruf.
  *
  * Jede Zeile ist eine eigene Tabelle und kein `<li>`: Outlook setzt

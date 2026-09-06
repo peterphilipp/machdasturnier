@@ -1,5 +1,5 @@
 import {
-  baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, sterneReihe, kasten,
+  baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, kasten,
   schichtListe, jubelBand
 } from './mailLayout.js';
 import { zeitpunktOrtszeit } from './zonenzeit.js';
@@ -103,48 +103,6 @@ export interface VorlagenBeschreibung {
 }
 
 const FUSS_STANDARD = 'Du bekommst diese Mail, weil du beim TSV Holm als Helfer für dieses Turnier hinterlegt bist.';
-
-/**
- * Die drei Bewertungsfragen, wie sie auch die App stellt.
- *
- * Doppelt gepflegt (hier und in RATING_FRAGEN im Frontend), weil Backend und
- * Frontend keinen gemeinsamen Code teilen. Wenn sich die Skala aendert, muss
- * es an beiden Stellen passieren - sonst zeigt die Mail andere Gesichter und
- * andere Worte als die Seite, auf der man nach dem Klick landet, und die
- * Auswertung rechnet Antworten auf zwei verschiedene Fragen zusammen.
- *
- * `feld` ist der Kurzname im Link; die Bewertungsseite loest ihn auf
- * (AUS_MAIL in BewertungsLinkView.tsx).
- */
-const FRAGEN: {
-  feld: 'w' | 'o' | 'f';
-  frage: string;
-  hinweis: string;
-  symbole: string[];
-  skala: [string, string];
-}[] = [
-  {
-    feld: 'w',
-    frage: '1. Stress & Auslastung',
-    hinweis: 'War genug zu tun – oder zu viel?',
-    symbole: ['😴', '🙂', '😊', '🥵', '🚨'],
-    skala: ['Viel zu ruhig', 'Überlastet']
-  },
-  {
-    feld: 'o',
-    frage: '2. Organisation & Einweisung',
-    hinweis: 'Wusstest du, was zu tun ist?',
-    symbole: ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'],
-    skala: ['Chaotisch', 'Perfekt']
-  },
-  {
-    feld: 'f',
-    frage: '3. Spaß & Stimmung',
-    hinweis: 'Ein Klick genügt – der Rest geht auf der Seite weiter.',
-    symbole: ['😞', '😐', '🙂', '😄', '🤩'],
-    skala: ['Kein Spaß', 'Super Stimmung!']
-  }
-];
 
 /**
  * Was im Auswahlfeld steht. Betreff und Text sind Vorbelegungen, die der
@@ -287,44 +245,30 @@ function bewertungsBlock(
   absaetze: string[]
 ): string {
   /**
-   * Jede Schicht traegt ihr eigenes Token (siehe ermittleBewertungsSchichten)
-   * - deshalb bekommt hier jede ihr eigenes Sternefeld, nicht nur die erste.
-   * Vorher gab es nur fuer die erste Schicht klickbare Sterne; ab der zweiten
-   * kam ein blosser "Bewerten"-Knopf, der in die App fuehrte statt direkt in
-   * der Mail zu bewerten - genau das, was diese Funktion eigentlich anbieten
-   * soll.
+   * Ein Knopf pro Schicht, kein Sternefeld mehr direkt in der Mail.
+   *
+   * Ein Stern in der Mail sah nach einer von 15 unabhaengigen Antworten aus,
+   * war aber nur ein Link wie jeder andere - er verlaesst die Mail so oder
+   * so, egal welchen man antippt. Diese vorgetaeuschte Mail-eigene Form war
+   * die eigentliche Verwirrung, nicht der Sprung auf die Seite an sich (den
+   * launch_handler:navigate-existing im PWA-Manifest inzwischen sauber
+   * navigiert statt nur das offene Fenster in den Vordergrund zu holen).
+   *
+   * Die Bewertungsseite fuehrt danach durch alle Schichten, die auch hier
+   * aufgelistet sind - getBewertungsKontext filtert mit denselben Kriterien
+   * (Person, Turnier, unbewertet) wie ermittleBewertungsSchichten hier.
    */
-  return schichten.map((s, i) => {
-    const basis = `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`;
+  for (const s of schichten) {
+    const url = `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`;
+    absaetze.push(`${s.bereich}, ${s.datum}, ${s.slot} bewerten: ${url}`);
+  }
 
-    const reihen = FRAGEN.map(f => sterneReihe({
-      frage: f.frage,
-      hinweis: f.hinweis,
-      basisUrl: basis,
-      feld: f.feld,
-      symbole: f.symbole,
-      skala: f.skala,
-      farbe: marke.farbe
-    })).join('');
-
-    const ueberschrift = schichten.length > 1
-      ? `Deine Schicht ${i + 1} von ${schichten.length}`
-      : 'Deine Schicht';
-
-    absaetze.push(`${ueberschrift}: ${s.bereich}, ${s.datum}, ${s.slot}.`);
-    absaetze.push(`Bewerten: ${basis}`);
-
-    return kasten(
-      `<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;`
-      + `letter-spacing:0.6px;margin-bottom:2px;">${maskiere(ueberschrift)}</div>`
-      + `<div style="font-size:16px;font-weight:800;color:#0f172a;line-height:1.3;">`
-      + `${maskiere(s.icon)} ${maskiere(s.bereich)}</div>`
-      + `<div style="font-size:13px;color:#475569;margin:2px 0 18px;">`
-      + `${maskiere(s.datum)} · ${maskiere(s.slot)}</div>`
-      + reihen,
-      marke.farbe
-    );
-  }).join('');
+  return schichtListe(schichten.map(s => ({
+    icon: s.icon,
+    bereich: s.bereich,
+    wann: `${s.datum} · ${s.slot}`,
+    url: `${marke.appUrl}/bewerten?t=${encodeURIComponent(s.token)}`
+  })), marke.farbe, 'Bewerten');
 }
 
 /**
