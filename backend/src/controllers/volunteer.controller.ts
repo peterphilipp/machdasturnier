@@ -12,7 +12,7 @@ import { normalizeRoles, highestRole } from '../utils/roles.js';
 import { setUserRoles, getUserRoles } from '../utils/userRoles.js';
 import { ermittleMarke, versendeMails, VersandErgebnis } from '../utils/mailVersand.js';
 import { berechneTurnierStatistik } from '../utils/turnierStatistik.js';
-import { VORLAGEN } from '../utils/mailVorlagen.js';
+import { VORLAGEN, vorlagenZeitpunkt, turnierIstVorbei } from '../utils/mailVorlagen.js';
 import type { DankeZahlen } from '../utils/mailVorlagen.js';
 
 import { sanitizeChildrenInput } from '../utils/sanitizeChildren.js';
@@ -331,6 +331,40 @@ export const broadcastPush = async (req: Request, res: Response) => {
   const kanaele: ('push' | 'mail')[] = req.body.kanaele?.length ? req.body.kanaele : ['push'];
   const vorlage = req.body.vorlage ?? 'frei';
   const eigeneId = (req as AuthRequest).userId ?? null;
+
+  /**
+   * Vorlage und Turnierzeitpunkt muessen zusammenpassen - aber nur beim
+   * ECHTEN Versand.
+   *
+   * Ein Aufruf zum Helfen bringt nichts mehr, wenn das Turnier vorbei ist;
+   * eine Bitte um Bewertung oder ein Danke bringt nichts VOR dem Ende. Der
+   * Testversand ("Nur an mich") ist davon ausgenommen: Er dient auch dazu,
+   * eine Vorlage vorab anzusehen, bevor das Turnier tatsaechlich endet -
+   * genau dieser Testweg wuerde sonst blockiert, waehrend man die Mail noch
+   * vorbereitet.
+   */
+  if (tournamentId && !req.body.nurAnMich) {
+    const zeitpunkt = vorlagenZeitpunkt(vorlage);
+    if (zeitpunkt) {
+      const turnier = await prisma.tournament.findUnique({
+        where: { id: Number(tournamentId) },
+        select: { endDate: true }
+      });
+      if (turnier) {
+        const vorbei = turnierIstVorbei(turnier.endDate);
+        if (zeitpunkt === 'vorTurnierende' && vorbei) {
+          return res.status(400).json({
+            error: 'Dieses Turnier ist bereits vorbei - ein Aufruf zum Helfen erreicht niemanden mehr rechtzeitig.'
+          });
+        }
+        if (zeitpunkt === 'nachTurnierende' && !vorbei) {
+          return res.status(400).json({
+            error: 'Dieses Turnier läuft noch - diese Vorlage passt erst, wenn es vorbei ist.'
+          });
+        }
+      }
+    }
+  }
 
   // Testversand: nur an das eigene Konto. Steht bewusst NACH der Ermittlung
   // der Zielgruppe, damit die angezeigte Reichweite dieselbe bleibt - man

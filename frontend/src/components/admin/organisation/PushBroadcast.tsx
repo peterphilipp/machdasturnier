@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getVolunteers, getShifts, getVolunteerShifts, broadcastPush, getMailVorlagen } from '../../../api';
-import { Shift, VolunteerShift, minToTime, inputStyle, btnStyle } from '../shared';
+import { Shift, VolunteerShift, Tournament, minToTime, inputStyle, btnStyle } from '../shared';
 import { modal } from '../Modal';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 
@@ -16,7 +16,27 @@ interface Vorlage {
   text: string;
 }
 
-export default function PushBroadcast({ selectedTournament }: { selectedTournament: number | null }) {
+/**
+ * Wann diese Vorlage zum Turnier passt - dieselbe Einteilung wie
+ * vorlagenZeitpunkt() im Backend (mailVorlagen.ts). Zwei Kopien, weil
+ * Frontend und Backend keinen gemeinsamen Code teilen; der Server prueft es
+ * beim echten Versand noch einmal verbindlich - hier geht es nur darum, den
+ * Organisator VOR dem Versuch zu warnen, statt ihn erst nach dem Absenden
+ * mit einer Fehlermeldung zu konfrontieren.
+ */
+const VORLAGEN_ZEITPUNKT: Record<VorlagenId, 'vorTurnierende' | 'nachTurnierende' | null> = {
+  'frei': null,
+  'appell-allgemein': 'vorTurnierende',
+  'appell-schicht': 'vorTurnierende',
+  'appell-verpflegung': 'vorTurnierende',
+  'bewertung': 'nachTurnierende',
+  'danke': 'nachTurnierende'
+};
+
+export default function PushBroadcast({ selectedTournament, tournaments = [] }: {
+  selectedTournament: number | null;
+  tournaments?: Tournament[];
+}) {
   const isMobile = useIsMobile();
   const [mode, setMode] = useState<'all' | 'shifts' | 'users'>('all');
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
@@ -77,6 +97,31 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
    * den Mailkanal ist gerade, dass die beiden Zahlen weit auseinanderliegen -
    * das soll man sehen, bevor man sich fuer einen Weg entscheidet.
    */
+  /**
+   * Passt die gewaehlte Vorlage zum Zeitpunkt dieses Turniers?
+   *
+   * Datumsvergleich auf Tagesbasis in der Zeitzone des Browsers - fuer einen
+   * Hinweis reicht das; der Server prueft beim echten Versand ortszeitgenau
+   * nach (siehe turnierIstVorbei() im Backend). Ohne gewaehltes Turnier oder
+   * bei "Freie Nachricht" gibt es nichts zu warnen.
+   */
+  const aktivesTurnier = tournaments.find(t => t.id === selectedTournament);
+  const turnierIstVorbei = aktivesTurnier
+    ? new Date(aktivesTurnier.endDate).setHours(23, 59, 59, 999) < Date.now()
+    : false;
+  const vorlagenKonflikt = (() => {
+    if (!aktivesTurnier) return null;
+    const zeitpunkt = VORLAGEN_ZEITPUNKT[vorlage];
+    if (!zeitpunkt) return null;
+    if (zeitpunkt === 'vorTurnierende' && turnierIstVorbei) {
+      return 'Dieses Turnier ist bereits vorbei – ein Aufruf zum Helfen erreicht niemanden mehr rechtzeitig.';
+    }
+    if (zeitpunkt === 'nachTurnierende' && !turnierIstVorbei) {
+      return 'Dieses Turnier läuft noch – diese Vorlage passt erst, wenn es vorbei ist.';
+    }
+    return null;
+  })();
+
   const reichweite = useMemo(() => {
     const zielIds = mode === 'users' ? new Set(selectedUserIds)
       : mode === 'all' ? new Set(volunteers.map(v => v.id))
@@ -296,6 +341,12 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
                 Empfänger sieht bevorzugt den Jahrgang seines eigenen Kindes, sonst die turnierweit
                 größten Lücken.
               </div>
+            )}
+            {/* Nur eine Warnung, kein hartes Verbot: Der Testversand an sich
+                selbst bleibt trotzdem moeglich - man will eine Vorlage auch
+                vorbereiten koennen, bevor der Zeitpunkt passt. */}
+            {vorlagenKonflikt && (
+              <div className="nachricht-warnung">⚠️ {vorlagenKonflikt}</div>
             )}
           </div>
         )}
@@ -590,9 +641,10 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
           </button>
           <button
             onClick={() => handleSend()}
-            disabled={sending || !title.trim() || !body.trim() || kanaele.length === 0}
+            disabled={sending || !title.trim() || !body.trim() || kanaele.length === 0 || !!vorlagenKonflikt}
+            title={vorlagenKonflikt ?? undefined}
             style={btnStyle}
-            className={`push-broadcast-submit-btn ${isMobile ? 'push-broadcast-submit-btn-mobile' : ''} ${sending || !title.trim() || !body.trim() ? 'push-broadcast-submit-btn-disabled' : ''}`}
+            className={`push-broadcast-submit-btn ${isMobile ? 'push-broadcast-submit-btn-mobile' : ''} ${sending || !title.trim() || !body.trim() || vorlagenKonflikt ? 'push-broadcast-submit-btn-disabled' : ''}`}
           >
             <span>{sending ? '⏳' : '🚀'}</span>
             <span>{sending ? 'Wird versendet …' : 'Jetzt an alle absenden'}</span>
@@ -611,17 +663,18 @@ export default function PushBroadcast({ selectedTournament }: { selectedTourname
           <button
             type="button"
             onClick={() => handleSend()}
-            disabled={sending || !title.trim() || !body.trim()}
+            disabled={sending || !title.trim() || !body.trim() || !!vorlagenKonflikt}
+            title={vorlagenKonflikt ?? undefined}
             style={{
-              background: sending || !title.trim() || !body.trim() ? '#adb5bd' : '#0d6efd',
+              background: sending || !title.trim() || !body.trim() || vorlagenKonflikt ? '#adb5bd' : '#0d6efd',
               color: '#fff',
               border: 'none',
               padding: '10px 18px',
               borderRadius: 20,
               fontWeight: 'bold',
               fontSize: 14,
-              cursor: sending || !title.trim() || !body.trim() ? 'not-allowed' : 'pointer',
-              boxShadow: sending || !title.trim() || !body.trim() ? 'none' : '0 4px 12px rgba(13,110,253,0.3)'
+              cursor: sending || !title.trim() || !body.trim() || vorlagenKonflikt ? 'not-allowed' : 'pointer',
+              boxShadow: sending || !title.trim() || !body.trim() || vorlagenKonflikt ? 'none' : '0 4px 12px rgba(13,110,253,0.3)'
             }}
           >
             {sending ? '⏳ Senden...' : '🚀 Push Senden'}

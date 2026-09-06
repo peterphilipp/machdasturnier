@@ -191,7 +191,7 @@ function ShoppingListWrapper() {
 }
 function PushBroadcastWrapper() {
   const ctx = useOutletContext<any>();
-  return <PushBroadcast selectedTournament={ctx.selectedTournamentId} />;
+  return <PushBroadcast selectedTournament={ctx.selectedTournamentId} tournaments={ctx.tournaments} />;
 }
 function HelferWrapper() {
   const ctx = useOutletContext<any>();

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { z } from 'zod';
 import prisma from '../config/prisma.js';
 import { pruefeBewertungsToken, baueBewertungsToken } from '../utils/bewertungsLink.js';
+import { aktuelleSchichtzeit } from '../utils/schichtzeit.js';
 
 /**
  * Bewerten ueber den Link aus der Mail - ohne Anmeldung.
@@ -39,7 +40,7 @@ export const getBewertungsKontext = async (req: Request, res: Response) => {
     where: { id: anspruch.volunteerShiftId },
     include: {
       user: { select: { name: true } },
-      shift: { include: { workArea: true, day: true } },
+      shift: { include: { workArea: true, day: true, daySlot: true } },
       // Nur fuer die Farbe: Die Seite ist nicht angemeldet und kann die
       // Vereinsfarben nicht wie die App nachladen. Ohne sie waere die Mail
       // orange und die Seite blau - fuer den Empfaenger sieht das aus wie
@@ -78,6 +79,8 @@ export const getBewertungsKontext = async (req: Request, res: Response) => {
       id: true, date: true, slot: true, role: true,
       shift: {
         select: {
+          startMin: true, endMin: true,
+          daySlot: { select: { startMin: true, endMin: true } },
           workArea: { select: { name: true, icon: true } },
           day: { select: { date: true } }
         }
@@ -91,14 +94,16 @@ export const getBewertungsKontext = async (req: Request, res: Response) => {
     bereich: vs.shift?.workArea?.name ?? vs.role,
     icon: vs.shift?.workArea?.icon ?? null,
     datum: vs.shift?.day?.date ?? vs.date,
-    slot: vs.slot,
+    // Live berechnet, nicht die beim Einplanen gespeicherte Kopie - siehe
+    // aktuelleSchichtzeit() fuer den Grund.
+    slot: aktuelleSchichtzeit(vs.shift, vs.slot),
     farbe: vs.tournament?.club?.primaryColor ?? null,
     weitere: weitere.map(w => ({
       token: baueBewertungsToken({ volunteerShiftId: w.id, userId: anspruch.userId }),
       bereich: w.shift?.workArea?.name ?? w.role,
       icon: w.shift?.workArea?.icon ?? null,
       datum: w.shift?.day?.date ?? w.date,
-      slot: w.slot
+      slot: aktuelleSchichtzeit(w.shift, w.slot)
     })),
     // Damit die Seite schon Abgegebenes anzeigt statt leerer Sterne.
     bereits: {

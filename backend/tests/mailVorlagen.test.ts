@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baueVorlage, VORLAGEN } from '../src/utils/mailVorlagen.js';
+import { baueVorlage, VORLAGEN, vorlagenZeitpunkt, turnierIstVorbei } from '../src/utils/mailVorlagen.js';
 import { maskiere, alsAbsaetze, kennzahlen, dunkler } from '../src/utils/mailLayout.js';
 
 const MARKE = {
@@ -513,5 +513,45 @@ describe('VORLAGEN', () => {
       expect(v.text.length).toBeGreaterThan(40);
       expect(v.zweck.length).toBeGreaterThan(5);
     }
+  });
+});
+
+describe('vorlagenZeitpunkt', () => {
+  it('ordnet alle drei Appelltypen vor das Turnierende ein', () => {
+    expect(vorlagenZeitpunkt('appell-allgemein')).toBe('vorTurnierende');
+    expect(vorlagenZeitpunkt('appell-schicht')).toBe('vorTurnierende');
+    expect(vorlagenZeitpunkt('appell-verpflegung')).toBe('vorTurnierende');
+  });
+
+  it('ordnet Bewertung und Danke nach das Turnierende ein', () => {
+    expect(vorlagenZeitpunkt('bewertung')).toBe('nachTurnierende');
+    expect(vorlagenZeitpunkt('danke')).toBe('nachTurnierende');
+  });
+
+  it('lässt die freie Nachricht ungebunden', () => {
+    expect(vorlagenZeitpunkt('frei')).toBeNull();
+  });
+});
+
+describe('turnierIstVorbei', () => {
+  // 6. September 2026 liegt in der Sommerzeit (MESZ, UTC+2) - Mitternacht in
+  // Berlin ist deshalb 22:00 UTC des Vortags, nicht 00:00 UTC.
+  const endeAmTag = '2026-09-06T00:00:00.000Z';
+
+  it('zählt den Endtag noch ganz dazu - auch kurz vor Mitternacht Ortszeit', () => {
+    // 23:59:59 in Berlin = 21:59:59 UTC.
+    expect(turnierIstVorbei(endeAmTag, new Date('2026-09-06T21:59:59.000Z'))).toBe(false);
+  });
+
+  it('ist ab Mitternacht Ortszeit des Folgetags vorbei, nicht erst ab Mitternacht UTC', () => {
+    // 00:00:01 des naechsten Tages in Berlin = 22:00:01 UTC am Endtag selbst.
+    // Ein Vergleich in Server-UTC (statt Ortszeit) würde das erst zwei
+    // Stunden spaeter zaehlen - genau der Fehler, den zeitpunktOrtszeit()
+    // vermeidet.
+    expect(turnierIstVorbei(endeAmTag, new Date('2026-09-06T22:00:01.000Z'))).toBe(true);
+  });
+
+  it('ist nicht vorbei, solange das Enddatum in der Zukunft liegt', () => {
+    expect(turnierIstVorbei('2026-12-31T00:00:00.000Z', new Date('2026-09-06T12:00:00.000Z'))).toBe(false);
   });
 });

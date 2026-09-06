@@ -2,6 +2,7 @@ import {
   baueMail, baueText, baueBetreff, alsAbsaetze, kennzahlen, maskiere, sterneReihe, kasten,
   schichtListe, jubelBand
 } from './mailLayout.js';
+import { zeitpunktOrtszeit } from './zonenzeit.js';
 
 /**
  * Die Vorlagen fuer den Nachrichtenversand.
@@ -51,6 +52,45 @@ export type VorlagenId =
   | 'appell-verpflegung'
   | 'bewertung'
   | 'danke';
+
+/**
+ * Wann diese Vorlage zum Turnier passt.
+ *
+ * Ein Aufruf zum Helfen bringt nichts mehr, wenn das Turnier vorbei ist -
+ * niemand kann sich noch eintragen. Eine Bitte um Bewertung oder ein Danke
+ * bringt umgekehrt nichts VOR dem Ende - es gibt noch nichts zu bewerten und
+ * nichts, wofuer zu danken waere. Die freie Nachricht ist bewusst ungebunden
+ * (`null`) - sie ist der Fluchtweg fuer alles, was in kein Raster passt.
+ */
+export function vorlagenZeitpunkt(id: VorlagenId): 'vorTurnierende' | 'nachTurnierende' | null {
+  if (id === 'appell-allgemein' || id === 'appell-schicht' || id === 'appell-verpflegung') {
+    return 'vorTurnierende';
+  }
+  if (id === 'bewertung' || id === 'danke') return 'nachTurnierende';
+  return null;
+}
+
+/**
+ * Ist dieses Turnier schon vorbei?
+ *
+ * Der Endtag zaehlt noch ganz dazu - ein Turnier, das heute endet, ist erst
+ * ab morgen "vorbei". Datumsvergleich statt Turnier.status: Der Status
+ * (aktiv/entwurf/archiviert) ist eine manuelle Einstufung, die ein
+ * Organisator oft erst Tage spaeter nachtraegt - das Turnierende steht aber
+ * schon vorher fest.
+ *
+ * Ueber zeitpunktOrtszeit() und nicht ueber `Date#setHours`: Letzteres
+ * rechnet in der Zeitzone des Server-Prozesses. Laeuft der Container in UTC
+ * (der Normalfall), waere "Mitternacht" dort zwei Stunden vor der echten
+ * Berliner Mitternacht - ein Turnier gaelte dann schon ab 22 Uhr abends als
+ * vorbei.
+ */
+export function turnierIstVorbei(endDate: Date | string, jetzt = new Date()): boolean {
+  // Minute 1440 = Mitternacht des naechsten Kalendertags in Ortszeit -
+  // spart das manuelle Erhoehen des Datums.
+  const folgetagBeginn = zeitpunktOrtszeit(endDate, 24 * 60);
+  return jetzt.getTime() >= folgetagBeginn.getTime();
+}
 
 export interface VorlagenBeschreibung {
   id: VorlagenId;

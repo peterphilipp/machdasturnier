@@ -39,6 +39,37 @@ export function slotText(start: number, ende: number): string {
 }
 
 /**
+ * Die Zeit, die fuer eine Einplanung HEUTE gilt - live aus der Schicht
+ * berechnet, nicht aus `volunteerShift.slot`.
+ *
+ * `volunteerShift.slot` ist eine Kopie vom Zeitpunkt der Einplanung und wird
+ * nur mitgezogen, wenn sich die Schicht SELBST aendert (siehe
+ * benachrichtigeBeiZeitaenderung, aufgerufen aus shift.controller.ts /
+ * planning.controller.ts). Aendert sich stattdessen das Tagesraster (die
+ * DaySlot-Vorlage), von der die Schicht ihre Zeit erbt, zieht keine der
+ * bereits gespeicherten Kopien nach - genau der Fall, der eine Mail mit der
+ * alten Zeit verschickt hat, waehrend das Dashboard (das effektiveZeit() bei
+ * jedem Rendern neu berechnet) schon die neue zeigte.
+ *
+ * Ueberall dort, wo die Zeit live angezeigt wird - Mail, oeffentliche
+ * Bewertungsseite -, zaehlt deshalb diese Funktion, nicht die Kopie. Die
+ * Kopie bleibt nur der Fallback, wenn die Schicht selbst keine Zeit mehr hat
+ * (z.B. geloescht).
+ */
+export function aktuelleSchichtzeit(
+  shift: {
+    startMin: number | null;
+    endMin: number | null;
+    daySlot?: { startMin: number; endMin: number } | null;
+  } | null | undefined,
+  fallbackSlot: string
+): string {
+  if (!shift) return fallbackSlot;
+  const { start, ende } = effektiveZeit(shift, shift.daySlot);
+  return start != null && ende != null ? slotText(start, ende) : fallbackSlot;
+}
+
+/**
  * Meldet eine verschobene Schicht an die bereits eingeplanten Helfer.
  *
  * Nur bei tatsaechlich geaenderter Uhrzeit - ein Speichern ohne Zeitwechsel

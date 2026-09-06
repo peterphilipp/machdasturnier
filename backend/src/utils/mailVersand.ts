@@ -9,6 +9,7 @@ import {
 import { baueBewertungsToken } from './bewertungsLink.js';
 import { ermittleOffeneSchichten } from './offeneSchichten.js';
 import { ermittleOffeneVerpflegung, waehleFuerEmpfaenger } from './offeneVerpflegung.js';
+import { aktuelleSchichtzeit } from './schichtzeit.js';
 
 /**
  * Der eigentliche Mailversand an eine Gruppe.
@@ -98,6 +99,8 @@ async function ermittleBewertungsSchichten(
       id: true, userId: true, date: true, slot: true, role: true,
       shift: {
         select: {
+          startMin: true, endMin: true,
+          daySlot: { select: { startMin: true, endMin: true } },
           workArea: { select: { name: true, icon: true } },
           day: { select: { date: true } }
         }
@@ -115,7 +118,10 @@ async function ermittleBewertungsSchichten(
       bereich: vs.shift?.workArea?.name || vs.role,
       icon: vs.shift?.workArea?.icon || '📍',
       datum: DATUM_LANG.format(new Date(datum)),
-      slot: vs.slot
+      // Live berechnet, nicht die beim Einplanen gespeicherte Kopie - siehe
+      // aktuelleSchichtzeit() fuer den Grund (Tagesraster-Aenderungen ziehen
+      // die Kopie sonst nicht nach).
+      slot: aktuelleSchichtzeit(vs.shift, vs.slot)
     });
     treffer.set(vs.userId, liste);
   }
