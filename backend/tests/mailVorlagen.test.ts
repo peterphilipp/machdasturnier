@@ -375,29 +375,36 @@ describe('Dankesmail', () => {
   });
 
   /**
-   * text-align:center auf einem <div> zentrierte den Text auf Gmails
-   * Android-App nachweislich nicht zuverlaessig, obwohl jeder Desktop-Client
-   * es tat (per Screenshot bestaetigt, mit korrektem CSS). Seitdem steckt der
-   * Text in einer inhaltsbreiten Tabelle mit align="center" - ein
-   * HTML-Attribut statt einer CSS-Regel. Betraf Jubelband und
-   * Kennzahlen-Kacheln gleich.
+   * Drei Anlaeufe, weil zwei in echtem Gmail nachweislich versagt haben:
+   * text-align:center auf einem <div> zentrierte auf dem Handy nicht (per
+   * Screenshot bestaetigt, mit korrektem CSS), eine inhaltsbreite Tabelle mit
+   * align="center" auf der Zelle danach auch nicht (Anwender bestaetigte:
+   * "Das Problem ist nur in Gmail sichtbar", trotz korrekt gemessener
+   * Zentrierung in Chrome). Jetzt steckt zusaetzlich ein <center>-Element
+   * darum - das aelteste und am weitesten unterstuetzte Zentrierungsmittel,
+   * das selbst rudimentaere Mail-Renderer noch einhalten. Betraf Jubelband
+   * und Kennzahlen-Kacheln gleich.
    */
-  it('zentriert Emoji und Text im Jubelband ueber eine inhaltsbreite Tabelle', () => {
+  it('zentriert Emoji und Text im Jubelband ueber center-Element und inhaltsbreite Tabelle', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const bandStelle = html.indexOf('Danke fürs Mithelfen!');
     const tdDavor = html.lastIndexOf('<td', bandStelle);
     expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
     const tableDavor = html.lastIndexOf('<table', tdDavor);
     expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
+    const centerDavor = html.lastIndexOf('<center>', tableDavor);
+    expect(centerDavor).toBeGreaterThan(-1);
   });
 
-  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln ueber eine inhaltsbreite Tabelle', () => {
+  it('zentriert Zahl und Beschriftung in den Kennzahlen-Kacheln ueber center-Element und inhaltsbreite Tabelle', () => {
     const html = baueVorlage('danke', { ...basis, zahlen }, MARKE).html;
     const zahlStelle = html.indexOf('74');
     const tdDavor = html.lastIndexOf('<td', zahlStelle);
     expect(html.slice(tdDavor, tdDavor + 40)).toContain('align="center"');
     const tableDavor = html.lastIndexOf('<table', tdDavor);
     expect(html.slice(tableDavor, tdDavor)).toContain('align="center"');
+    const centerDavor = html.lastIndexOf('<center>', tableDavor);
+    expect(centerDavor).toBeGreaterThan(-1);
   });
 
   /**
