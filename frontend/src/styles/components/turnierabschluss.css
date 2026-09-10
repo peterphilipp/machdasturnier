@@ -86,24 +86,63 @@
    das trifft ausgerechnet die Stellen, an denen zwei Staende gleichzeitig
    laufen.
 
-   Nur diese Blaetter drehen sich; Deckblatt, Tabellen und Rueckmeldungen
-   bleiben hochkant. Moeglich macht das eine benannte Seite: `page: quer`
-   weist einzelnen Elementen ein eigenes @page-Format zu. */
+   Nur diese Blaetter sollen quer wirken; Deckblatt, Tabellen und
+   Rueckmeldungen bleiben hochkant - im selben Druckauftrag. Der erste
+   Versuch dafuer war eine benannte Seite (`@page quer { size: A4
+   landscape }` + `page: quer` auf dem Element), auf dem Papier korrekt nach
+   Spezifikation. In echten Browsern bleibt das Blatt damit aber hochkant,
+   nur der INHALT bleibt in voller Querformat-Breite stehen - verzerrt, weil
+   gemischte Seitenformate innerhalb eines einzelnen Druckauftrags in der
+   Praxis nicht zuverlaessig umgesetzt werden.
+
+   Deshalb jetzt der robustere Weg: Jedes Blatt bleibt bei der einen @page-
+   Vorgabe (A4 hochkant, siehe station-print.css) - nur der INHALT
+   (.station-print-quer-inhalt, siehe TurnierabschlussModal.tsx: Kopf,
+   Diagramm und Fuss gemeinsam in einem Wrapper) wird um 90 Grad gedreht und
+   in die Hochkantflaeche eingepasst. Wer den Ausdruck in der Hand dreht,
+   sieht das Diagramm wie gewohnt quer - nur eben auf einem Blatt, das im PDF
+   selbst hochkant bleibt. */
 .station-print-page--quer {
   width: 297mm;
   min-height: 210mm;
 }
 
+/* Im Bildschirm-Vorschau unveraendert eine normale Flex-Spalte (Kopf/Gantt
+   oben, Fuss unten) - die Drehung passiert erst im Druck, siehe unten. */
+.station-print-quer-inhalt {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+}
+
 @media print {
-  @page quer {
-    size: A4 landscape;
-    margin: 12mm;
+  .station-print-page--quer {
+    /* Zurueck zur normalen Hochkantflaeche wie jedes andere Blatt - keine
+       eigene Seitengroesse mehr. */
+    width: 210mm !important;
+    min-height: 297mm !important;
+    position: relative;
+    /* visible statt hidden: geht ein Diagramm ausnahmsweise ueber die
+       186mm Vorschauhoehe hinaus, soll es sichtbar ueberstehen statt
+       lautlos abgeschnitten zu werden - ein Blatt, auf dem offensichtlich
+       etwas nicht passt, faellt wenigstens auf. */
+    overflow: visible;
   }
 
-  .station-print-page--quer {
-    page: quer;
-    /* 210mm Blatthoehe minus 2x12mm Rand, mit etwas Luft nach unten. */
-    min-height: 165mm !important;
+  .station-print-quer-inhalt {
+    /* Vor der Drehung liegen Breite und Hoehe vertauscht: 273mm x 186mm ist
+       die Druckflaeche NACH Abzug des @page-Rands (12mm) einer Querseite -
+       exakt die Breite, mit der das Gantt schon gemessen und gebaut ist
+       (siehe Kommentar oben). Nach der Drehung wird daraus 186mm x 273mm,
+       die Druckflaeche einer Hochkantseite. */
+    width: 273mm;
+    height: 186mm;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
   }
 }
 

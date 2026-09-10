@@ -843,32 +843,37 @@ export default function TurnierabschlussModal({
               {/* ------------------------------- Dienstplan als Diagramm ----- */}
               {/* Querformat: siehe turnierabschluss.css - die Aussage des Gantt
                   liegt in der Breite, hochkant schneidet die Beschriftung
-                  paralleler Schichten ab. */}
+                  paralleler Schichten ab. Kopf, Diagramm UND Fuss stecken
+                  gemeinsam in einem Wrapper (.station-print-quer-inhalt), weil
+                  im Druck dieser eine Block als Ganzes gedreht wird - nicht
+                  das Blatt selbst, siehe CSS-Kommentar dort. */}
               {tagesplaene.map(({ day, shifts }) => (
                 <div key={day.id} className="station-print-page station-print-page--quer">
-                  <div>
-                    <Kopf titel={`📋 Dienstplan ${tagKurz(day.date)}`} />
-                    <div className="station-print-meta-bar">
-                      <div>📅 <strong>{tagLang(day.date)}</strong></div>
-                      <div>⏱️ {shifts.length} Schichten</div>
-                      <div>🕐 {hhmm(gemeinsameAchse.start)} – {hhmm(gemeinsameAchse.ende)}</div>
-                    </div>
+                  <div className="station-print-quer-inhalt">
+                    <div>
+                      <Kopf titel={`📋 Dienstplan ${tagKurz(day.date)}`} />
+                      <div className="station-print-meta-bar">
+                        <div>📅 <strong>{tagLang(day.date)}</strong></div>
+                        <div>⏱️ {shifts.length} Schichten</div>
+                        <div>🕐 {hhmm(gemeinsameAchse.start)} – {hhmm(gemeinsameAchse.ende)}</div>
+                      </div>
 
-                    {/* Dieselbe Komponente wie im Dienstplan, nur nicht
-                        bearbeitbar - so sieht das Blatt aus wie das, was die
-                        Organisatoren kennen, statt wie eine zweite Wahrheit. */}
-                    <div className="abschluss-gantt">
-                      <ShiftTimeline
-                        title=""
-                        shifts={shifts as unknown as TimelineShift[]}
-                        volunteerShifts={volunteerShifts}
-                        globalStartMin={gemeinsameAchse.start}
-                        globalEndMin={gemeinsameAchse.ende}
-                        gruppierung="bereich"
-                      />
+                      {/* Dieselbe Komponente wie im Dienstplan, nur nicht
+                          bearbeitbar - so sieht das Blatt aus wie das, was die
+                          Organisatoren kennen, statt wie eine zweite Wahrheit. */}
+                      <div className="abschluss-gantt">
+                        <ShiftTimeline
+                          title=""
+                          shifts={shifts as unknown as TimelineShift[]}
+                          volunteerShifts={volunteerShifts}
+                          globalStartMin={gemeinsameAchse.start}
+                          globalEndMin={gemeinsameAchse.ende}
+                          gruppierung="bereich"
+                        />
+                      </div>
                     </div>
+                    <Fuss seite={`Dienstplan ${tagKurz(day.date)}`} />
                   </div>
-                  <Fuss seite={`Dienstplan ${tagKurz(day.date)}`} />
                 </div>
               ))}
             </>
