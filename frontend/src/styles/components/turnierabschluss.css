@@ -73,109 +73,19 @@
 
 /* Das Dienstplan-Diagramm auf dem Blatt.
    Die Komponente bringt ihren eigenen Abstand fuer die Bildschirmansicht mit;
-   auf Papier steht darueber schon die Kopfleiste. */
+   auf Papier steht darueber schon die Kopfleiste.
+
+   Frueher gab es hier ein eigenes Querformat fuer dieses Blatt - drei
+   Anlaeufe (benannte @page, Flexbox-Zentrierung, absolute Position mit
+   festen mm-Werten) sind allesamt im echten Druck-PDF gescheitert, obwohl
+   jeder davon im DOM-Inspektor exakt korrekt aussah. Gemischte Seitenformate
+   und gedrehte Inhalte innerhalb eines Druckauftrags sind in echten Browsern
+   nachweislich nicht zuverlaessig herzustellen. Das ganze Dokument bleibt
+   deshalb hochkant; ShiftTimeline bekommt stattdessen eine eigene
+   Druckdarstellung, die ohne die volle Breite einer Querseite auskommt -
+   siehe die Kommentare in ShiftTimeline.tsx. */
 .abschluss-gantt > div {
   margin-bottom: 0 !important;
-}
-
-/* ---- Querformat fuer die Diagrammblaetter ----
-   Die Aussage des Gantt liegt auf der Zeitachse, also in der Breite. Mit
-   echten Turnierdaten gemessen: hochkant bleiben 11,6mm je Stunde, quer sind
-   es 22,1mm. Der Unterschied ist nicht kosmetisch - hochkant schneidet die
-   Beschriftung paralleler Schichten mitten im Wort ab ("2 (07:45-09:3"), und
-   das trifft ausgerechnet die Stellen, an denen zwei Staende gleichzeitig
-   laufen.
-
-   Nur diese Blaetter sollen quer wirken; Deckblatt, Tabellen und
-   Rueckmeldungen bleiben hochkant - im selben Druckauftrag. Der erste
-   Versuch dafuer war eine benannte Seite (`@page quer { size: A4
-   landscape }` + `page: quer` auf dem Element), auf dem Papier korrekt nach
-   Spezifikation. In echten Browsern bleibt das Blatt damit aber hochkant,
-   nur der INHALT bleibt in voller Querformat-Breite stehen - verzerrt, weil
-   gemischte Seitenformate innerhalb eines einzelnen Druckauftrags in der
-   Praxis nicht zuverlaessig umgesetzt werden.
-
-   Deshalb jetzt der robustere Weg: Jedes Blatt bleibt bei der einen @page-
-   Vorgabe (A4 hochkant, siehe station-print.css) - nur der INHALT
-   (.station-print-quer-inhalt, siehe TurnierabschlussModal.tsx: Kopf,
-   Diagramm und Fuss gemeinsam in einem Wrapper) wird um 90 Grad gedreht und
-   in die Hochkantflaeche eingepasst. Wer den Ausdruck in der Hand dreht,
-   sieht das Diagramm wie gewohnt quer - nur eben auf einem Blatt, das im PDF
-   selbst hochkant bleibt.
-
-   Zwei weitere Anlaeufe sind schon gescheitert, beide nur im DOM-Inspektor
-   geprueft, nicht im echten Druck-PDF - dort zeigte sich jedesmal ein
-   ANDERER Fehler, den keine DOM-Messung vorher erkennen liess:
-
-   1. position:absolute mit top/left:50% + translate(-50%,-50%): im DOM exakt
-      zentriert, im PDF trotzdem verschoben und abgeschnitten. Vermutlich
-      loest der Browser die Prozentwerte gegen eine andere Blattgroesse auf,
-      als der Seitenumbruch-Algorithmus am Ende tatsaechlich verwendet.
-
-   2. Flexbox-Zentrierung (align-items/justify-content:center): im DOM
-      ebenfalls exakt zentriert (auch mit einer vollstaendigen Simulation
-      ALLER @media print-Regeln geprueft), im PDF stand der Inhalt oben UND
-      unten ueber, dazu eine leere Seite am Ende. Wahrscheinlicher Grund:
-      transform veraendert nur die GEMALTE Position, nicht die Layout-Breite
-      eines Elements - fuer die Seitenumbruch-Berechnung blieb der Block
-      273mm breit, in einem nur 210mm breiten Container. Diese "unsichtbare"
-      Layout-Ueberbreite (quer zur Drehachse also oben/unten sichtbar) hat
-      vermutlich den Umbruch verwirrt.
-
-   Jetzt Anlauf 3: wieder position:absolute (nimmt das Element ganz aus dem
-   normalen Fluss, umgeht damit das Flexbox-Problem von Anlauf 2), aber ohne
-   jede Prozentrechnung (umgeht das Problem von Anlauf 1). Die Randwerte sind
-   aus den bekannten, festen Massen (Blatt 210x297mm, Inhalt vor der Drehung
-   273x186mm) direkt ausgerechnet: Damit der Mittelpunkt des Inhalts genau
-   auf dem Mittelpunkt des Blatts liegt (Drehung um die eigene Mitte
-   veraendert den Mittelpunkt nicht), muss die Zelle bei
-   left = 105mm - 273mm/2 = -31.5mm, top = 148.5mm - 186mm/2 = 55.5mm
-   beginnen - feste mm-Werte, keine Prozente, die gegen eine schwankende
-   Blattgroesse aufgeloest werden koennten. */
-.station-print-page--quer {
-  width: 297mm;
-  min-height: 210mm;
-}
-
-/* Im Bildschirm-Vorschau unveraendert eine normale Flex-Spalte (Kopf/Gantt
-   oben, Fuss unten) - die Drehung passiert erst im Druck, siehe unten. */
-.station-print-quer-inhalt {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  height: 100%;
-}
-
-@media print {
-  .station-print-page--quer {
-    /* Zurueck zur normalen Hochkantflaeche wie jedes andere Blatt - keine
-       eigene Seitengroesse mehr. */
-    width: 210mm !important;
-    min-height: 297mm !important;
-    position: relative;
-    /* geht ein Diagramm ausnahmsweise ueber die 186mm Vorschauhoehe hinaus,
-       soll es sichtbar ueberstehen statt lautlos abgeschnitten zu werden -
-       ein Blatt, auf dem offensichtlich etwas nicht passt, faellt wenigstens
-       auf. */
-    overflow: visible;
-  }
-
-  .station-print-quer-inhalt {
-    /* Vor der Drehung liegen Breite und Hoehe vertauscht: 273mm x 186mm ist
-       die Druckflaeche NACH Abzug des @page-Rands (12mm) einer Querseite -
-       exakt die Breite, mit der das Gantt schon gemessen und gebaut ist
-       (siehe Kommentar oben). Nach der Drehung wird daraus 186mm x 273mm,
-       die Druckflaeche einer Hochkantseite. */
-    width: 273mm;
-    height: 186mm;
-    position: absolute;
-    /* Feste mm-Werte statt 50% + translate - siehe Kommentar oben, das ist
-       der Teil, der beim ersten Anlauf mit Prozenten schiefging. */
-    left: -31.5mm;
-    top: 55.5mm;
-    transform: rotate(90deg);
-    transform-origin: center center;
-  }
 }
 
 .abschluss-kachel {
